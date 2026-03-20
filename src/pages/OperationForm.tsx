@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
+import { triggerSuccessToast } from '../lib/toastUtils';
 import { Save, X, Building2 } from 'lucide-react';
 
 export default function OperationForm() {
@@ -121,6 +123,7 @@ export default function OperationForm() {
 
       if (insertError) throw insertError;
       
+      triggerSuccessToast(useStore.getState().user?.email, 'Opération sauvegardée avec succès.');
       navigate(id ? `/operations/${id}` : '/');
     } catch (err: any) {
       console.error(err);

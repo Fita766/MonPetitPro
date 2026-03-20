@@ -16,3 +16,11 @@ body {
   margin: 0;
   padding: 0;
 }
+
+/* Make sure interactive elements always have a pointer cursor */
+button, 
+select, 
+input[type="submit"],
+input[type="button"] {
+  cursor: pointer;
+}

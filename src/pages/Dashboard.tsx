@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
-import { PlusCircle, Building, Calendar } from 'lucide-react';
+import { useStore } from '../store/useStore';
+import { triggerSuccessToast } from '../lib/toastUtils';
+import { PlusCircle, Building, Calendar, Edit, Trash2 } from 'lucide-react';
 
 interface Operation {
   id: string;
@@ -40,6 +42,24 @@ export default function Dashboard() {
     return <div className="flex items-center justify-center h-64 text-slate-500">Chargement des opérations...</div>;
   }
 
+  const handleDelete = async (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    if (!confirm('Êtes-vous sûr de vouloir supprimer cette opération ET toutes ses observations ? Cette action est irréversible.')) return;
+    try {
+      const { error } = await supabase.from('operations').delete().eq('id', id);
+      if (error) throw error;
+      triggerSuccessToast(useStore.getState().user?.email, 'Opération supprimée avec succès.');
+      fetchOperations();
+    } catch (err) {
+      console.error('Error deleting operation:', err);
+    }
+  };
+
+  const handleEdit = (e: React.MouseEvent, id: string) => {
+    e.stopPropagation();
+    navigate(`/operations/${id}/edit`);
+  };
+
   return (
     <div>
       <div className="flex justify-between items-center mb-8">
@@ -77,10 +97,20 @@ export default function Dashboard() {
               onClick={() => navigate(`/operations/${op.id}`)}
               className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
             >
-              <div className="absolute top-4 right-4 bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-medium">
-                {op.operation_type}
+              <div className="absolute top-4 right-4 flex items-center gap-2">
+                <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-medium">
+                  {op.operation_type}
+                </span>
+                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex bg-white/90 backdrop-blur rounded shadow-sm border border-slate-200">
+                  <button onClick={(e) => handleEdit(e, op.id)} className="p-1.5 text-slate-500 hover:text-primary transition" title="Modifier">
+                    <Edit size={14} />
+                  </button>
+                  <button onClick={(e) => handleDelete(e, op.id)} className="p-1.5 text-slate-500 hover:text-danger transition" title="Supprimer">
+                    <Trash2 size={14} />
+                  </button>
+                </div>
               </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2 pr-12 line-clamp-1">{op.name}</h3>
+              <h3 className="text-xl font-bold text-slate-800 mb-2 pr-24 line-clamp-1">{op.name}</h3>
               <p className="text-sm text-slate-500 mb-4 flex items-center gap-2">
                 <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
                   {op.project_manager.charAt(0).toUpperCase()}

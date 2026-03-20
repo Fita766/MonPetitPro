@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
+import { triggerSuccessToast } from '../lib/toastUtils';
 import { ArrowLeft, Calendar, FileText, CheckCircle2, AlertCircle, Clock, Trash2, Edit } from 'lucide-react';
 
 interface Operation {
@@ -119,6 +121,7 @@ export default function OperationDetail() {
       }
       
       resetObsForm();
+      triggerSuccessToast(useStore.getState().user?.email, editingObsId ? 'Observation modifiée avec succès.' : 'Observation ajoutée avec succès.');
       fetchOperationData();
     } catch (error) {
       console.error('Error adding/updating observation:', error);
@@ -130,6 +133,7 @@ export default function OperationDetail() {
     try {
       const { error } = await supabase.from('observations').delete().eq('id', obsId);
       if (error) throw error;
+      triggerSuccessToast(useStore.getState().user?.email, 'Observation supprimée avec succès.');
       fetchOperationData();
     } catch (e) {
       console.error('Error deleting observation:', e);
@@ -154,6 +158,7 @@ export default function OperationDetail() {
     try {
       const { error } = await supabase.from('operations').delete().eq('id', operation.id);
       if (error) throw error;
+      triggerSuccessToast(useStore.getState().user?.email, 'Opération supprimée avec succès.');
       navigate('/');
     } catch (e) {
       console.error('Error deleting operation:', e);
