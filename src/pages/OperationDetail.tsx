@@ -38,6 +38,7 @@ export default function OperationDetail() {
 
   // Observation form
   const [showObsForm, setShowObsForm] = useState(false);
+  const [showCustomResponsible, setShowCustomResponsible] = useState(false);
   const [obsForm, setObsForm] = useState({
     info_date: new Date().toISOString().split('T')[0],
     description: '',
@@ -55,6 +56,7 @@ export default function OperationDetail() {
       deadline_date: '',
       completion_date: ''
     });
+    setShowCustomResponsible(false);
     setShowObsForm(false);
   };
 
@@ -288,8 +290,40 @@ export default function OperationDetail() {
               <input required type="date" value={obsForm.info_date} onChange={(e) => setObsForm({...obsForm, info_date: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" />
             </div>
             <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Responsable *</label>
-              <input required list="responsibles-list" type="text" value={obsForm.responsible_person} onChange={(e) => setObsForm({...obsForm, responsible_person: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" placeholder="Ex: MOA, Entreprise, etc." />
+                  <label className="block text-sm font-medium text-slate-700 mb-2">Responsable *</label>
+                  {responsibles.length > 0 && !showCustomResponsible && (!obsForm.responsible_person || responsibles.includes(obsForm.responsible_person)) ? (
+                    <select
+                      required
+                      value={obsForm.responsible_person}
+                      onChange={(e) => {
+                        if (e.target.value === 'NEW') {
+                          setShowCustomResponsible(true);
+                          setObsForm({...obsForm, responsible_person: ''});
+                        } else setObsForm({...obsForm, responsible_person: e.target.value});
+                      }}
+                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none"
+                    >
+                      <option value="" disabled>Sélectionner...</option>
+                      {responsibles.map((r, i) => <option key={i} value={r}>{r}</option>)}
+                      <option value="NEW" className="font-bold text-primary">+ Nouveau responsable...</option>
+                    </select>
+                  ) : (
+                    <div className="relative">
+                      <input
+                        required
+                        type="text"
+                        placeholder="Saisissez un nom"
+                        value={obsForm.responsible_person}
+                        onChange={(e) => setObsForm({...obsForm, responsible_person: e.target.value})}
+                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none pr-16"
+                      />
+                      {responsibles.length > 0 && (
+                        <button type="button" onClick={() => { setShowCustomResponsible(false); setObsForm({...obsForm, responsible_person: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
+                          Retour liste
+                        </button>
+                      )}
+                    </div>
+                  )}
             </div>
             <div className="col-span-1 md:col-span-2">
               <label className="block text-sm font-medium text-slate-700 mb-1">Description *</label>

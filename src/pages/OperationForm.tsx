@@ -13,6 +13,8 @@ export default function OperationForm() {
   
   const [managers, setManagers] = useState<string[]>([]);
   const [promoters, setPromoters] = useState<string[]>([]);
+  const [showCustomManager, setShowCustomManager] = useState(false);
+  const [showCustomPromoter, setShowCustomPromoter] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
@@ -65,10 +67,15 @@ export default function OperationForm() {
           acc[key] = data[key] === null ? '' : String(data[key]);
           return acc;
         }, {});
-        // Fix operation_type to default to V1 if not standard
         if (!['V1', 'VEFA', 'Réhabilitation', 'Autre'].includes(safeData.operation_type)) {
            safeData.operation_type = 'Autre';
         }
+        
+        // Setup initial custom views if existing values are not in DB lists yet
+        // (will be resolved when fetchSuggestions finishes, but this ensures safety)
+        if (safeData.project_manager) setShowCustomManager(true);
+        if (safeData.promoter_name) setShowCustomPromoter(true);
+
         setFormData(prev => ({ ...prev, ...safeData }));
       }
     } catch (err) {
@@ -135,12 +142,6 @@ export default function OperationForm() {
 
   return (
     <div className="max-w-4xl mx-auto pb-12">
-      <datalist id="managers-list">
-        {managers.map(m => <option key={m} value={m} />)}
-      </datalist>
-      <datalist id="promoters-list">
-        {promoters.map(m => <option key={m} value={m} />)}
-      </datalist>
 
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
@@ -174,7 +175,34 @@ export default function OperationForm() {
             
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Conducteur de travaux *</label>
-              <input required list="managers-list" type="text" name="project_manager" value={formData.project_manager} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
+              {managers.length > 0 && !showCustomManager && (!formData.project_manager || managers.includes(formData.project_manager)) ? (
+                <select 
+                  required
+                  value={formData.project_manager}
+                  onChange={(e) => {
+                    if (e.target.value === 'NEW') {
+                      setShowCustomManager(true);
+                      setFormData({...formData, project_manager: ''});
+                    } else {
+                      setFormData({...formData, project_manager: e.target.value});
+                    }
+                  }}
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                >
+                  <option value="" disabled>Sélectionner...</option>
+                  {managers.map(m => <option key={m} value={m}>{m}</option>)}
+                  <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
+                </select>
+              ) : (
+                <div className="relative">
+                  <input required type="text" placeholder="Nom du conducteur..." value={formData.project_manager} onChange={(e) => setFormData({...formData, project_manager: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none pr-16" />
+                  {managers.length > 0 && (
+                    <button type="button" onClick={() => { setShowCustomManager(false); setFormData({...formData, project_manager: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
+                      Retour liste
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div>
@@ -190,14 +218,63 @@ export default function OperationForm() {
             {formData.operation_type === 'VEFA' && (
               <div className="col-span-1 md:col-span-2 border-l-4 border-warning pl-4 py-2 bg-warning/5 rounded-r">
                 <label className="block text-sm font-medium text-slate-800 mb-1">Nom du promoteur (Obligatoire pour VEFA) *</label>
-                <input required list="promoters-list" type="text" name="promoter_name" value={formData.promoter_name} onChange={handleChange} className="w-full px-4 py-2 border border-warning/30 rounded-lg focus:ring-2 focus:ring-warning focus:border-warning outline-none bg-white" />
+                {promoters.length > 0 && !showCustomPromoter && (!formData.promoter_name || promoters.includes(formData.promoter_name)) ? (
+                  <select 
+                    required
+                    value={formData.promoter_name}
+                    onChange={(e) => {
+                      if (e.target.value === 'NEW') {
+                        setShowCustomPromoter(true);
+                        setFormData({...formData, promoter_name: ''});
+                      } else setFormData({...formData, promoter_name: e.target.value});
+                    }}
+                    className="w-full px-4 py-2 border border-warning/30 rounded-lg focus:ring-2 focus:ring-warning outline-none bg-white"
+                  >
+                    <option value="" disabled>Sélectionner...</option>
+                    {promoters.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
+                  </select>
+                ) : (
+                  <div className="relative">
+                    <input required type="text" placeholder="Nom du promoteur..." value={formData.promoter_name} onChange={(e) => setFormData({...formData, promoter_name: e.target.value})} className="w-full px-4 py-2 border border-warning/30 rounded-lg focus:ring-2 focus:ring-warning outline-none bg-white pr-16" />
+                    {promoters.length > 0 && (
+                      <button type="button" onClick={() => { setShowCustomPromoter(false); setFormData({...formData, promoter_name: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
+                        Retour liste
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
             
             {formData.operation_type !== 'VEFA' && (
               <div className="col-span-1 md:col-span-2">
                 <label className="block text-sm font-medium text-slate-700 mb-1">Nom du promoteur</label>
-                <input list="promoters-list" type="text" name="promoter_name" value={formData.promoter_name} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
+                {promoters.length > 0 && !showCustomPromoter && (!formData.promoter_name || promoters.includes(formData.promoter_name)) ? (
+                  <select 
+                    value={formData.promoter_name}
+                    onChange={(e) => {
+                      if (e.target.value === 'NEW') {
+                        setShowCustomPromoter(true);
+                        setFormData({...formData, promoter_name: ''});
+                      } else setFormData({...formData, promoter_name: e.target.value});
+                    }}
+                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
+                  >
+                    <option value="">(Aucun)</option>
+                    {promoters.map(m => <option key={m} value={m}>{m}</option>)}
+                    <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
+                  </select>
+                ) : (
+                  <div className="relative">
+                    <input type="text" placeholder="Nom du promoteur..." value={formData.promoter_name} onChange={(e) => setFormData({...formData, promoter_name: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none pr-16" />
+                    {promoters.length > 0 && (
+                      <button type="button" onClick={() => { setShowCustomPromoter(false); setFormData({...formData, promoter_name: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
+                        Retour liste
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             )}
           </div>

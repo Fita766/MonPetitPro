@@ -62,6 +62,14 @@ function App() {
           } 
         />
         <Route 
+          path="/operations/:id/edit" 
+          element={
+            <ProtectedRoute>
+              <OperationForm />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
           path="/operations/:id" 
           element={
             <ProtectedRoute>
