@@ -4,6 +4,8 @@ import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
 import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 type ViewMode = 'structuree' | 'tabulaire';
 type TabularFilter = 'statut' | 'vefa' | 'mod' | 'all';
@@ -55,7 +57,7 @@ export default function Observations() {
   };
 
   const deleteObservation = async (id: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
     try {
       const { error } = await supabase.from('observations').delete().eq('id', id);
       if (error) throw error;
@@ -87,22 +89,93 @@ export default function Observations() {
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  const generatePDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for better table space
+    const dateStr = new Date().toLocaleDateString();
+    
+    // Header
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42); // slate-900
+    doc.text("MonPetitPro - Suivi Action Immo", 14, 20);
+    
+    doc.setFontSize(14);
+    doc.setTextColor(100, 116, 139); // slate-500
+    doc.text(`Rapport d'Observations - ${dateStr}`, 14, 30);
+    
+    let currentY = 40;
+
+    if (viewMode === 'structuree') {
+      // PDF grouped by operation
+      (Object.entries(groupedData) as [string, {op: any, items: any[]}][]).forEach(([_, { op, items }]) => {
+        if (currentY > 250) {
+          doc.addPage();
+          currentY = 20;
+        }
+
+        // Operation Header
+        doc.setFillColor(15, 23, 42); // Dark background
+        doc.rect(14, currentY, 269, 10, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(10);
+        doc.text(`${op.name} (${op.total_housing_units} logts) - CTX: ${op.project_manager} - Type: ${op.operation_type}`, 18, currentY + 7);
+        
+        currentY += 10;
+
+        autoTable(doc, {
+          startY: currentY,
+          head: [['Date Info', 'Description', 'Réalisateur', 'Butoire', 'Réalisation', 'Statut']],
+          body: items.map(obs => [
+            obs.info_date ? new Date(obs.info_date).toLocaleDateString() : '-',
+            obs.description,
+            obs.responsible_person || '-',
+            obs.deadline_date ? new Date(obs.deadline_date).toLocaleDateString() : '-',
+            obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '-',
+            getStatus(obs).label
+          ]),
+          theme: 'striped',
+          styles: { fontSize: 8, font: 'helvetica' },
+          headStyles: { fillColor: [51, 65, 85] },
+          margin: { left: 14, right: 14 }
+        });
+
+        // @ts-ignore - finalY exists in autoTable result
+        currentY = (doc as any).lastAutoTable.finalY + 15;
+      });
+    } else {
+      // Global Tabular PDF
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Opération', 'CTX', 'Description', 'Réalisateur', 'Statut', 'Info']],
+        body: filteredData.map(obs => [
+          obs.operations.name,
+          obs.operations.project_manager,
+          obs.description,
+          obs.responsible_person || '-',
+          getStatus(obs).label,
+          obs.info_date ? new Date(obs.info_date).toLocaleDateString() : '-'
+        ]),
+        theme: 'striped',
+        styles: { fontSize: 8 },
+        headStyles: { fillColor: [15, 23, 42] }
+      });
+    }
+
+    doc.save(`MonPetitPro_Rapport_${new Date().toISOString().split('T')[0]}.pdf`);
+    triggerSuccessToast(useStore.getState().user?.email, "PDF généré avec succès !");
   };
 
   const exportToExcel = () => {
     const dataToExport = filteredData.map((obs: any) => ({
-      'Opération': obs.operation?.name || 'N/A',
-      'Conducteur (CTX)': obs.operation?.project_manager || 'N/A',
+      'Opération': obs.operations?.name || 'N/A',
+      'Conducteur (CTX)': obs.operations?.project_manager || 'N/A',
       'Description': obs.description,
       'Statut': obs.status === 'done' ? 'Terminé' : (obs.status === 'blocked' ? 'Bloqué' : 'En cours'),
       'Réalisateur': obs.responsible_person || 'N/A',
       'Date Info': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A',
       'Butoire': obs.deadline_date ? new Date(obs.deadline_date).toLocaleDateString() : 'N/A',
       'Réalisation': obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : 'N/A',
-      'Type': obs.operation?.operation_type || 'N/A',
-      'Promoteur': obs.operation?.promoter_name || 'N/A'
+      'Type': obs.operations?.operation_type || 'N/A',
+      'Promoteur': obs.operations?.promoter_name || 'N/A'
     }));
 
     const worksheet = XLSX.utils.json_to_sheet(dataToExport);
@@ -114,7 +187,7 @@ export default function Observations() {
     worksheet['!cols'] = Object.keys(dataToExport[0]).map(() => ({ wch: max_width + 2 }));
 
     XLSX.writeFile(workbook, `MonPetitPro_Observations_${new Date().toISOString().split('T')[0]}.xlsx`);
-    triggerSuccessToast("Fichier Excel généré avec succès !");
+    triggerSuccessToast(useStore.getState().user?.email, "Fichier Excel généré avec succès !");
   };
 
   // Dynamic filter lists
@@ -183,7 +256,7 @@ export default function Observations() {
             <FileSpreadsheet size={18} /> Exporter Excel
           </button>
           <button 
-            onClick={handlePrint}
+            onClick={generatePDF}
             className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition shadow-sm"
           >
             <Printer size={18} /> Exporter PDF

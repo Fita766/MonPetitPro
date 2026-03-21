@@ -140,7 +140,7 @@ export default function OperationDetail() {
   };
 
   const deleteObservation = async (obsId: string) => {
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
     try {
       const { error } = await supabase.from('observations').delete().eq('id', obsId);
       if (error) throw error;
@@ -165,7 +165,7 @@ export default function OperationDetail() {
 
   const deleteOperation = async () => {
     if (!operation) return;
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette opération ET toutes ses observations ? Cette action est irréversible.')) return;
+    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette opération ET toutes ses observations ? Cette action est irréversible.')) return;
     try {
       const { error } = await supabase.from('operations').delete().eq('id', operation.id);
       if (error) throw error;
@@ -185,6 +185,7 @@ export default function OperationDetail() {
         .eq('id', obsId);
         
       if (error) throw error;
+      triggerSuccessToast(useStore.getState().user?.email, 'Observation marquée comme terminée.');
       fetchOperationData();
     } catch (error) {
       console.error('Error marking as completed:', error);

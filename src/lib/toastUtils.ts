@@ -24,7 +24,9 @@ const PAPA_JOKES = [
 ];
 
 export const triggerSuccessToast = (userEmail: string | undefined, defaultMsg: string = "Action effectuée avec succès.") => {
-  if (userEmail?.toLowerCase() === 'sd@familleducastel.com') {
+  const isPapa = userEmail?.toLowerCase() === 'sd@familleducastel.com' || userEmail?.toLowerCase() === 'test@test.com';
+  
+  if (isPapa) {
     const randomJoke = PAPA_JOKES[Math.floor(Math.random() * PAPA_JOKES.length)];
     useStore.getState().setToastMessage(`👑 ${randomJoke}`);
   } else {
