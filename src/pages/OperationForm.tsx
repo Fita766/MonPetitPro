@@ -13,13 +13,16 @@ export default function OperationForm() {
   
   const [managers, setManagers] = useState<string[]>([]);
   const [promoters, setPromoters] = useState<string[]>([]);
+  const [opTypes, setOpTypes] = useState<string[]>(['MOD', 'Inter G', 'Etudiant', 'Béguinage', 'VEFA', 'Réhabilitation', 'Autre']);
   const [showCustomManager, setShowCustomManager] = useState(false);
   const [showCustomPromoter, setShowCustomPromoter] = useState(false);
+  const [showCustomOpType, setShowCustomOpType] = useState(false);
 
   const [formData, setFormData] = useState({
     name: '',
     project_manager: '',
-    operation_type: 'V1',
+    manager_name: '', // Nouveau champ Gestionnaire
+    operation_type: 'MOD',
     promoter_name: '',
     contractual_delivery_date: '',
     expected_delivery_date: '',
@@ -34,6 +37,8 @@ export default function OperationForm() {
     pls_units: '0',
     brs_units: '0',
     psla_units: '0',
+    student_units: '0', // Nouveau
+    specific_units: '0', // Nouveau
     individual_housing_units: '0',
     collective_housing_units: '0',
   });
@@ -47,10 +52,14 @@ export default function OperationForm() {
 
   const fetchSuggestions = async () => {
     try {
-      const { data } = await supabase.from('operations').select('project_manager, promoter_name');
+      const { data } = await supabase.from('operations').select('project_manager, promoter_name, operation_type');
       if (data) {
         setManagers(Array.from(new Set(data.map(d => d.project_manager).filter(Boolean))));
         setPromoters(Array.from(new Set(data.map(d => d.promoter_name).filter(Boolean))));
+        
+        const existingTypes = Array.from(new Set(data.map(d => d.operation_type).filter(Boolean)));
+        const defaultTypes = ['MOD', 'Inter G', 'Etudiant', 'Béguinage', 'VEFA', 'Réhabilitation', 'Autre'];
+        setOpTypes(Array.from(new Set([...defaultTypes, ...existingTypes])));
       }
     } catch (err) {
       console.error(err);
@@ -67,9 +76,6 @@ export default function OperationForm() {
           acc[key] = data[key] === null ? '' : String(data[key]);
           return acc;
         }, {});
-        if (!['V1', 'VEFA', 'Réhabilitation', 'Autre'].includes(safeData.operation_type)) {
-           safeData.operation_type = 'Autre';
-        }
         
         // Setup initial custom views if existing values are not in DB lists yet
         // (will be resolved when fetchSuggestions finishes, but this ensures safety)
@@ -108,6 +114,8 @@ export default function OperationForm() {
         pls_units: parseInt(formData.pls_units) || 0,
         brs_units: parseInt(formData.brs_units) || 0,
         psla_units: parseInt(formData.psla_units) || 0,
+        student_units: parseInt(formData.student_units) || 0,
+        specific_units: parseInt(formData.specific_units) || 0,
         individual_housing_units: parseInt(formData.individual_housing_units) || 0,
         collective_housing_units: parseInt(formData.collective_housing_units) || 0,
         user_id: userData.user?.id,
@@ -173,6 +181,11 @@ export default function OperationForm() {
               <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
             </div>
             
+            <div className="col-span-1 md:col-span-2">
+              <label className="block text-sm font-medium text-slate-700 mb-1">Gestionnaire *</label>
+              <input required type="text" name="manager_name" value={formData.manager_name} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Nom du gestionnaire" />
+            </div>
+            
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Conducteur de travaux *</label>
               {managers.length > 0 && !showCustomManager && (!formData.project_manager || managers.includes(formData.project_manager)) ? (
@@ -207,12 +220,30 @@ export default function OperationForm() {
 
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Type d'opération *</label>
-              <select name="operation_type" value={formData.operation_type} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none">
-                <option value="V1">V1</option>
-                <option value="VEFA">VEFA</option>
-                <option value="Réhabilitation">Réhabilitation</option>
-                <option value="Autre">Autre</option>
-              </select>
+              {!showCustomOpType && opTypes.includes(formData.operation_type) ? (
+                <select 
+                  required
+                  name="operation_type" 
+                  value={formData.operation_type} 
+                  onChange={(e) => {
+                    if (e.target.value === 'NEW') {
+                      setShowCustomOpType(true);
+                      setFormData({...formData, operation_type: ''});
+                    } else handleChange(e);
+                  }} 
+                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
+                >
+                  {opTypes.map(t => <option key={t} value={t}>{t}</option>)}
+                  <option value="NEW" className="font-bold text-primary">+ Autre type...</option>
+                </select>
+              ) : (
+                <div className="relative">
+                  <input required type="text" placeholder="Type (ex: MOD, VEFA...)" value={formData.operation_type} onChange={(e) => setFormData({...formData, operation_type: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none pr-16" />
+                  <button type="button" onClick={() => { setShowCustomOpType(false); setFormData({...formData, operation_type: 'MOD'}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
+                    Liste
+                  </button>
+                </div>
+              )}
             </div>
 
             {formData.operation_type === 'VEFA' && (
@@ -306,7 +337,7 @@ export default function OperationForm() {
         {/* Logements */}
         <section>
           <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Détails des logements</h2>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
             <div className="col-span-2 md:col-span-4 bg-slate-50 p-4 rounded-lg border border-slate-200 mb-2">
               <label className="block text-sm font-medium text-slate-800 mb-1">Nombre total de logements</label>
               <input type="number" min="0" name="total_housing_units" value={formData.total_housing_units} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none max-w-xs" />
@@ -319,6 +350,8 @@ export default function OperationForm() {
             <div><label className="block text-xs text-slate-500 mb-1">PLS</label><input type="number" min="0" name="pls_units" value={formData.pls_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
             <div><label className="block text-xs text-slate-500 mb-1">BRS</label><input type="number" min="0" name="brs_units" value={formData.brs_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
             <div><label className="block text-xs text-slate-500 mb-1">PSLA</label><input type="number" min="0" name="psla_units" value={formData.psla_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Etudiant</label><input type="number" min="0" name="student_units" value={formData.student_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
+            <div><label className="block text-xs text-slate-500 mb-1">Spécifique</label><input type="number" min="0" name="specific_units" value={formData.specific_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
           </div>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>

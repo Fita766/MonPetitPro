@@ -24,3 +24,36 @@ input[type="submit"],
 input[type="button"] {
   cursor: pointer;
 }
+
+/* Print Styles for PDF Export */
+@media print {
+  .print\:hidden {
+    display: none !important;
+  }
+  
+  body {
+    background-color: white !important;
+    padding: 0 !important;
+  }
+
+  .print\:break-inside-avoid {
+    break-inside: avoid;
+  }
+
+  #print-area {
+    width: 100% !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure background colors are printed */
+  * {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  /* Adjust spacing for print */
+  .pb-12 {
+    padding-bottom: 0 !important;
+  }
+}
