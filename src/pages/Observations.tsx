@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, ArrowLeft, Building2, FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
+import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
