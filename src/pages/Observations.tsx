@@ -165,29 +165,70 @@ export default function Observations() {
   };
 
   const exportToExcel = () => {
-    const dataToExport = filteredData.map((obs: any) => ({
-      'Opération': obs.operations?.name || 'N/A',
-      'Conducteur (CTX)': obs.operations?.project_manager || 'N/A',
-      'Description': obs.description,
-      'Statut': obs.status === 'done' ? 'Terminé' : (obs.status === 'blocked' ? 'Bloqué' : 'En cours'),
-      'Réalisateur': obs.responsible_person || 'N/A',
-      'Date Info': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A',
-      'Butoire': obs.deadline_date ? new Date(obs.deadline_date).toLocaleDateString() : 'N/A',
-      'Réalisation': obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : 'N/A',
-      'Type': obs.operations?.operation_type || 'N/A',
-      'Promoteur': obs.operations?.promoter_name || 'N/A'
-    }));
-
-    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Observations");
-    
-    // Auto-size columns
-    const max_width = dataToExport.reduce((w: number, r: any) => Math.max(w, ...Object.values(r).map((v: any) => v ? v.toString().length : 0)), 10);
-    worksheet['!cols'] = Object.keys(dataToExport[0]).map(() => ({ wch: max_width + 2 }));
 
-    XLSX.writeFile(workbook, `MonPetitPro_Observations_${new Date().toISOString().split('T')[0]}.xlsx`);
-    triggerSuccessToast(useStore.getState().user?.email, "Fichier Excel généré avec succès !");
+    // 1. Helper for sheet creation
+    const formatObs = (obs: any) => ({
+      'Nom OP': obs.operations?.name || 'N/A',
+      'Nbre lot': obs.operations?.total_housing_units || 0,
+      'CTx': obs.operations?.project_manager || 'N/A',
+      'Description': obs.description,
+      'Statut': getStatus(obs).label,
+      'Réalisateur': obs.responsible_person || 'N/A',
+      'Dates': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A'
+    });
+
+    // 2. CTX Sheet (Sorted by CTX)
+    const ctxData = [...filteredData].sort((a, b) => (a.operations?.project_manager || '').localeCompare(b.operations?.project_manager || '')).map(formatObs);
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ctxData), "CTX");
+
+    // 3. STATUT Sheet (Sorted by Status)
+    const statusData = [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)).map(formatObs);
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(statusData), "STATUT");
+
+    // 4. OPERATIONS Sheet (Summary from filtered observations' unique operations)
+    const uniqueOps = Array.from(new Set(filteredData.map(o => o.operations.id))).map(id => {
+      const op = filteredData.find(o => o.operations.id === id).operations;
+      return {
+        'Nom OP': op.name,
+        'Nbre lot': op.total_housing_units,
+        'Contractuelle': op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'N/A',
+        'Previde livraison': op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : 'N/A'
+      };
+    });
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(uniqueOps), "OPERATIONS");
+
+    // 5. VEFA Sheet (Only VEFA + includes Promoter col)
+    const vefaData = filteredData
+      .filter(obs => obs.operations?.operation_type === 'VEFA')
+      .map(obs => ({
+        'Nom OP': obs.operations?.name || 'N/A',
+        'Promoteur': obs.operations?.promoter_name || 'N/A',
+        'Nbre lot': obs.operations?.total_housing_units || 0,
+        'CTx': obs.operations?.project_manager || 'N/A',
+        'Description': obs.description,
+        'Statut': getStatus(obs).label,
+        'Réalisateur': obs.responsible_person || 'N/A',
+        'Dates': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A'
+      }));
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(vefaData), "VEFA");
+
+    // 6. MOD Sheet (Everything except VEFA)
+    const modData = filteredData
+      .filter(obs => obs.operations?.operation_type !== 'VEFA')
+      .map(formatObs);
+    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(modData), "MOD");
+
+    // Auto-size columns for all sheets
+    workbook.SheetNames.forEach(name => {
+      const sheet = workbook.Sheets[name];
+      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
+      const max_width = data.reduce((w, r) => Math.max(w, ...r.map(v => v ? v.toString().length : 0)), 10);
+      sheet['!cols'] = data[0].map(() => ({ wch: max_width + 2 }));
+    });
+
+    XLSX.writeFile(workbook, `MonPetitPro_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
+    triggerSuccessToast(useStore.getState().user?.email, "Export Excel généré avec succès !");
   };
 
   // Dynamic filter lists

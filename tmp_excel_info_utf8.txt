@@ -1,0 +1,99 @@
+﻿Sheet Names: [ 'CTX', 'STATUT', 'OPERATIONS', 'VEFA', 'MOD' ]
+
+--- Sheet: CTX ---
+--- First 10 rows ---
+Row 0: []
+Row 1: [ 'FILTRE PAR CTX' ]
+Row 2: []
+Row 3: [ 'Nom Op 1' ]
+Row 4: [ <3 empty items>, 'Nbre logt', <1 empty item>, 'CTX' ]
+Row 5: [
+  'Date de livraison',
+  <1 empty item>,
+  'Contractuelle',
+  'XX/XX/XXXX',
+  'Previ',
+  'XX/XX/XXXX'
+]
+Row 6: [ <2 empty items>, 'R├®elle', 'XX/XX/XXXX', 'VEFA / MOD', 'PROMOTEUR' ]
+Row 7: [
+  'Statut',
+  'Date info',
+  'Description',
+  'R├®alisateur',
+  'date butoire',
+  'date r├®alisation'
+]
+Row 8: []
+Row 9: [ 'Nom Op 2' ]
+
+--- Sheet: STATUT ---
+--- First 10 rows ---
+Row 0: []
+Row 1: [ 'FILTRE PAR STATUT' ]
+Row 2: []
+Row 3: [ 'Nom OP', 'CTx', 'Description', 'Statut', 'R├®alisateur', 'Dates' ]
+Row 4: [ <5 empty items>, 'Info', 'Butoire', 'R├®alisation' ]
+Row 5: [ <3 empty items>, 'Texte + couleur' ]
+
+--- Sheet: OPERATIONS ---
+--- First 10 rows ---
+Row 0: []
+Row 1: [ 'FILTRE PAR OPERATION' ]
+Row 2: []
+Row 3: [ 'Nom Op 1' ]
+Row 4: [ <3 empty items>, 'Nbre logt', <1 empty item>, 'CTX' ]
+Row 5: [
+  'Date de livraison',
+  <1 empty item>,
+  'Contractuelle',
+  'XX/XX/XXXX',
+  'Previ',
+  'XX/XX/XXXX'
+]
+Row 6: [ <2 empty items>, 'R├®elle', 'XX/XX/XXXX', 'VEFA / MOD', 'PROMOTEUR' ]
+Row 7: [
+  'Statut',
+  'Date info',
+  'Description',
+  'R├®alisateur',
+  'date butoire',
+  'date r├®alisation'
+]
+Row 8: []
+Row 9: [ 'Nom Op 3' ]
+
+--- Sheet: VEFA ---
+--- First 10 rows ---
+Row 0: []
+Row 1: [ 'FILTRE PAR VEFA' ]
+Row 2: []
+Row 3: [
+  'Nom OP',
+  'Promoteur',
+  'Nbre lot',
+  'CTx',
+  'Description',
+  'Statut',
+  'R├®alisateur',
+  'Dates'
+]
+Row 4: [ <7 empty items>, 'Info', 'Butoire', 'R├®alisation' ]
+Row 5: [ <5 empty items>, 'Texte + couleur' ]
+
+--- Sheet: MOD ---
+--- First 10 rows ---
+Row 0: []
+Row 1: [ 'FILTRE PAR MOD' ]
+Row 2: []
+Row 3: [
+  'Nom OP',
+  'Nbre lot',
+  'CTx',
+  'Description',
+  'Statut',
+  'R├®alisateur',
+  'Dates'
+]
+Row 4: [ <6 empty items>, 'Info', 'Butoire', 'R├®alisation' ]
+Row 5: [ <4 empty items>, 'Texte + couleur' ]
