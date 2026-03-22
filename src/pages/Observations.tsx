@@ -163,206 +163,223 @@ export default function Observations() {
   const exportToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
     
-    // --- FEUILLE 1 : CTX ---
-    const sheetCtx = workbook.addWorksheet('CTX');
-    sheetCtx.columns = [
-      { width: 15 }, // A: Statut
-      { width: 12 }, // B: Date Info
-      { width: 40 }, // C: Description
-      { width: 15 }, // D: Label Delivery
-      { width: 15 }, // E: Nbre logt / Réalisateur
-      { width: 15 }, // F: Value / Date butoire
-      { width: 15 }, // G: CTX / Date réalisation
-      { width: 25 }, // H: Value / CTX / PROMOTEUR
-    ];
+    // --- FONCTION UTILITAIRE : GÉNÉRER UNE FEUILLE STRUCTURÉE ---
+    const addStructuredSheet = (sheetName: string, mainTitle: string, data: any[]) => {
+      const sheet = workbook.addWorksheet(sheetName);
+      sheet.columns = [
+        { width: 15 }, // A: Statut
+        { width: 12 }, // B: Date Info
+        { width: 40 }, // C: Description
+        { width: 15 }, // D: Label Delivery
+        { width: 15 }, // E: Nbre logt / Réalisateur
+        { width: 15 }, // F: Value / Date butoire
+        { width: 15 }, // G: CTX / Date réalisation
+        { width: 25 }, // H: Value / CTX / PROMOTEUR
+      ];
 
-    const mainHeader = sheetCtx.getCell('A1');
-    mainHeader.value = 'FILTRE PAR CTX';
-    sheetCtx.mergeCells('A1:H1');
-    mainHeader.style = {
-      font: { bold: true, size: 14 },
-      alignment: { horizontal: 'center', vertical: 'middle' },
-      border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
-    };
+      const mainHeader = sheet.getCell('A1');
+      mainHeader.value = mainTitle;
+      sheet.mergeCells('A1:H1');
+      mainHeader.style = {
+        font: { bold: true, size: 14 },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+      };
 
-    let currentRow = 3;
-    const opsIds = Array.from(new Set(filteredData.map(o => o.operations.id)));
-    
-    for (const opId of opsIds) {
-      const op = filteredData.find(o => o.operations.id === opId).operations;
-      const opObs = filteredData.filter(o => o.operations.id === opId);
-
-      const opNameCell = sheetCtx.getCell(`A${currentRow}`);
-      opNameCell.value = op.name;
-      sheetCtx.mergeCells(`A${currentRow}:D${currentRow}`);
-      opNameCell.font = { bold: true, size: 12 };
-      opNameCell.border = { top: { style: 'medium' }, left: { style: 'medium' } };
-
-      currentRow++;
-
-      const delLabel = sheetCtx.getCell(`A${currentRow}`);
-      delLabel.value = 'Date de livraison';
-      sheetCtx.mergeCells(`A${currentRow}:B${currentRow + 1}`);
-      delLabel.alignment = { horizontal: 'center', vertical: 'middle' };
-      delLabel.border = { left: { style: 'medium' }, right: { style: 'thin' }, top: { style: 'thin' }, bottom: { style: 'thin' } };
-
-      sheetCtx.getCell(`C${currentRow}`).value = 'Contractuelle';
-      sheetCtx.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-      sheetCtx.getCell(`E${currentRow}`).value = 'Nbre logt';
-      sheetCtx.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
-      sheetCtx.getCell(`G${currentRow}`).value = 'CTX';
-      sheetCtx.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
-
-      ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-        sheetCtx.getCell(`${col}${currentRow}`).border = { 
-          top: { style: 'thin' }, 
-          bottom: { style: 'thin' }, 
-          left: { style: 'thin' }, 
-          right: { style: col === 'H' ? 'medium' : 'thin' } 
-        };
-      });
-
-      currentRow++;
-
-      sheetCtx.getCell(`C${currentRow}`).value = 'Réelle';
-      sheetCtx.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-      sheetCtx.getCell(`E${currentRow}`).value = 'VEFA / MOD';
-      sheetCtx.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
-      sheetCtx.getCell(`G${currentRow}`).value = 'PROMOTEUR';
-      sheetCtx.getCell(`H${currentRow}`).value = op.promoter_name || '-';
-
-      ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-        sheetCtx.getCell(`${col}${currentRow}`).border = { 
-          top: { style: 'thin' }, 
-          bottom: { style: 'thin' }, 
-          left: { style: 'thin' }, 
-          right: { style: col === 'H' ? 'medium' : 'thin' } 
-        };
-      });
-
-      currentRow++;
-
-      const hCols = ['A', 'B', 'C', 'E', 'F', 'G'];
-      const hLabels = ['Statut', 'Date info', 'Description', 'Réalisateur', 'date butoire', 'date réalisation'];
+      let currentRow = 3;
+      const opsIds = Array.from(new Set(data.map(o => o.operations.id)));
       
-      hCols.forEach((col, i) => {
-        const cell = sheetCtx.getCell(`${col}${currentRow}`);
-        cell.value = hLabels[i];
-        cell.font = { bold: true };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-        cell.border = { 
-          top: { style: 'thin' }, bottom: { style: 'thin' }, 
-          left: { style: col === 'A' ? 'medium' : 'thin' }, 
-          right: { style: col === 'G' ? 'medium' : 'thin' } 
-        };
-      });
+      for (const opId of opsIds) {
+        const op = data.find(o => o.operations.id === opId).operations;
+        const opObs = data.filter(o => o.operations.id === opId);
 
-      currentRow++;
+        // Nom OP
+        const opNameCell = sheet.getCell(`A${currentRow}`);
+        opNameCell.value = op.name;
+        sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+        opNameCell.font = { bold: true, size: 12 };
+        opNameCell.border = { top: { style: 'medium' }, left: { style: 'medium' } };
+        currentRow++;
 
-      opObs.forEach((obs, idx) => {
-        const s = getStatus(obs).label;
-        sheetCtx.getCell(`A${currentRow}`).value = s;
-        sheetCtx.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
-        sheetCtx.getCell(`C${currentRow}`).value = obs.description;
-        sheetCtx.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
-        sheetCtx.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
-        sheetCtx.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+        // Livraison Labels
+        const delLabel = sheet.getCell(`A${currentRow}`);
+        delLabel.value = 'Date de livraison';
+        sheet.mergeCells(`A${currentRow}:B${currentRow + 1}`);
+        delLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+        delLabel.border = { left: { style: 'medium' }, right: { style: 'thin' }, top: { style: 'thin' }, bottom: { style: 'thin' } };
 
-        ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
-          sheetCtx.getCell(`${col}${currentRow}`).border = { 
-            left: { style: col === 'A' ? 'medium' : 'thin' }, 
-            right: { style: col === 'G' ? 'medium' : 'thin' },
-            bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
+        sheet.getCell(`C${currentRow}`).value = 'Contractuelle';
+        sheet.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+        sheet.getCell(`E${currentRow}`).value = 'Nbre logt';
+        sheet.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
+        sheet.getCell(`G${currentRow}`).value = 'CTX';
+        sheet.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
+
+        ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
+          sheet.getCell(`${col}${currentRow}`).border = { 
+            top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: col === 'H' ? 'medium' : 'thin' } 
           };
         });
         currentRow++;
-      });
 
-      currentRow += 2;
-    }
+        sheet.getCell(`C${currentRow}`).value = 'Réelle';
+        sheet.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+        sheet.getCell(`E${currentRow}`).value = 'VEFA / MOD';
+        sheet.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
+        sheet.getCell(`G${currentRow}`).value = 'PROMOTEUR';
+        sheet.getCell(`H${currentRow}`).value = op.promoter_name || '-';
 
-    // --- FEUILLE 2 : STATUT ---
-    const sheetStatut = workbook.addWorksheet('STATUT');
-    sheetStatut.columns = [
-      { width: 20 }, // A: Nom OP
-      { width: 15 }, // B: CTx
-      { width: 45 }, // C: Description
-      { width: 18 }, // D: Statut
-      { width: 20 }, // E: Réalisateur
-      { width: 15 }, // F: Info
-      { width: 15 }, // G: Butoire
-      { width: 15 }, // H: Réalisation
-    ];
+        ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
+          sheet.getCell(`${col}${currentRow}`).border = { 
+            top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: col === 'H' ? 'medium' : 'thin' } 
+          };
+        });
+        currentRow++;
 
-    const statutHeader = sheetStatut.getCell('A1');
-    statutHeader.value = 'FILTRE PAR STATUT';
-    sheetStatut.mergeCells('A1:H1');
-    statutHeader.style = {
-      font: { bold: true, size: 14 },
-      alignment: { horizontal: 'center', vertical: 'middle' },
-      border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+        // En-têtes Observations
+        const hCols = ['A', 'B', 'C', 'E', 'F', 'G'];
+        const hLabels = ['Statut', 'Date info', 'Description', 'Réalisateur', 'date butoire', 'date réalisation'];
+        hCols.forEach((col, i) => {
+          const cell = sheet.getCell(`${col}${currentRow}`);
+          cell.value = hLabels[i];
+          cell.font = { bold: true };
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+          cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' } };
+        });
+        currentRow++;
+
+        // Lignes Observations
+        opObs.forEach((obs, idx) => {
+          const status = getStatus(obs).label;
+          sheet.getCell(`A${currentRow}`).value = status;
+          sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
+          sheet.getCell(`C${currentRow}`).value = obs.description;
+          sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
+          sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
+          sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+
+          ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
+            sheet.getCell(`${col}${currentRow}`).border = { 
+              left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' },
+              bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
+            };
+          });
+          currentRow++;
+        });
+        currentRow += 2;
+      }
     };
 
-    const hRow1 = 3;
-    const hRow2 = 4;
-    const topHeaders = ['Nom OP', 'CTx', 'Description', 'Statut', 'Réalisateur', 'Dates'];
-    const subHeaders = ['', '', '', '', '', 'Info', 'Butoire', 'Réalisation'];
-
-    topHeaders.forEach((h, i) => {
-      const targetCell = sheetStatut.getCell(`${String.fromCharCode(65 + i)}${hRow1}`);
-      targetCell.value = h;
-      targetCell.font = { bold: true };
-      targetCell.alignment = { horizontal: 'center', vertical: 'middle' };
-      targetCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-      targetCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+    // --- FONCTION UTILITAIRE : GÉNÉRER UNE FEUILLE TABULAIRE ---
+    const addTabularSheet = (sheetName: string, mainTitle: string, data: any[], includePromoteur: boolean = true) => {
+      const sheet = workbook.addWorksheet(sheetName);
       
-      if (i < 5) {
-        sheetStatut.mergeCells(`${String.fromCharCode(65 + i)}${hRow1}:${String.fromCharCode(65 + i)}${hRow2}`);
-      } else {
-        sheetStatut.mergeCells(`F${hRow1}:H${hRow1}`);
+      const cols = [
+        { header: 'Nom OP', width: 20 },
+        ...(includePromoteur ? [{ header: 'Promoteur', width: 20 }] : []),
+        { header: 'Nbre lot', width: 12 },
+        { header: 'CTx', width: 15 },
+        { header: 'Description', width: 45 },
+        { header: 'Statut', width: 18 },
+        { header: 'Réalisateur', width: 20 },
+        { header: 'Info', width: 15 },
+        { header: 'Butoire', width: 15 },
+        { header: 'Réalisation', width: 15 },
+      ];
+      sheet.columns = cols.map(c => ({ width: c.width }));
+
+      const totalCols = cols.length;
+      const lastColLetter = String.fromCharCode(64 + totalCols);
+
+      const mainHeader = sheet.getCell('A1');
+      mainHeader.value = mainTitle;
+      sheet.mergeCells(`A1:${lastColLetter}1`);
+      mainHeader.style = {
+        font: { bold: true, size: 14 },
+        alignment: { horizontal: 'center', vertical: 'middle' },
+        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+      };
+
+      // Header row 3 & 4
+      const hRow1 = 3;
+      const hRow2 = 4;
+      
+      // En-têtes statiques (les 7 premières colonnes ou 6 si sans promoteur)
+      const staticColsCount = includePromoteur ? 7 : 6;
+      for (let i = 0; i < staticColsCount; i++) {
+        const colLetter = String.fromCharCode(65 + i);
+        const cell = sheet.getCell(`${colLetter}${hRow1}`);
+        cell.value = cols[i].header;
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+        sheet.mergeCells(`${colLetter}${hRow1}:${colLetter}${hRow2}`);
       }
-    });
 
-    ['F', 'G', 'H'].forEach((col, i) => {
-      const cell = sheetStatut.getCell(`${col}${hRow2}`);
-      cell.value = subHeaders[5 + i];
-      cell.font = { bold: true };
-      cell.alignment = { horizontal: 'center' };
-      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-    });
+      // En-tête fusionné "Dates"
+      const dateStartColLetter = String.fromCharCode(65 + staticColsCount);
+      const cellDates = sheet.getCell(`${dateStartColLetter}${hRow1}`);
+      cellDates.value = 'Dates';
+      cellDates.font = { bold: true };
+      cellDates.alignment = { horizontal: 'center', vertical: 'middle' };
+      cellDates.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+      cellDates.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+      sheet.mergeCells(`${dateStartColLetter}${hRow1}:${lastColLetter}${hRow1}`);
 
-    const sortedByStatus = [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label));
-    
-    let stRow = 5;
-    sortedByStatus.forEach((obs) => {
-      const status = getStatus(obs);
-      sheetStatut.getCell(`A${stRow}`).value = obs.operations.name;
-      sheetStatut.getCell(`B${stRow}`).value = obs.operations.project_manager;
-      sheetStatut.getCell(`C${stRow}`).value = obs.description;
-      
-      const stCell = sheetStatut.getCell(`D${stRow}`);
-      stCell.value = status.label;
-      let bgColor = 'FFFFFF';
-      if (status.label === 'Terminé') bgColor = 'D1FAE5';
-      if (status.label === 'En retard') bgColor = 'FEE2E2';
-      if (status.label === 'En cours') bgColor = 'FEF3C7';
-      
-      stCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-      stCell.font = { italic: true };
-
-      sheetStatut.getCell(`E${stRow}`).value = obs.responsible_person || '-';
-      sheetStatut.getCell(`F${stRow}`).value = new Date(obs.info_date).toLocaleDateString();
-      sheetStatut.getCell(`G${stRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
-      sheetStatut.getCell(`H${stRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
-
-      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-        sheetStatut.getCell(`${col}${stRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-        sheetStatut.getCell(`${col}${stRow}`).alignment = { vertical: 'middle' };
+      // Sous-en-têtes dates
+      ['Info', 'Butoire', 'Réalisation'].forEach((h, idx) => {
+        const colLetter = String.fromCharCode(65 + staticColsCount + idx);
+        const cell = sheet.getCell(`${colLetter}${hRow2}`);
+        cell.value = h;
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'center' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
       });
-      stRow++;
-    });
 
+      // Données
+      let r = 5;
+      data.forEach(obs => {
+        const status = getStatus(obs);
+        let c = 1;
+        sheet.getCell(r, c++).value = obs.operations.name;
+        if (includePromoteur) sheet.getCell(r, c++).value = obs.operations.promoter_name || '-';
+        sheet.getCell(r, c++).value = obs.operations.total_housing_units || 0;
+        sheet.getCell(r, c++).value = obs.operations.project_manager;
+        sheet.getCell(r, c++).value = obs.description;
+        
+        const stCell = sheet.getCell(r, c++);
+        stCell.value = status.label;
+        let bgColor = 'FFFFFF';
+        if (status.label === 'Terminé') bgColor = 'D1FAE5';
+        if (status.label === 'En retard') bgColor = 'FEE2E2';
+        if (status.label === 'En cours') bgColor = 'FEF3C7';
+        stCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+        stCell.font = { italic: true };
+
+        sheet.getCell(r, c++).value = obs.responsible_person || '-';
+        sheet.getCell(r, c++).value = new Date(obs.info_date).toLocaleDateString();
+        sheet.getCell(r, c++).value = new Date(obs.deadline_date).toLocaleDateString();
+        sheet.getCell(r, c++).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+
+        // Bordures pour toute la ligne
+        for (let j = 1; j <= totalCols; j++) {
+          sheet.getCell(r, j).border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+          sheet.getCell(r, j).alignment = { vertical: 'middle' };
+        }
+        r++;
+      });
+    };
+
+    // --- GÉNÉRATION DES 5 FEUILLES ---
+    addStructuredSheet('CTX', 'FILTRE PAR CTX', filteredData);
+    addTabularSheet('STATUT', 'FILTRE PAR STATUT', [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)), false);
+    addStructuredSheet('OPERATIONS', 'FILTRE PAR OPERATION', filteredData);
+    addTabularSheet('VEFA', 'FILTRE PAR VEFA', filteredData.filter(o => o.operations.operation_type === 'VEFA'));
+    addTabularSheet('MOD', 'FILTRE PAR MOD', filteredData.filter(o => o.operations.operation_type !== 'VEFA'), false);
+
+    // --- FINALISATION ---
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
@@ -372,7 +389,7 @@ export default function Observations() {
     anchor.click();
     window.URL.revokeObjectURL(url);
 
-    triggerSuccessToast(useStore.getState().user?.email, "Export Excel Premium généré !");
+    triggerSuccessToast(useStore.getState().user?.email, "Export Excel Premium généré (5 feuilles) !");
   };
 
   // Dynamic filter lists
