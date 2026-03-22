@@ -408,7 +408,7 @@ export default function Observations() {
     // --- GÉNÉRATION DES 5 FEUILLES ---
     // In excel export, we might want to include empty ops too if they are visible in UI?
     // Let's use groupedData object entries for CTX and OPERATIONS to match UI
-    const exportDataGroups = Object.values(groupedData).flatMap(g => g.items.length > 0 ? g.items : [{ operations: g.op }]);
+    const exportDataGroups = (Object.values(groupedData) as any[]).flatMap(g => g.items.length > 0 ? g.items : [{ operations: g.op }]);
     
     addStructuredSheet('CTX', 'FILTRE PAR CTX', exportDataGroups);
     addTabularSheet('STATUT', 'FILTRE PAR STATUT', [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)), false);
