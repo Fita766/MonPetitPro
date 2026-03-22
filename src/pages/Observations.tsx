@@ -95,7 +95,7 @@ export default function Observations() {
     
     doc.setFontSize(22);
     doc.setTextColor(15, 23, 42); 
-    doc.text("MonPetitPro - Suivi Action Immo", 14, 20);
+    doc.text("Suivi Action Immo", 14, 20);
     
     doc.setFontSize(14);
     doc.setTextColor(100, 116, 139); 
@@ -155,7 +155,7 @@ export default function Observations() {
       });
     }
 
-    doc.save(`MonPetitPro_Rapport_${new Date().toISOString().split('T')[0]}.pdf`);
+    doc.save(`Rapport_Suivi_Immo_${new Date().toISOString().split('T')[0]}.pdf`);
     triggerSuccessToast(useStore.getState().user?.email, "PDF généré avec succès !");
   };
 
@@ -384,7 +384,7 @@ export default function Observations() {
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `MonPetitPro_Export_Premium_${new Date().toISOString().split('T')[0]}.xlsx`;
+    anchor.download = `Export_Premium_Suivi_Immo_${new Date().toISOString().split('T')[0]}.xlsx`;
     anchor.click();
     window.URL.revokeObjectURL(url);
 
