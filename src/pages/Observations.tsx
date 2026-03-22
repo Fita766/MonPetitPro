@@ -91,30 +91,27 @@ export default function Observations() {
   };
 
   const generatePDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); // Landscape for better table space
+    const doc = new jsPDF('l', 'mm', 'a4'); 
     const dateStr = new Date().toLocaleDateString();
     
-    // Header
     doc.setFontSize(22);
-    doc.setTextColor(15, 23, 42); // slate-900
+    doc.setTextColor(15, 23, 42); 
     doc.text("MonPetitPro - Suivi Action Immo", 14, 20);
     
     doc.setFontSize(14);
-    doc.setTextColor(100, 116, 139); // slate-500
+    doc.setTextColor(100, 116, 139); 
     doc.text(`Rapport d'Observations - ${dateStr}`, 14, 30);
     
     let currentY = 40;
 
     if (viewMode === 'structuree') {
-      // PDF grouped by operation
       (Object.entries(groupedData) as [string, {op: any, items: any[]}][]).forEach(([_, { op, items }]) => {
         if (currentY > 250) {
           doc.addPage();
           currentY = 20;
         }
 
-        // Operation Header
-        doc.setFillColor(15, 23, 42); // Dark background
+        doc.setFillColor(15, 23, 42); 
         doc.rect(14, currentY, 269, 10, 'F');
         doc.setTextColor(255, 255, 255);
         doc.setFontSize(10);
@@ -139,11 +136,9 @@ export default function Observations() {
           margin: { left: 14, right: 14 }
         });
 
-        // @ts-ignore - finalY exists in autoTable result
         currentY = (doc as any).lastAutoTable.finalY + 15;
       });
     } else {
-      // Global Tabular PDF
       autoTable(doc, {
         startY: currentY,
         head: [['Opération', 'CTX', 'Description', 'Réalisateur', 'Statut', 'Info']],
@@ -167,10 +162,10 @@ export default function Observations() {
 
   const exportToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('CTX');
-
-    // Configuration des largeurs de colonnes
-    sheet.columns = [
+    
+    // --- FEUILLE 1 : CTX ---
+    const sheetCtx = workbook.addWorksheet('CTX');
+    sheetCtx.columns = [
       { width: 15 }, // A: Statut
       { width: 12 }, // B: Date Info
       { width: 40 }, // C: Description
@@ -181,10 +176,9 @@ export default function Observations() {
       { width: 25 }, // H: Value / CTX / PROMOTEUR
     ];
 
-    // 1. En-tête principal : FILTRE PAR CTX
-    const mainHeader = sheet.getCell('A1');
+    const mainHeader = sheetCtx.getCell('A1');
     mainHeader.value = 'FILTRE PAR CTX';
-    sheet.mergeCells('A1:H1');
+    sheetCtx.mergeCells('A1:H1');
     mainHeader.style = {
       font: { bold: true, size: 14 },
       alignment: { horizontal: 'center', vertical: 'middle' },
@@ -192,39 +186,35 @@ export default function Observations() {
     };
 
     let currentRow = 3;
-
-    // Groupement par Opération pour la feuille CTX
     const opsIds = Array.from(new Set(filteredData.map(o => o.operations.id)));
     
     for (const opId of opsIds) {
       const op = filteredData.find(o => o.operations.id === opId).operations;
       const opObs = filteredData.filter(o => o.operations.id === opId);
 
-      // --- Ligne 1 : Nom de l'Opération ---
-      const opNameCell = sheet.getCell(`A${currentRow}`);
+      const opNameCell = sheetCtx.getCell(`A${currentRow}`);
       opNameCell.value = op.name;
-      sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+      sheetCtx.mergeCells(`A${currentRow}:D${currentRow}`);
       opNameCell.font = { bold: true, size: 12 };
       opNameCell.border = { top: { style: 'medium' }, left: { style: 'medium' } };
 
       currentRow++;
 
-      // --- Ligne 2 : Labels et Métadonnées ---
-      const delLabel = sheet.getCell(`A${currentRow}`);
+      const delLabel = sheetCtx.getCell(`A${currentRow}`);
       delLabel.value = 'Date de livraison';
-      sheet.mergeCells(`A${currentRow}:B${currentRow + 1}`);
+      sheetCtx.mergeCells(`A${currentRow}:B${currentRow + 1}`);
       delLabel.alignment = { horizontal: 'center', vertical: 'middle' };
       delLabel.border = { left: { style: 'medium' }, right: { style: 'thin' }, top: { style: 'thin' }, bottom: { style: 'thin' } };
 
-      sheet.getCell(`C${currentRow}`).value = 'Contractuelle';
-      sheet.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-      sheet.getCell(`E${currentRow}`).value = 'Nbre logt';
-      sheet.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
-      sheet.getCell(`G${currentRow}`).value = 'CTX';
-      sheet.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
+      sheetCtx.getCell(`C${currentRow}`).value = 'Contractuelle';
+      sheetCtx.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+      sheetCtx.getCell(`E${currentRow}`).value = 'Nbre logt';
+      sheetCtx.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
+      sheetCtx.getCell(`G${currentRow}`).value = 'CTX';
+      sheetCtx.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
 
       ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-        sheet.getCell(`${col}${currentRow}`).border = { 
+        sheetCtx.getCell(`${col}${currentRow}`).border = { 
           top: { style: 'thin' }, 
           bottom: { style: 'thin' }, 
           left: { style: 'thin' }, 
@@ -234,16 +224,15 @@ export default function Observations() {
 
       currentRow++;
 
-      // --- Ligne 3 : Date Réelle & VEFA/MOD & PROMOTEUR ---
-      sheet.getCell(`C${currentRow}`).value = 'Réelle';
-      sheet.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-      sheet.getCell(`E${currentRow}`).value = 'VEFA / MOD';
-      sheet.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
-      sheet.getCell(`G${currentRow}`).value = 'PROMOTEUR';
-      sheet.getCell(`H${currentRow}`).value = op.promoter_name || '-';
+      sheetCtx.getCell(`C${currentRow}`).value = 'Réelle';
+      sheetCtx.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+      sheetCtx.getCell(`E${currentRow}`).value = 'VEFA / MOD';
+      sheetCtx.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
+      sheetCtx.getCell(`G${currentRow}`).value = 'PROMOTEUR';
+      sheetCtx.getCell(`H${currentRow}`).value = op.promoter_name || '-';
 
       ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-        sheet.getCell(`${col}${currentRow}`).border = { 
+        sheetCtx.getCell(`${col}${currentRow}`).border = { 
           top: { style: 'thin' }, 
           bottom: { style: 'thin' }, 
           left: { style: 'thin' }, 
@@ -253,12 +242,11 @@ export default function Observations() {
 
       currentRow++;
 
-      // --- Ligne 4 : En-têtes des observations ---
       const hCols = ['A', 'B', 'C', 'E', 'F', 'G'];
       const hLabels = ['Statut', 'Date info', 'Description', 'Réalisateur', 'date butoire', 'date réalisation'];
       
       hCols.forEach((col, i) => {
-        const cell = sheet.getCell(`${col}${currentRow}`);
+        const cell = sheetCtx.getCell(`${col}${currentRow}`);
         cell.value = hLabels[i];
         cell.font = { bold: true };
         cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
@@ -271,18 +259,17 @@ export default function Observations() {
 
       currentRow++;
 
-      // --- Données ---
       opObs.forEach((obs, idx) => {
         const s = getStatus(obs).label;
-        sheet.getCell(`A${currentRow}`).value = s;
-        sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
-        sheet.getCell(`C${currentRow}`).value = obs.description;
-        sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
-        sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
-        sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+        sheetCtx.getCell(`A${currentRow}`).value = s;
+        sheetCtx.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
+        sheetCtx.getCell(`C${currentRow}`).value = obs.description;
+        sheetCtx.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
+        sheetCtx.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
+        sheetCtx.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
 
         ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
-          sheet.getCell(`${col}${currentRow}`).border = { 
+          sheetCtx.getCell(`${col}${currentRow}`).border = { 
             left: { style: col === 'A' ? 'medium' : 'thin' }, 
             right: { style: col === 'G' ? 'medium' : 'thin' },
             bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
@@ -294,18 +281,99 @@ export default function Observations() {
       currentRow += 2;
     }
 
+    // --- FEUILLE 2 : STATUT ---
+    const sheetStatut = workbook.addWorksheet('STATUT');
+    sheetStatut.columns = [
+      { width: 20 }, // A: Nom OP
+      { width: 15 }, // B: CTx
+      { width: 45 }, // C: Description
+      { width: 18 }, // D: Statut
+      { width: 20 }, // E: Réalisateur
+      { width: 15 }, // F: Info
+      { width: 15 }, // G: Butoire
+      { width: 15 }, // H: Réalisation
+    ];
+
+    const statutHeader = sheetStatut.getCell('A1');
+    statutHeader.value = 'FILTRE PAR STATUT';
+    sheetStatut.mergeCells('A1:H1');
+    statutHeader.style = {
+      font: { bold: true, size: 14 },
+      alignment: { horizontal: 'center', vertical: 'middle' },
+      border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+    };
+
+    const hRow1 = 3;
+    const hRow2 = 4;
+    const topHeaders = ['Nom OP', 'CTx', 'Description', 'Statut', 'Réalisateur', 'Dates'];
+    const subHeaders = ['', '', '', '', '', 'Info', 'Butoire', 'Réalisation'];
+
+    topHeaders.forEach((h, i) => {
+      const targetCell = sheetStatut.getCell(`${String.fromCharCode(65 + i)}${hRow1}`);
+      targetCell.value = h;
+      targetCell.font = { bold: true };
+      targetCell.alignment = { horizontal: 'center', vertical: 'middle' };
+      targetCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+      targetCell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+      
+      if (i < 5) {
+        sheetStatut.mergeCells(`${String.fromCharCode(65 + i)}${hRow1}:${String.fromCharCode(65 + i)}${hRow2}`);
+      } else {
+        sheetStatut.mergeCells(`F${hRow1}:H${hRow1}`);
+      }
+    });
+
+    ['F', 'G', 'H'].forEach((col, i) => {
+      const cell = sheetStatut.getCell(`${col}${hRow2}`);
+      cell.value = subHeaders[5 + i];
+      cell.font = { bold: true };
+      cell.alignment = { horizontal: 'center' };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+    });
+
+    const sortedByStatus = [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label));
+    
+    let stRow = 5;
+    sortedByStatus.forEach((obs) => {
+      const status = getStatus(obs);
+      sheetStatut.getCell(`A${stRow}`).value = obs.operations.name;
+      sheetStatut.getCell(`B${stRow}`).value = obs.operations.project_manager;
+      sheetStatut.getCell(`C${stRow}`).value = obs.description;
+      
+      const stCell = sheetStatut.getCell(`D${stRow}`);
+      stCell.value = status.label;
+      let bgColor = 'FFFFFF';
+      if (status.label === 'Terminé') bgColor = 'D1FAE5';
+      if (status.label === 'En retard') bgColor = 'FEE2E2';
+      if (status.label === 'En cours') bgColor = 'FEF3C7';
+      
+      stCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+      stCell.font = { italic: true };
+
+      sheetStatut.getCell(`E${stRow}`).value = obs.responsible_person || '-';
+      sheetStatut.getCell(`F${stRow}`).value = new Date(obs.info_date).toLocaleDateString();
+      sheetStatut.getCell(`G${stRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
+      sheetStatut.getCell(`H${stRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+
+      ['A', 'B', 'C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
+        sheetStatut.getCell(`${col}${stRow}`).border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+        sheetStatut.getCell(`${col}${stRow}`).alignment = { vertical: 'middle' };
+      });
+      stRow++;
+    });
+
     const buffer = await workbook.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = window.URL.createObjectURL(blob);
     const anchor = document.createElement('a');
     anchor.href = url;
-    anchor.download = `MonPetitPro_Export_CTX_${new Date().toISOString().split('T')[0]}.xlsx`;
+    anchor.download = `MonPetitPro_Export_Premium_${new Date().toISOString().split('T')[0]}.xlsx`;
     anchor.click();
     window.URL.revokeObjectURL(url);
 
-    triggerSuccessToast(useStore.getState().user?.email, "Export Excel (CTX) généré !");
+    triggerSuccessToast(useStore.getState().user?.email, "Export Excel Premium généré !");
   };
-
 
   // Dynamic filter lists
   const uniqueOps = Array.from(new Set(observations.map(o => o.operations.name))).sort();
@@ -319,7 +387,6 @@ export default function Observations() {
     if (filterRealisateur && obs.responsible_person !== filterRealisateur) return false;
     if (filterStatus && getStatus(obs).label !== filterStatus) return false;
     
-    // Tabular-specific sub-filters
     if (viewMode === 'tabulaire') {
       if (tabularFilter === 'vefa' && obs.operations.operation_type !== 'VEFA') return false;
       if (tabularFilter === 'mod' && obs.operations.operation_type === 'VEFA') return false;
@@ -328,7 +395,6 @@ export default function Observations() {
     return true;
   });
 
-  // Grouping for Structured View
   const groupedData = filteredData.reduce((acc, obs) => {
     const opId = obs.operations.id;
     if (!acc[opId]) {
@@ -345,7 +411,6 @@ export default function Observations() {
 
   return (
     <div className="pb-12 max-w-[1600px] mx-auto">
-      {/* HEADER SECTION - Hidden on Print */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 print:hidden">
         <div>
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Suivi des Observations</h1>
@@ -381,7 +446,6 @@ export default function Observations() {
         </div>
       </div>
 
-      {/* FILTERS SECTION - Hidden on Print */}
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8 print:hidden">
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[180px]">
@@ -422,7 +486,6 @@ export default function Observations() {
           </button>
         </div>
 
-        {/* Tabular Sub-Filters */}
         {viewMode === 'tabulaire' && (
           <div className="flex gap-2 mt-5 pt-4 border-t border-slate-100">
             <button onClick={() => setTabularFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${tabularFilter === 'all' ? 'bg-primary border-primary text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>GLOBALISÉ</button>
@@ -433,14 +496,11 @@ export default function Observations() {
         )}
       </div>
 
-      {/* CONTENT SECTION */}
       <div id="print-area">
         {viewMode === 'structuree' ? (
-          /* VUE STRUCTURÉE (Groupée par Opération) */
           <div className="space-y-12">
             {(Object.entries(groupedData) as [string, {op: any, items: any[]}][]).map(([opId, { op, items }]) => (
               <div key={opId} className="print:break-inside-avoid">
-                {/* Op Header as requested in mockups - Optimized for long text and responsive */}
                 <div className="bg-slate-900 text-white rounded-t-xl overflow-hidden print:bg-slate-900 print:text-white">
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 p-4 gap-y-6 gap-x-4 text-[10px] uppercase font-bold tracking-wider">
                     <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
@@ -477,7 +537,6 @@ export default function Observations() {
                   </div>
                 </div>
                 
-                {/* Observation Table for this op */}
                 <div className="bg-white border-x border-b border-slate-200 rounded-b-xl overflow-hidden shadow-sm">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50 border-b border-slate-200">
@@ -519,7 +578,6 @@ export default function Observations() {
             ))}
           </div>
         ) : (
-          /* VUE TABULAIRE GLOBALE */
           <div className="bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
             <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
               <span className="text-xs font-bold uppercase tracking-widest">Vue Tabulaire : {tabularFilter.toUpperCase()}</span>
@@ -571,7 +629,6 @@ export default function Observations() {
         )}
       </div>
 
-      {/* MODAL EDIT - Simple version updated with 'Réalisateur' labeling */}
       {editingObs && (
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 print:hidden">
           <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200">
