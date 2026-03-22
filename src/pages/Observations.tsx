@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
-import * as XLSX from 'xlsx';
+import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, ArrowLeft, Building2, FileText, CheckCircle2, AlertCircle, Clock } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 
 type ViewMode = 'structuree' | 'tabulaire';
 type TabularFilter = 'statut' | 'vefa' | 'mod' | 'all';
@@ -164,72 +165,147 @@ export default function Observations() {
     triggerSuccessToast(useStore.getState().user?.email, "PDF généré avec succès !");
   };
 
-  const exportToExcel = () => {
-    const workbook = XLSX.utils.book_new();
+  const exportToExcel = async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('CTX');
 
-    // 1. Helper for sheet creation
-    const formatObs = (obs: any) => ({
-      'Nom OP': obs.operations?.name || 'N/A',
-      'Nbre lot': obs.operations?.total_housing_units || 0,
-      'CTx': obs.operations?.project_manager || 'N/A',
-      'Description': obs.description,
-      'Statut': getStatus(obs).label,
-      'Réalisateur': obs.responsible_person || 'N/A',
-      'Dates': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A'
-    });
+    // Configuration des largeurs de colonnes
+    sheet.columns = [
+      { width: 15 }, // A: Statut
+      { width: 12 }, // B: Date Info
+      { width: 40 }, // C: Description
+      { width: 15 }, // D: Label Delivery
+      { width: 15 }, // E: Nbre logt / Réalisateur
+      { width: 15 }, // F: Value / Date butoire
+      { width: 15 }, // G: CTX / Date réalisation
+      { width: 25 }, // H: Value / CTX / PROMOTEUR
+    ];
 
-    // 2. CTX Sheet (Sorted by CTX)
-    const ctxData = [...filteredData].sort((a, b) => (a.operations?.project_manager || '').localeCompare(b.operations?.project_manager || '')).map(formatObs);
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(ctxData), "CTX");
+    // 1. En-tête principal : FILTRE PAR CTX
+    const mainHeader = sheet.getCell('A1');
+    mainHeader.value = 'FILTRE PAR CTX';
+    sheet.mergeCells('A1:H1');
+    mainHeader.style = {
+      font: { bold: true, size: 14 },
+      alignment: { horizontal: 'center', vertical: 'middle' },
+      border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+    };
 
-    // 3. STATUT Sheet (Sorted by Status)
-    const statusData = [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)).map(formatObs);
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(statusData), "STATUT");
+    let currentRow = 3;
 
-    // 4. OPERATIONS Sheet (Summary from filtered observations' unique operations)
-    const uniqueOps = Array.from(new Set(filteredData.map(o => o.operations.id))).map(id => {
-      const op = filteredData.find(o => o.operations.id === id).operations;
-      return {
-        'Nom OP': op.name,
-        'Nbre lot': op.total_housing_units,
-        'Contractuelle': op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'N/A',
-        'Previde livraison': op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : 'N/A'
-      };
-    });
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(uniqueOps), "OPERATIONS");
+    // Groupement par Opération pour la feuille CTX
+    const opsIds = Array.from(new Set(filteredData.map(o => o.operations.id)));
+    
+    for (const opId of opsIds) {
+      const op = filteredData.find(o => o.operations.id === opId).operations;
+      const opObs = filteredData.filter(o => o.operations.id === opId);
 
-    // 5. VEFA Sheet (Only VEFA + includes Promoter col)
-    const vefaData = filteredData
-      .filter(obs => obs.operations?.operation_type === 'VEFA')
-      .map(obs => ({
-        'Nom OP': obs.operations?.name || 'N/A',
-        'Promoteur': obs.operations?.promoter_name || 'N/A',
-        'Nbre lot': obs.operations?.total_housing_units || 0,
-        'CTx': obs.operations?.project_manager || 'N/A',
-        'Description': obs.description,
-        'Statut': getStatus(obs).label,
-        'Réalisateur': obs.responsible_person || 'N/A',
-        'Dates': obs.info_date ? new Date(obs.info_date).toLocaleDateString() : 'N/A'
-      }));
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(vefaData), "VEFA");
+      // --- Ligne 1 : Nom de l'Opération ---
+      const opNameCell = sheet.getCell(`A${currentRow}`);
+      opNameCell.value = op.name;
+      sheet.mergeCells(`A${currentRow}:D${currentRow}`);
+      opNameCell.font = { bold: true, size: 12 };
+      opNameCell.border = { top: { style: 'medium' }, left: { style: 'medium' } };
 
-    // 6. MOD Sheet (Everything except VEFA)
-    const modData = filteredData
-      .filter(obs => obs.operations?.operation_type !== 'VEFA')
-      .map(formatObs);
-    XLSX.utils.book_append_sheet(workbook, XLSX.utils.json_to_sheet(modData), "MOD");
+      currentRow++;
 
-    // Auto-size columns for all sheets
-    workbook.SheetNames.forEach(name => {
-      const sheet = workbook.Sheets[name];
-      const data = XLSX.utils.sheet_to_json(sheet, { header: 1 }) as any[][];
-      const max_width = data.reduce((w, r) => Math.max(w, ...r.map(v => v ? v.toString().length : 0)), 10);
-      sheet['!cols'] = data[0].map(() => ({ wch: max_width + 2 }));
-    });
+      // --- Ligne 2 : Labels et Métadonnées ---
+      const delLabel = sheet.getCell(`A${currentRow}`);
+      delLabel.value = 'Date de livraison';
+      sheet.mergeCells(`A${currentRow}:B${currentRow + 1}`);
+      delLabel.alignment = { horizontal: 'center', vertical: 'middle' };
+      delLabel.border = { left: { style: 'medium' }, right: { style: 'thin' }, top: { style: 'thin' }, bottom: { style: 'thin' } };
 
-    XLSX.writeFile(workbook, `MonPetitPro_Export_${new Date().toISOString().split('T')[0]}.xlsx`);
-    triggerSuccessToast(useStore.getState().user?.email, "Export Excel généré avec succès !");
+      sheet.getCell(`C${currentRow}`).value = 'Contractuelle';
+      sheet.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+      sheet.getCell(`E${currentRow}`).value = 'Nbre logt';
+      sheet.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
+      sheet.getCell(`G${currentRow}`).value = 'CTX';
+      sheet.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
+
+      ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
+        sheet.getCell(`${col}${currentRow}`).border = { 
+          top: { style: 'thin' }, 
+          bottom: { style: 'thin' }, 
+          left: { style: 'thin' }, 
+          right: { style: col === 'H' ? 'medium' : 'thin' } 
+        };
+      });
+
+      currentRow++;
+
+      // --- Ligne 3 : Date Réelle & VEFA/MOD & PROMOTEUR ---
+      sheet.getCell(`C${currentRow}`).value = 'Réelle';
+      sheet.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
+      sheet.getCell(`E${currentRow}`).value = 'VEFA / MOD';
+      sheet.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
+      sheet.getCell(`G${currentRow}`).value = 'PROMOTEUR';
+      sheet.getCell(`H${currentRow}`).value = op.promoter_name || '-';
+
+      ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
+        sheet.getCell(`${col}${currentRow}`).border = { 
+          top: { style: 'thin' }, 
+          bottom: { style: 'thin' }, 
+          left: { style: 'thin' }, 
+          right: { style: col === 'H' ? 'medium' : 'thin' } 
+        };
+      });
+
+      currentRow++;
+
+      // --- Ligne 4 : En-têtes des observations ---
+      const hCols = ['A', 'B', 'C', 'E', 'F', 'G'];
+      const hLabels = ['Statut', 'Date info', 'Description', 'Réalisateur', 'date butoire', 'date réalisation'];
+      
+      hCols.forEach((col, i) => {
+        const cell = sheet.getCell(`${col}${currentRow}`);
+        cell.value = hLabels[i];
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+        cell.border = { 
+          top: { style: 'thin' }, bottom: { style: 'thin' }, 
+          left: { style: col === 'A' ? 'medium' : 'thin' }, 
+          right: { style: col === 'G' ? 'medium' : 'thin' } 
+        };
+      });
+
+      currentRow++;
+
+      // --- Données ---
+      opObs.forEach((obs, idx) => {
+        const s = getStatus(obs).label;
+        sheet.getCell(`A${currentRow}`).value = s;
+        sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
+        sheet.getCell(`C${currentRow}`).value = obs.description;
+        sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
+        sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
+        sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+
+        ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
+          sheet.getCell(`${col}${currentRow}`).border = { 
+            left: { style: col === 'A' ? 'medium' : 'thin' }, 
+            right: { style: col === 'G' ? 'medium' : 'thin' },
+            bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
+          };
+        });
+        currentRow++;
+      });
+
+      currentRow += 2;
+    }
+
+    const buffer = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = window.URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `MonPetitPro_Export_CTX_${new Date().toISOString().split('T')[0]}.xlsx`;
+    anchor.click();
+    window.URL.revokeObjectURL(url);
+
+    triggerSuccessToast(useStore.getState().user?.email, "Export Excel (CTX) généré !");
   };
+
 
   // Dynamic filter lists
   const uniqueOps = Array.from(new Set(observations.map(o => o.operations.name))).sort();
