@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet } from 'lucide-react';
+import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -12,9 +12,11 @@ type TabularFilter = 'statut' | 'vefa' | 'mod' | 'all';
 
 export default function Observations() {
   const [observations, setObservations] = useState<any[]>([]);
+  const [allOperations, setAllOperations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<ViewMode>('structuree');
   const [tabularFilter, setTabularFilter] = useState<TabularFilter>('all');
+  const [showEmptyOps, setShowEmptyOps] = useState(false);
   
   // Basic Filters
   const [filterOp, setFilterOp] = useState('');
@@ -25,23 +27,30 @@ export default function Observations() {
   const [editingObs, setEditingObs] = useState<any | null>(null);
 
   useEffect(() => {
-    fetchObservations();
+    fetchData();
   }, []);
 
-  const fetchObservations = async () => {
+  const fetchData = async () => {
+    setLoading(true);
     try {
-      const { data, error } = await supabase
+      // Fetch Observations
+      const { data: obsData, error: obsError } = await supabase
         .from('observations')
-        .select(`
-          *,
-          operations (*)
-        `)
+        .select(`*, operations (*)`)
         .order('deadline_date', { ascending: true });
+      if (obsError) throw obsError;
+      setObservations(obsData || []);
 
-      if (error) throw error;
-      setObservations(data || []);
+      // Fetch All Operations (to show those without obs)
+      const { data: opsData, error: opsError } = await supabase
+        .from('operations')
+        .select('*')
+        .order('name');
+      if (opsError) throw opsError;
+      setAllOperations(opsData || []);
+
     } catch (error) {
-      console.error('Error fetching observations:', error);
+      console.error('Error fetching data:', error);
     } finally {
       setLoading(false);
     }
@@ -62,7 +71,7 @@ export default function Observations() {
       const { error } = await supabase.from('observations').delete().eq('id', id);
       if (error) throw error;
       triggerSuccessToast(useStore.getState().user?.email, 'Observation supprimée avec succès.');
-      fetchObservations();
+      fetchData();
     } catch (err) {
       console.error('Error deleting observation:', err);
     }
@@ -83,7 +92,7 @@ export default function Observations() {
       if (error) throw error;
       triggerSuccessToast(useStore.getState().user?.email, 'Observation modifiée avec succès.');
       setEditingObs(null);
-      fetchObservations();
+      fetchData();
     } catch (err) {
       console.error('Error updating observation:', err);
     }
@@ -161,6 +170,7 @@ export default function Observations() {
 
   const exportToExcel = async () => {
     const workbook = new ExcelJS.Workbook();
+    const exportDateStr = new Date().toLocaleDateString();
     
     // --- FONCTION UTILITAIRE : GÉNÉRER UNE FEUILLE STRUCTURÉE ---
     const addStructuredSheet = (sheetName: string, mainTitle: string, data: any[]) => {
@@ -178,19 +188,29 @@ export default function Observations() {
 
       const mainHeader = sheet.getCell('A1');
       mainHeader.value = mainTitle;
-      sheet.mergeCells('A1:H1');
+      sheet.mergeCells('A1:F1');
       mainHeader.style = {
         font: { bold: true, size: 14 },
         alignment: { horizontal: 'center', vertical: 'middle' },
         border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
       };
 
+      // Date d'export
+      const dateCell = sheet.getCell('G1');
+      dateCell.value = `Généré le: ${exportDateStr}`;
+      sheet.mergeCells('G1:H1');
+      dateCell.font = { italic: true, size: 10 };
+      dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      dateCell.border = { bottom: { style: 'medium' }, top: { style: 'medium' }, right: { style: 'medium' } };
+
       let currentRow = 3;
-      const opsIds = Array.from(new Set(data.map(o => o.operations.id)));
+      const opsIds = Array.from(new Set(data.filter(o => o.operations).map(o => o.operations.id)));
       
       for (const opId of opsIds) {
-        const op = data.find(o => o.operations.id === opId).operations;
-        const opObs = data.filter(o => o.operations.id === opId);
+        const matchingData = data.find(o => o.operations.id === opId);
+        if (!matchingData) continue;
+        const op = matchingData.operations;
+        const opObs = data.filter(o => o.operations.id === opId && o.id); // Valid observations only
 
         // Nom OP
         const opNameCell = sheet.getCell(`A${currentRow}`);
@@ -248,23 +268,32 @@ export default function Observations() {
         currentRow++;
 
         // Lignes Observations
-        opObs.forEach((obs, idx) => {
-          const status = getStatus(obs).label;
-          sheet.getCell(`A${currentRow}`).value = status;
-          sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
-          sheet.getCell(`C${currentRow}`).value = obs.description;
-          sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
-          sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
-          sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
+        if (opObs.length > 0) {
+          opObs.forEach((obs, idx) => {
+            const status = getStatus(obs).label;
+            sheet.getCell(`A${currentRow}`).value = status;
+            sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
+            sheet.getCell(`C${currentRow}`).value = obs.description;
+            sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
+            sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
+            sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
 
-          ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
-            sheet.getCell(`${col}${currentRow}`).border = { 
-              left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' },
-              bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
-            };
+            ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
+              sheet.getCell(`${col}${currentRow}`).border = { 
+                left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' },
+                bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
+              };
+            });
+            currentRow++;
           });
+        } else {
+          // Empty row for op with no obs
+          sheet.getCell(`A${currentRow}`).value = "(Aucune observation)";
+          sheet.mergeCells(`A${currentRow}:G${currentRow}`);
+          sheet.getCell(`A${currentRow}`).font = { italic: true, color: { argb: '94A3B8' } };
+          sheet.getCell(`A${currentRow}`).border = { left: { style: 'medium' }, right: { style: 'medium' }, bottom: { style: 'medium' } };
           currentRow++;
-        });
+        }
         currentRow += 2;
       }
     };
@@ -289,21 +318,29 @@ export default function Observations() {
 
       const totalCols = cols.length;
       const lastColLetter = String.fromCharCode(64 + totalCols);
+      const dateStartColLetter = String.fromCharCode(64 + totalCols - 2);
 
       const mainHeader = sheet.getCell('A1');
       mainHeader.value = mainTitle;
-      sheet.mergeCells(`A1:${lastColLetter}1`);
+      sheet.mergeCells(`A1:${String.fromCharCode(dateStartColLetter.charCodeAt(0) - 1)}1`);
       mainHeader.style = {
         font: { bold: true, size: 14 },
         alignment: { horizontal: 'center', vertical: 'middle' },
-        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
+        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'thin' } }
       };
+
+      // Date d'export
+      const dateCell = sheet.getCell(`${dateStartColLetter}1`);
+      dateCell.value = `Généré le: ${exportDateStr}`;
+      sheet.mergeCells(`${dateStartColLetter}1:${lastColLetter}1`);
+      dateCell.font = { italic: true, size: 10 };
+      dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
+      dateCell.border = { bottom: { style: 'medium' }, top: { style: 'medium' }, right: { style: 'medium' }, left: { style: 'thin' } };
 
       // Header row 3 & 4
       const hRow1 = 3;
       const hRow2 = 4;
       
-      // En-têtes statiques (les 7 premières colonnes ou 6 si sans promoteur)
       const staticColsCount = includePromoteur ? 7 : 6;
       for (let i = 0; i < staticColsCount; i++) {
         const colLetter = String.fromCharCode(65 + i);
@@ -316,17 +353,15 @@ export default function Observations() {
         sheet.mergeCells(`${colLetter}${hRow1}:${colLetter}${hRow2}`);
       }
 
-      // En-tête fusionné "Dates"
-      const dateStartColLetter = String.fromCharCode(65 + staticColsCount);
-      const cellDates = sheet.getCell(`${dateStartColLetter}${hRow1}`);
+      const dateHColLetter = String.fromCharCode(65 + staticColsCount);
+      const cellDates = sheet.getCell(`${dateHColLetter}${hRow1}`);
       cellDates.value = 'Dates';
       cellDates.font = { bold: true };
       cellDates.alignment = { horizontal: 'center', vertical: 'middle' };
       cellDates.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
       cellDates.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-      sheet.mergeCells(`${dateStartColLetter}${hRow1}:${lastColLetter}${hRow1}`);
+      sheet.mergeCells(`${dateHColLetter}${hRow1}:${lastColLetter}${hRow1}`);
 
-      // Sous-en-têtes dates
       ['Info', 'Butoire', 'Réalisation'].forEach((h, idx) => {
         const colLetter = String.fromCharCode(65 + staticColsCount + idx);
         const cell = sheet.getCell(`${colLetter}${hRow2}`);
@@ -337,9 +372,9 @@ export default function Observations() {
         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
       });
 
-      // Données
       let r = 5;
       data.forEach(obs => {
+        if (!obs.id) return; // Skip empty ops in tabular views usually, but let's see
         const status = getStatus(obs);
         let c = 1;
         sheet.getCell(r, c++).value = obs.operations.name;
@@ -362,7 +397,6 @@ export default function Observations() {
         sheet.getCell(r, c++).value = new Date(obs.deadline_date).toLocaleDateString();
         sheet.getCell(r, c++).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
 
-        // Bordures pour toute la ligne
         for (let j = 1; j <= totalCols; j++) {
           sheet.getCell(r, j).border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
           sheet.getCell(r, j).alignment = { vertical: 'middle' };
@@ -372,11 +406,15 @@ export default function Observations() {
     };
 
     // --- GÉNÉRATION DES 5 FEUILLES ---
-    addStructuredSheet('CTX', 'FILTRE PAR CTX', filteredData);
+    // In excel export, we might want to include empty ops too if they are visible in UI?
+    // Let's use groupedData object entries for CTX and OPERATIONS to match UI
+    const exportDataGroups = Object.values(groupedData).flatMap(g => g.items.length > 0 ? g.items : [{ operations: g.op }]);
+    
+    addStructuredSheet('CTX', 'FILTRE PAR CTX', exportDataGroups);
     addTabularSheet('STATUT', 'FILTRE PAR STATUT', [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)), false);
-    addStructuredSheet('OPERATIONS', 'FILTRE PAR OPERATION', filteredData);
-    addTabularSheet('VEFA', 'FILTRE PAR VEFA', filteredData.filter(o => o.operations.operation_type === 'VEFA'));
-    addTabularSheet('MOD', 'FILTRE PAR MOD', filteredData.filter(o => o.operations.operation_type !== 'VEFA'), false);
+    addStructuredSheet('OPERATIONS', 'FILTRE PAR OPERATION', exportDataGroups);
+    addTabularSheet('VEFA', 'FILTRE PAR VEFA', filteredData.filter(o => o.operations?.operation_type === 'VEFA'));
+    addTabularSheet('MOD', 'FILTRE PAR MOD', filteredData.filter(o => o.operations?.operation_type !== 'VEFA'), false);
 
     // --- FINALISATION ---
     const buffer = await workbook.xlsx.writeBuffer();
@@ -392,8 +430,8 @@ export default function Observations() {
   };
 
   // Dynamic filter lists
-  const uniqueOps = Array.from(new Set(observations.map(o => o.operations.name))).sort();
-  const uniqueCtx = Array.from(new Set(observations.map(o => o.operations.project_manager))).sort();
+  const uniqueOps = Array.from(new Set(allOperations.map(o => o.name))).sort();
+  const uniqueCtx = Array.from(new Set(allOperations.map(o => o.project_manager))).sort();
   const uniqueResponsables = Array.from(new Set(observations.map(o => o.responsible_person))).sort();
 
   // Unified filtering
@@ -411,19 +449,28 @@ export default function Observations() {
     return true;
   });
 
-  const groupedData = filteredData.reduce((acc, obs) => {
-    const opId = obs.operations.id;
-    if (!acc[opId]) {
-      acc[opId] = {
-        op: obs.operations,
-        items: []
-      };
-    }
-    acc[opId].items.push(obs);
+  const groupedData = allOperations.reduce((acc, op) => {
+    // Apply op filters to the operation itself
+    if (filterOp && op.name !== filterOp) return acc;
+    if (filterCtx && op.project_manager !== filterCtx) return acc;
+
+    const opItems = filteredData.filter(obs => obs.operations.id === op.id);
+    
+    // If showEmptyOps is false, only include if there are observations
+    if (!showEmptyOps && opItems.length === 0) return acc;
+
+    // If there are observation-specific filters active, and no observations match, skip even if showEmptyOps is true
+    // because most likely the user wants to see results of the filter.
+    if (opItems.length === 0 && (filterStatus || filterRealisateur)) return acc;
+
+    acc[op.id] = {
+      op: op,
+      items: opItems
+    };
     return acc;
   }, {} as Record<string, { op: any, items: any[] }>);
 
-  if (loading) return <div className="p-8 text-center text-slate-500">Chargement...</div>;
+  if (loading) return <div className="p-8 text-center text-slate-500 font-medium">Chargement des données...</div>;
 
   return (
     <div className="pb-12 max-w-[1600px] mx-auto">
@@ -485,7 +532,7 @@ export default function Observations() {
               {uniqueResponsables.map(r => <option key={r as string} value={r as string}>{r}</option>)}
             </select>
           </div>
-          <div className="flex-1 min-w-[180px]">
+          <div className="flex-1 min-w-[160px]">
             <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Statut</label>
             <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none">
               <option value="">Tous</option>
@@ -494,12 +541,23 @@ export default function Observations() {
               <option value="Terminé">Terminé</option>
             </select>
           </div>
-          <button 
-            onClick={() => {setFilterOp(''); setFilterCtx(''); setFilterRealisateur(''); setFilterStatus('');}}
-            className="px-4 py-2 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 text-sm font-semibold transition bg-white shadow-sm"
-          >
-            Effacer
-          </button>
+          
+          <div className="flex items-center gap-2 mb-0.5">
+            <button 
+              onClick={() => setShowEmptyOps(!showEmptyOps)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition border ${showEmptyOps ? 'bg-primary/10 border-primary text-primary' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}
+              title={showEmptyOps ? "Masquer les opérations vides" : "Afficher toutes les opérations"}
+            >
+              {showEmptyOps ? <Eye size={16} /> : <EyeOff size={16} />}
+              <span className="hidden sm:inline">{showEmptyOps ? "Opérations Vides Visibles" : "Afficher Opérations Vides"}</span>
+            </button>
+            <button 
+              onClick={() => {setFilterOp(''); setFilterCtx(''); setFilterRealisateur(''); setFilterStatus(''); setShowEmptyOps(false);}}
+              className="px-4 py-2 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 text-sm font-semibold transition bg-white shadow-sm"
+            >
+              Effacer
+            </button>
+          </div>
         </div>
 
         {viewMode === 'tabulaire' && (
@@ -566,27 +624,35 @@ export default function Observations() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100">
-                      {items.map((obs) => (
-                        <tr key={obs.id} className="group hover:bg-slate-50 transition-colors">
-                          <td className="p-3 pl-6 text-xs text-slate-600 font-medium">{new Date(obs.info_date).toLocaleDateString()}</td>
-                          <td className="p-3 text-sm text-slate-900 font-semibold">{obs.description}</td>
-                          <td className="p-3 text-xs text-slate-700 uppercase font-bold">{obs.responsible_person}</td>
-                          <td className="p-3 text-xs text-slate-600">{new Date(obs.deadline_date).toLocaleDateString()}</td>
-                          <td className="p-3 text-xs font-bold">
-                            {obs.completion_date ? (
-                              <span className="text-emerald-600">{new Date(obs.completion_date).toLocaleDateString()}</span>
-                            ) : (
-                              <span className={new Date(obs.deadline_date) < new Date() ? 'text-red-500' : 'text-slate-300 italic'}>En cours</span>
-                            )}
-                          </td>
-                          <td className="p-3 pr-6 text-right print:hidden">
-                            <div className="flex justify-end gap-1 opacity-20 group-hover:opacity-100 transition">
-                              <button onClick={() => setEditingObs(obs)} className="p-1 text-slate-400 hover:text-primary"><Edit size={14}/></button>
-                              <button onClick={() => deleteObservation(obs.id)} className="p-1 text-slate-400 hover:text-danger"><Trash2 size={14}/></button>
-                            </div>
+                      {items.length > 0 ? (
+                        items.map((obs) => (
+                          <tr key={obs.id} className="group hover:bg-slate-50 transition-colors">
+                            <td className="p-3 pl-6 text-xs text-slate-600 font-medium">{new Date(obs.info_date).toLocaleDateString()}</td>
+                            <td className="p-3 text-sm text-slate-900 font-semibold">{obs.description}</td>
+                            <td className="p-3 text-xs text-slate-700 uppercase font-bold">{obs.responsible_person}</td>
+                            <td className="p-3 text-xs text-slate-600">{new Date(obs.deadline_date).toLocaleDateString()}</td>
+                            <td className="p-3 text-xs font-bold">
+                              {obs.completion_date ? (
+                                <span className="text-emerald-600">{new Date(obs.completion_date).toLocaleDateString()}</span>
+                              ) : (
+                                <span className={new Date(obs.deadline_date) < new Date() ? 'text-red-500' : 'text-slate-300 italic'}>En cours</span>
+                              )}
+                            </td>
+                            <td className="p-3 pr-6 text-right print:hidden">
+                              <div className="flex justify-end gap-1 opacity-20 group-hover:opacity-100 transition">
+                                <button onClick={() => setEditingObs(obs)} className="p-1 text-slate-400 hover:text-primary"><Edit size={14}/></button>
+                                <button onClick={() => deleteObservation(obs.id)} className="p-1 text-slate-400 hover:text-danger"><Trash2 size={14}/></button>
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      ) : (
+                        <tr>
+                          <td colSpan={6} className="p-8 text-center text-slate-400 italic text-sm">
+                            Aucune observation pour cette opération.
                           </td>
                         </tr>
-                      ))}
+                      )}
                     </tbody>
                   </table>
                 </div>
@@ -616,28 +682,34 @@ export default function Observations() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
-                  {filteredData.map((obs) => {
-                    const status = getStatus(obs);
-                    return (
-                      <tr key={obs.id} className="hover:bg-slate-50 transition-colors">
-                        <td className="p-4 pl-6 text-sm font-bold text-slate-900">{obs.operations.name}</td>
-                        {tabularFilter === 'vefa' && <td className="p-4 text-xs text-slate-600 font-medium uppercase">{obs.operations.promoter_name || '-'}</td>}
-                        {(tabularFilter === 'vefa' || tabularFilter === 'mod') && <td className="p-4 text-xs text-slate-700">{obs.operations.total_housing_units}</td>}
-                        <td className="p-4 text-xs text-slate-700 font-semibold">{obs.operations.project_manager}</td>
-                        <td className="p-4 text-sm font-medium text-slate-800">{obs.description}</td>
-                        <td className="p-4">
-                          <div className={`px-2 py-1 rounded inline-flex items-center gap-2 border ${status.color}`}>
-                            <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}></span>
-                            <span className="text-[10px] font-black uppercase tracking-tighter">{status.label}</span>
-                          </div>
-                        </td>
-                        <td className="p-4 text-xs font-black text-slate-900 uppercase tracking-tighter">{obs.responsible_person}</td>
-                        <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.info_date).toLocaleDateString()}</td>
-                        <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.deadline_date).toLocaleDateString()}</td>
-                        <td className="p-4 text-[11px] text-emerald-600 font-black">{obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '-'}</td>
-                      </tr>
-                    );
-                  })}
+                  {filteredData.length > 0 ? (
+                    filteredData.map((obs) => {
+                      const status = getStatus(obs);
+                      return (
+                        <tr key={obs.id} className="hover:bg-slate-50 transition-colors">
+                          <td className="p-4 pl-6 text-sm font-bold text-slate-900">{obs.operations.name}</td>
+                          {tabularFilter === 'vefa' && <td className="p-4 text-xs text-slate-600 font-medium uppercase">{obs.operations.promoter_name || '-'}</td>}
+                          {(tabularFilter === 'vefa' || tabularFilter === 'mod') && <td className="p-4 text-xs text-slate-700">{obs.operations.total_housing_units}</td>}
+                          <td className="p-4 text-xs text-slate-700 font-semibold">{obs.operations.project_manager}</td>
+                          <td className="p-4 text-sm font-medium text-slate-800">{obs.description}</td>
+                          <td className="p-4">
+                            <div className={`px-2 py-1 rounded inline-flex items-center gap-2 border ${status.color}`}>
+                              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}></span>
+                              <span className="text-[10px] font-black uppercase tracking-tighter">{status.label}</span>
+                            </div>
+                          </td>
+                          <td className="p-4 text-xs font-black text-slate-900 uppercase tracking-tighter">{obs.responsible_person}</td>
+                          <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.info_date).toLocaleDateString()}</td>
+                          <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.deadline_date).toLocaleDateString()}</td>
+                          <td className="p-4 text-[11px] text-emerald-600 font-black">{obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '-'}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={10} className="p-12 text-center text-slate-400 italic">Aucune observation ne correspond à vos filtres.</td>
+                    </tr>
+                  )}
                 </tbody>
               </table>
             </div>
