@@ -579,7 +579,7 @@ export default function Observations() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 p-4 gap-y-6 gap-x-4 text-[10px] uppercase font-bold tracking-wider">
                     <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
                       <span className="text-slate-500 block mb-1">Nom de l'OP</span>
-                      <span className="text-sm md:text-base text-white block truncate" title={op.name}>{op.name}</span>
+                      <span className="text-sm md:text-base text-white block" title={op.name}>{op.name}</span>
                     </div>
                     <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
                       <span className="text-slate-500 block mb-1">Nbre logt</span>

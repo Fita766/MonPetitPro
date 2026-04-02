@@ -261,10 +261,19 @@ export default function OperationDetail() {
 
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
           <div>
-            <p className="text-sm text-slate-500 mb-1">Livraison Prévue</p>
+            <p className="text-sm text-slate-500 mb-1">Livraison Prev</p>
             <p className="font-medium text-slate-800 flex items-center gap-2">
               <Calendar size={16} className="text-slate-400" />
               {operation.expected_delivery_date ? new Date(operation.expected_delivery_date).toLocaleDateString() : '-'}
+            </p>
+          </div>
+          <div>
+            <p className="text-sm text-slate-500 mb-1">Livraison réelle</p>
+            <p className="font-medium flex items-center gap-2">
+              <Calendar size={16} className="text-slate-400" />
+              <span className={operation.actual_delivery_date ? 'text-emerald-600 font-bold' : 'text-slate-400 italic'}>
+                {operation.actual_delivery_date ? new Date(operation.actual_delivery_date).toLocaleDateString() : 'Non livré/Saisi'}
+              </span>
             </p>
           </div>
           <div>

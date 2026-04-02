@@ -11,12 +11,16 @@ interface Operation {
   project_manager: string;
   operation_type: string;
   expected_delivery_date: string;
+  actual_delivery_date: string;
+  promoter_name: string;
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [operations, setOperations] = useState<Operation[]>([]);
   const [loading, setLoading] = useState(true);
+  const [filterManager, setFilterManager] = useState('');
+  const [filterPromoter, setFilterPromoter] = useState('');
 
   useEffect(() => {
     fetchOperations();
@@ -27,7 +31,7 @@ export default function Dashboard() {
       const { data, error } = await supabase
         .from('operations')
         .select('*')
-        .order('created_at', { ascending: false });
+        .order('name', { ascending: true });
 
       if (error) throw error;
       setOperations(data || []);
@@ -60,20 +64,49 @@ export default function Dashboard() {
     navigate(`/operations/${id}/edit`);
   };
 
+  const filteredOperations = operations.filter(op => {
+    if (filterManager && op.project_manager !== filterManager) return false;
+    if (filterPromoter && op.promoter_name !== filterPromoter) return false;
+    return true;
+  });
+
+  const uniqueManagers = Array.from(new Set(operations.map(o => o.project_manager))).sort();
+  const uniquePromoters = Array.from(new Set(operations.map(o => o.promoter_name).filter(Boolean))).sort();
+
   return (
     <div>
-      <div className="flex justify-between items-center mb-8">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
         <div>
           <h1 className="text-3xl font-bold text-slate-900">Mes Opérations</h1>
           <p className="text-slate-500 mt-1">Gérez vos programmes immobiliers et suivez leur avancement.</p>
         </div>
-        <button 
-          onClick={() => navigate('/operations/new')}
-          className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors"
-        >
-          <PlusCircle size={20} />
-          <span>Nouvelle Opération</span>
-        </button>
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex gap-2">
+            <select 
+              value={filterManager} 
+              onChange={(e) => setFilterManager(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[150px]"
+            >
+              <option value="">Tous les conducteurs</option>
+              {uniqueManagers.map(m => <option key={m} value={m}>{m}</option>)}
+            </select>
+            <select 
+              value={filterPromoter} 
+              onChange={(e) => setFilterPromoter(e.target.value)}
+              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[150px]"
+            >
+              <option value="">Tous les promoteurs</option>
+              {uniquePromoters.map(p => <option key={p} value={p}>{p}</option>)}
+            </select>
+          </div>
+          <button 
+            onClick={() => navigate('/operations/new')}
+            className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
+          >
+            <PlusCircle size={20} />
+            <span>Nouvelle Opération</span>
+          </button>
+        </div>
       </div>
 
       {operations.length === 0 ? (
@@ -91,7 +124,7 @@ export default function Dashboard() {
         </div>
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {operations.map((op) => (
+          {filteredOperations.map((op) => (
             <div 
               key={op.id} 
               onClick={() => navigate(`/operations/${op.id}`)}
@@ -118,10 +151,18 @@ export default function Dashboard() {
                 {op.project_manager}
               </p>
               
-              <div className="pt-4 border-t border-slate-100 flex justify-between items-center">
-                <div className="flex items-center text-sm text-slate-600 gap-1.5">
-                  <Calendar size={16} className="text-slate-400" />
-                  <span>Livraison : {op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : 'N/A'}</span>
+              <div className="pt-4 border-t border-slate-100 space-y-2">
+                <div className="flex items-center text-xs text-slate-600 gap-1.5">
+                  <Calendar size={14} className="text-slate-400" />
+                  <span className="font-medium">Livraison Prev :</span>
+                  <span>{op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : 'N/A'}</span>
+                </div>
+                <div className="flex items-center text-xs text-slate-600 gap-1.5">
+                  <Calendar size={14} className="text-slate-400" />
+                  <span className="font-medium">Livraison réelle :</span>
+                  <span className={op.actual_delivery_date ? 'text-emerald-600 font-bold' : 'text-slate-400 italic'}>
+                    {op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'Non livré/Saisi'}
+                  </span>
                 </div>
               </div>
             </div>
