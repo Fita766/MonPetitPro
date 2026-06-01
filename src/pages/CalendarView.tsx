@@ -239,7 +239,7 @@ export default function CalendarView() {
     if (dayEvents.length === 0 && obsDeadlines.length === 0 && obsCompletions.length === 0) return null;
 
     return (
-      <div className={`space-y-1.5 flex-1 overflow-y-auto scrollbar-thin ${isSmall ? 'mt-1' : 'mt-2'}`}>
+      <div className={`space-y-1.5 flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${isSmall ? 'mt-1' : 'mt-2'}`}>
         {dayEvents.map(evt => (
           <div 
             key={evt.id} 
@@ -269,7 +269,7 @@ export default function CalendarView() {
             title={obs.description}
           >
             <span className={`rounded-full bg-emerald-500 shrink-0 ${isSmall ? 'w-1 h-1' : 'w-1.5 h-1.5'}`}></span>
-            <span className="truncate">Réalisé</span>
+            <span className="truncate">{obs.description?.split('\n')[0] || 'Observation'}</span>
           </div>
         ))}
       </div>
@@ -289,13 +289,13 @@ export default function CalendarView() {
             <div 
               key={i}
               onClick={() => handleDayClick(day)}
-              className={`p-2 border-r border-b border-slate-200 transition-colors cursor-pointer flex flex-col group
+              className={`p-2 border-r border-b border-slate-200 transition-colors cursor-pointer flex flex-col group relative overflow-hidden
                 ${!isCurrentMonth ? 'bg-slate-50/50 text-slate-400' : 'bg-white text-slate-700'}
                 ${isToday ? 'bg-primary/5' : 'hover:bg-slate-50'}
-                ${small ? 'min-h-[60px]' : 'min-h-[120px]'}
+                ${small ? 'h-[75px]' : 'h-[140px]'}
               `}
             >
-              <div className="flex justify-between items-start">
+              <div className="flex justify-between items-start shrink-0">
                 <span className={`font-semibold flex items-center justify-center rounded-full
                   ${isToday ? 'bg-primary text-white' : ''}
                   ${small ? 'text-xs w-5 h-5' : 'text-sm w-7 h-7'}

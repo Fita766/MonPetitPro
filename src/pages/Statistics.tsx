@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, CheckCircle2, AlertTriangle, Clock, BarChart3, Users, Timer, ShieldAlert } from 'lucide-react';
+import { LayoutDashboard, CheckCircle2, AlertTriangle, Clock, BarChart3, Users } from 'lucide-react';
 
 const STATUS_COLORS: Record<string, string> = {
   'Réussi': 'bg-emerald-500',
@@ -9,6 +9,24 @@ const STATUS_COLORS: Record<string, string> = {
   'Échec': 'bg-red-500',
   'Bloqué': 'bg-purple-500',
   'Terminé': 'bg-emerald-500'
+};
+
+const STATUS_TEXT_COLORS: Record<string, string> = {
+  'Réussi': 'text-emerald-700',
+  'En cours': 'text-blue-700',
+  'En retard': 'text-amber-700',
+  'Échec': 'text-red-700',
+  'Bloqué': 'text-purple-700',
+  'Terminé': 'text-emerald-700'
+};
+
+const STATUS_BG_COLORS: Record<string, string> = {
+  'Réussi': 'bg-emerald-50',
+  'En cours': 'bg-blue-50',
+  'En retard': 'bg-amber-50',
+  'Échec': 'bg-red-50',
+  'Bloqué': 'bg-purple-50',
+  'Terminé': 'bg-emerald-50'
 };
 
 export default function Statistics() {
@@ -38,15 +56,7 @@ export default function Statistics() {
           } else if (new Date(o.deadline_date) < new Date()) {
             status = 'En retard';
           }
-          
-          let completionDays = null;
-          if (status === 'Réussi' || status === 'Terminé') {
-            const end = o.completion_date ? new Date(o.completion_date) : new Date(o.updated_at || o.deadline_date || new Date());
-            const start = new Date(o.info_date);
-            completionDays = Math.max(0, Math.round((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24)));
-          }
-          
-          return { ...o, calculated_status: status, completionDays };
+          return { ...o, calculated_status: status };
         });
         setObservations(processedObs);
       }
@@ -67,11 +77,6 @@ export default function Statistics() {
   const completedObs = observations.filter(o => o.completion_date || o.calculated_status === 'Réussi').length;
   const successRate = totalObs > 0 ? Math.round((completedObs / totalObs) * 100) : 0;
   const delayedObs = observations.filter(o => o.calculated_status === 'En retard').length;
-  
-  const obsWithCompletionTime = observations.filter(o => o.completionDays !== null);
-  const avgGlobalCompletionTime = obsWithCompletionTime.length > 0 
-    ? Math.round(obsWithCompletionTime.reduce((acc, o) => acc + o.completionDays, 0) / obsWithCompletionTime.length) 
-    : 0;
 
   // --- Status Data for Progress Bars ---
   const statusCounts = observations.reduce((acc, obs) => {
@@ -96,37 +101,16 @@ export default function Statistics() {
   // --- Realisateur Data ---
   const realisateursCounts = observations.reduce((acc, obs) => {
     const r = obs.responsible_person || 'Non assigné';
-    if (!acc[r]) acc[r] = { name: r, assignees: 0, reussies: 0, totalDays: 0, completedWithDates: 0, enRetard: 0, echec: 0 };
+    if (!acc[r]) acc[r] = { name: r, assignees: 0, reussies: 0 };
     acc[r].assignees += 1;
-    if (obs.calculated_status === 'Réussi' || obs.calculated_status === 'Terminé') {
+    if (obs.completion_date || obs.calculated_status === 'Réussi') {
       acc[r].reussies += 1;
-      if (obs.completionDays !== null) {
-        acc[r].totalDays += obs.completionDays;
-        acc[r].completedWithDates += 1;
-      }
-    } else if (obs.calculated_status === 'En retard') {
-      acc[r].enRetard += 1;
-    } else if (obs.calculated_status === 'Échec') {
-      acc[r].echec += 1;
     }
     return acc;
   }, {} as Record<string, any>);
   const realisateurData = Object.values(realisateursCounts)
-    .map(r => ({ ...r, avgDays: r.completedWithDates > 0 ? Math.round(r.totalDays / r.completedWithDates) : '-' }))
     .sort((a, b) => b.assignees - a.assignees)
     .slice(0, 10);
-
-  // --- Critical Operations Data ---
-  const operationCriticality = operations.map(op => {
-    const opObs = observations.filter(o => o.operation_id === op.id);
-    const total = opObs.length;
-    const delayed = opObs.filter(o => o.calculated_status === 'En retard').length;
-    const echec = opObs.filter(o => o.calculated_status === 'Échec').length;
-    const bloque = opObs.filter(o => o.calculated_status === 'Bloqué').length;
-    
-    const score = delayed * 2 + echec * 3 + bloque * 2; 
-    return { name: op.name, score, delayed, echec, bloque, total };
-  }).sort((a, b) => b.score - a.score).filter(o => o.score > 0).slice(0, 5);
 
   const KpiCard = ({ title, value, subtext, icon: Icon, color }: any) => (
     <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-shadow">
@@ -145,8 +129,8 @@ export default function Statistics() {
     <div className="pb-12 max-w-[1600px] mx-auto animate-fade-in">
       <div className="mb-8 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Tableau de Bord & Statistiques Avancées</h1>
-          <p className="text-slate-500 mt-1">Analyse détaillée des performances, délais et points critiques.</p>
+          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Tableau de Bord & Statistiques</h1>
+          <p className="text-slate-500 mt-1">Vue globale de l'activité et des performances.</p>
         </div>
         <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
           <BarChart3 size={20} />
@@ -155,21 +139,22 @@ export default function Statistics() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
         <KpiCard 
-          title="Opérations" 
+          title="Opérations Actives" 
           value={totalOps} 
           icon={LayoutDashboard} 
           color="bg-indigo-50 text-indigo-600" 
         />
         <KpiCard 
-          title="Observations" 
+          title="Total Observations" 
           value={totalObs} 
+          subtext="Total des points relevés"
           icon={AlertTriangle} 
           color="bg-amber-50 text-amber-600" 
         />
         <KpiCard 
-          title="Taux Réussite" 
+          title="Taux de Réussite" 
           value={`${successRate}%`} 
           subtext={`${completedObs} clôturées`}
           icon={CheckCircle2} 
@@ -178,22 +163,15 @@ export default function Statistics() {
         <KpiCard 
           title="Points en Retard" 
           value={delayedObs} 
-          subtext="Dates dépassées"
+          subtext="Dates butoires dépassées"
           icon={Clock} 
           color="bg-red-50 text-red-600" 
         />
-        <KpiCard 
-          title="Délai Moyen" 
-          value={`${avgGlobalCompletionTime} j`} 
-          subtext="Pour clôturer un point"
-          icon={Timer} 
-          color="bg-blue-50 text-blue-600" 
-        />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         {/* Status Distribution */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 lg:col-span-1">
+        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
             <BarChart3 size={18} className="text-primary"/> Répartition des Statuts
           </h2>
@@ -218,95 +196,6 @@ export default function Statistics() {
           </div>
         </div>
 
-        {/* Classement Réalisateurs */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 lg:col-span-2">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
-            <Users size={18} className="text-primary"/> Performances par Réalisateur (Top 10)
-          </h2>
-          
-          <div className="overflow-x-auto">
-            <table className="w-full text-left">
-              <thead>
-                <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
-                  <th className="pb-3 font-bold">Réalisateur</th>
-                  <th className="pb-3 font-bold text-center">Assigné</th>
-                  <th className="pb-3 font-bold text-center">Réussi</th>
-                  <th className="pb-3 font-bold text-center">En Retard / Échec</th>
-                  <th className="pb-3 font-bold text-center">Délai Moyen (j)</th>
-                  <th className="pb-3 font-bold">Succès</th>
-                </tr>
-              </thead>
-              <tbody>
-                {realisateurData.map((user, i) => {
-                  const percentage = user.assignees > 0 ? Math.round((user.reussies / user.assignees) * 100) : 0;
-                  return (
-                    <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                      <td className="py-4 font-bold text-slate-700">{user.name}</td>
-                      <td className="py-4 text-center font-bold text-slate-600">
-                        <span className="bg-slate-100 px-3 py-1 rounded-full">{user.assignees}</span>
-                      </td>
-                      <td className="py-4 text-center font-bold text-emerald-600">
-                        <span className="bg-emerald-50 px-3 py-1 rounded-full">{user.reussies}</span>
-                      </td>
-                      <td className="py-4 text-center font-bold">
-                        {user.enRetard > 0 || user.echec > 0 ? (
-                          <span className="text-red-500 bg-red-50 px-2 py-1 rounded-md">{user.enRetard} / {user.echec}</span>
-                        ) : (
-                          <span className="text-slate-300">-</span>
-                        )}
-                      </td>
-                      <td className="py-4 text-center font-bold text-slate-700">
-                        {user.avgDays !== '-' ? `${user.avgDays} j` : '-'}
-                      </td>
-                      <td className="py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-24 bg-slate-100 rounded-full h-2 overflow-hidden">
-                            <div 
-                              className={`h-2 rounded-full ${percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} 
-                              style={{ width: `${percentage}%` }}
-                            ></div>
-                          </div>
-                          <span className="text-xs font-bold text-slate-500">{percentage}%</span>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      </div>
-      
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Opérations Critiques */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-sm font-black text-red-600 uppercase tracking-widest mb-6 flex items-center gap-2">
-            <ShieldAlert size={18} /> Top 5 Opérations Critiques
-          </h2>
-          <p className="text-xs text-slate-500 mb-4 font-medium">Les opérations avec le plus de points en retard, échecs ou bloqués.</p>
-          
-          <div className="space-y-4">
-            {operationCriticality.length > 0 ? operationCriticality.map((op, i) => (
-              <div key={i} className="flex flex-col gap-2 p-3 bg-slate-50 rounded-lg border border-slate-100">
-                <div className="flex justify-between items-center">
-                  <span className="font-bold text-slate-800 text-sm truncate max-w-[70%]">{op.name}</span>
-                  <span className="bg-red-100 text-red-700 text-xs font-bold px-2 py-1 rounded-md">Score: {op.score}</span>
-                </div>
-                <div className="flex gap-4 text-xs font-bold">
-                  <span className="text-amber-600 flex items-center gap-1"><Clock size={12}/> {op.delayed} retards</span>
-                  <span className="text-red-600 flex items-center gap-1"><AlertTriangle size={12}/> {op.echec} échecs</span>
-                  <span className="text-purple-600 flex items-center gap-1"><ShieldAlert size={12}/> {op.bloque} bloqués</span>
-                </div>
-              </div>
-            )) : (
-              <div className="text-center p-6 bg-emerald-50 text-emerald-600 rounded-lg font-bold border border-emerald-100">
-                Aucune opération critique ! Tout est au vert.
-              </div>
-            )}
-          </div>
-        </div>
-
         {/* Types d'Operations */}
         <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
           <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
@@ -328,6 +217,53 @@ export default function Statistics() {
               </div>
             ))}
           </div>
+        </div>
+      </div>
+      
+      {/* Classement Réalisateurs */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
+        <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
+          <Users size={18} className="text-primary"/> Classement par Réalisateur (Top 10)
+        </h2>
+        
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead>
+              <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
+                <th className="pb-3 font-bold">Réalisateur</th>
+                <th className="pb-3 font-bold text-center">Total Assigné</th>
+                <th className="pb-3 font-bold text-center">Total Réussi</th>
+                <th className="pb-3 font-bold">Taux de succès</th>
+              </tr>
+            </thead>
+            <tbody>
+              {realisateurData.map((user, i) => {
+                const percentage = user.assignees > 0 ? Math.round((user.reussies / user.assignees) * 100) : 0;
+                return (
+                  <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
+                    <td className="py-4 font-bold text-slate-700">{user.name}</td>
+                    <td className="py-4 text-center font-bold text-slate-600">
+                      <span className="bg-slate-100 px-3 py-1 rounded-full">{user.assignees}</span>
+                    </td>
+                    <td className="py-4 text-center font-bold text-emerald-600">
+                      <span className="bg-emerald-50 px-3 py-1 rounded-full">{user.reussies}</span>
+                    </td>
+                    <td className="py-4">
+                      <div className="flex items-center gap-3">
+                        <div className="w-32 bg-slate-100 rounded-full h-2 overflow-hidden">
+                          <div 
+                            className={`h-2 rounded-full ${percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} 
+                            style={{ width: `${percentage}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-xs font-bold text-slate-500">{percentage}%</span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
