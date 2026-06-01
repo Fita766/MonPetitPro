@@ -9,6 +9,7 @@ import OperationForm from './pages/OperationForm';
 import OperationDetail from './pages/OperationDetail';
 import Observations from './pages/Observations';
 import CalendarView from './pages/CalendarView';
+import Statistics from './pages/Statistics';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -91,6 +92,14 @@ function App() {
           element={
             <ProtectedRoute>
               <CalendarView />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/statistics" 
+          element={
+            <ProtectedRoute>
+              <Statistics />
             </ProtectedRoute>
           } 
         />
