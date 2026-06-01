@@ -11,23 +11,6 @@ const STATUS_COLORS: Record<string, string> = {
   'Terminé': 'bg-emerald-500'
 };
 
-const STATUS_TEXT_COLORS: Record<string, string> = {
-  'Réussi': 'text-emerald-700',
-  'En cours': 'text-blue-700',
-  'En retard': 'text-amber-700',
-  'Échec': 'text-red-700',
-  'Bloqué': 'text-purple-700',
-  'Terminé': 'text-emerald-700'
-};
-
-const STATUS_BG_COLORS: Record<string, string> = {
-  'Réussi': 'bg-emerald-50',
-  'En cours': 'bg-blue-50',
-  'En retard': 'bg-amber-50',
-  'Échec': 'bg-red-50',
-  'Bloqué': 'bg-purple-50',
-  'Terminé': 'bg-emerald-50'
-};
 
 export default function Statistics() {
   const [operations, setOperations] = useState<any[]>([]);
@@ -85,8 +68,8 @@ export default function Statistics() {
   }, {} as Record<string, number>);
 
   const statusData = Object.entries(statusCounts)
-    .map(([name, value]) => ({ name, value, percentage: Math.round((value / totalObs) * 100) || 0 }))
-    .sort((a, b) => b.value - a.value);
+    .map(([name, value]: [string, any]) => ({ name, value, percentage: Math.round((value / totalObs) * 100) || 0 }))
+    .sort((a: any, b: any) => b.value - a.value);
 
   // --- Operations Type Data ---
   const typeCounts = operations.reduce((acc, op) => {
@@ -95,8 +78,8 @@ export default function Statistics() {
     return acc;
   }, {} as Record<string, number>);
   const typeData = Object.entries(typeCounts)
-    .map(([name, value]) => ({ name, value, percentage: Math.round((value / totalOps) * 100) || 0 }))
-    .sort((a, b) => b.value - a.value);
+    .map(([name, value]: [string, any]) => ({ name, value, percentage: Math.round((value / totalOps) * 100) || 0 }))
+    .sort((a: any, b: any) => b.value - a.value);
 
   // --- Realisateur Data ---
   const realisateursCounts = observations.reduce((acc, obs) => {
@@ -109,7 +92,7 @@ export default function Statistics() {
     return acc;
   }, {} as Record<string, any>);
   const realisateurData = Object.values(realisateursCounts)
-    .sort((a, b) => b.assignees - a.assignees)
+    .sort((a: any, b: any) => b.assignees - a.assignees)
     .slice(0, 10);
 
   const KpiCard = ({ title, value, subtext, icon: Icon, color }: any) => (
@@ -237,7 +220,7 @@ export default function Statistics() {
               </tr>
             </thead>
             <tbody>
-              {realisateurData.map((user, i) => {
+              {realisateurData.map((user: any, i) => {
                 const percentage = user.assignees > 0 ? Math.round((user.reussies / user.assignees) * 100) : 0;
                 return (
                   <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">

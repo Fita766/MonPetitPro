@@ -11,7 +11,7 @@ import {
 import { fr } from 'date-fns/locale';
 import { 
   ChevronLeft, ChevronRight, PlusCircle, X, MapPin, Video, 
-  AlignLeft, AlertTriangle, Calendar as CalendarIcon, Clock
+  AlignLeft, AlertTriangle, Calendar as CalendarIcon
 } from 'lucide-react';
 
 type ViewMode = 'day' | 'week' | 'month' | 'year';
@@ -35,7 +35,7 @@ export default function CalendarView() {
   const [events, setEvents] = useState<EventItem[]>([]);
   const [observations, setObservations] = useState<any[]>([]);
   const [operations, setOperations] = useState<any[]>([]);
-  const [loading, setLoading] = useState(true);
+
 
   // Modals
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -59,7 +59,6 @@ export default function CalendarView() {
   }, [currentDate]);
 
   const fetchData = async () => {
-    setLoading(true);
     try {
       const { data: ops } = await supabase.from('operations').select('id, name');
       if (ops) setOperations(ops);
@@ -95,8 +94,6 @@ export default function CalendarView() {
       }
     } catch (error) {
       console.error('Error fetching calendar data:', error);
-    } finally {
-      setLoading(false);
     }
   };
 
