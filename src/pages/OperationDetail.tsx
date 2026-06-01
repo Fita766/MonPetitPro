@@ -33,6 +33,7 @@ interface Observation {
   responsible_person: string;
   deadline_date: string;
   completion_date: string | null;
+  _custom_status?: string;
 }
 
 export default function OperationDetail() {
@@ -53,7 +54,8 @@ export default function OperationDetail() {
     description: '',
     responsible_person: '',
     deadline_date: '',
-    completion_date: ''
+    completion_date: '',
+    _custom_status: 'En cours'
   });
 
   const resetObsForm = () => {
@@ -63,7 +65,8 @@ export default function OperationDetail() {
       description: '',
       responsible_person: '',
       deadline_date: '',
-      completion_date: ''
+      completion_date: '',
+      _custom_status: 'En cours'
     });
     setShowCustomResponsible(false);
     setShowObsForm(false);
@@ -95,7 +98,14 @@ export default function OperationDetail() {
         .order('deadline_date', { ascending: true });
 
       if (obsError) throw obsError;
-      const obsList = obsData || [];
+      const obsList = (obsData || []).map(obs => {
+        const match = obs.description?.match(/\n\n\[STATUT: (.*?)\]/);
+        if (match) {
+            obs._custom_status = match[1];
+            obs.description = obs.description.replace(/\n\n\[STATUT: .*?\]/, '');
+        }
+        return obs;
+      });
       setObservations(obsList);
       
       // Extraire les responsables uniques pour l'autocomplétion
@@ -113,14 +123,23 @@ export default function OperationDetail() {
     try {
       const { data: userData } = await supabase.auth.getUser();
       
+      let finalDescription = obsForm.description;
+      if (obsForm._custom_status && obsForm._custom_status !== 'En cours') {
+          finalDescription = `${obsForm.description}\n\n[STATUT: ${obsForm._custom_status}]`;
+      }
+
+      const isCompletedStatus = obsForm._custom_status === 'Réussi' || obsForm._custom_status === 'Échec';
+
       const payload = {
         operation_id: id,
         user_id: userData.user?.id,
         info_date: obsForm.info_date,
-        description: obsForm.description,
+        description: finalDescription,
         responsible_person: obsForm.responsible_person,
         deadline_date: obsForm.deadline_date,
-        completion_date: obsForm.completion_date || null
+        completion_date: isCompletedStatus 
+            ? (obsForm.completion_date || new Date().toISOString().split('T')[0])
+            : (obsForm.completion_date || null)
       };
 
       if (editingObsId) {
@@ -158,7 +177,8 @@ export default function OperationDetail() {
       description: obs.description,
       responsible_person: obs.responsible_person,
       deadline_date: obs.deadline_date,
-      completion_date: obs.completion_date || ''
+      completion_date: obs.completion_date || '',
+      _custom_status: obs._custom_status || 'En cours'
     });
     setShowObsForm(true);
   };
@@ -193,6 +213,11 @@ export default function OperationDetail() {
   };
 
   const getStatus = (obs: Observation) => {
+    if (obs._custom_status) {
+        if (obs._custom_status === 'Réussi') return { label: 'Réussi', color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle2 };
+        if (obs._custom_status === 'Échec') return { label: 'Échec', color: 'bg-red-100 text-red-800', icon: AlertCircle };
+        if (obs._custom_status === 'Bloqué') return { label: 'Bloqué', color: 'bg-orange-100 text-orange-800', icon: AlertCircle };
+    }
     if (obs.completion_date) return { label: 'Terminé', color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle2 };
     
     // Check if overdue
@@ -367,6 +392,19 @@ export default function OperationDetail() {
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1">Date de réalisation</label>
               <input type="date" value={obsForm.completion_date} onChange={(e) => setObsForm({...obsForm, completion_date: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-slate-700 mb-1">Statut</label>
+              <select 
+                value={obsForm._custom_status} 
+                onChange={(e) => setObsForm({...obsForm, _custom_status: e.target.value})}
+                className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none bg-white"
+              >
+                <option value="En cours">En cours</option>
+                <option value="Réussi">Réussi</option>
+                <option value="Échec">Échec</option>
+                <option value="Bloqué">Bloqué</option>
+              </select>
             </div>
           </div>
           <div className="flex justify-end">

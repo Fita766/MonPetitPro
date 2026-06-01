@@ -8,6 +8,7 @@ import Dashboard from './pages/Dashboard';
 import OperationForm from './pages/OperationForm';
 import OperationDetail from './pages/OperationDetail';
 import Observations from './pages/Observations';
+import CalendarView from './pages/CalendarView';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -82,6 +83,14 @@ function App() {
           element={
             <ProtectedRoute>
               <Observations />
+            </ProtectedRoute>
+          } 
+        />
+        <Route 
+          path="/calendar" 
+          element={
+            <ProtectedRoute>
+              <CalendarView />
             </ProtectedRoute>
           } 
         />

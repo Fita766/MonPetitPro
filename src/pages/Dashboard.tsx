@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { PlusCircle, Building, Calendar, Edit, Trash2 } from 'lucide-react';
+import { Search, PlusCircle, Building, Calendar, Edit, Trash2 } from 'lucide-react';
 
 interface Operation {
   id: string;
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [filterManager, setFilterManager] = useState('');
   const [filterPromoter, setFilterPromoter] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   useEffect(() => {
     fetchOperations();
@@ -30,7 +31,7 @@ export default function Dashboard() {
     try {
       const { data, error } = await supabase
         .from('operations')
-        .select('*')
+        .select('*, observations(responsible_person)')
         .order('name', { ascending: true });
 
       if (error) throw error;
@@ -67,6 +68,19 @@ export default function Dashboard() {
   const filteredOperations = operations.filter(op => {
     if (filterManager && op.project_manager !== filterManager) return false;
     if (filterPromoter && op.promoter_name !== filterPromoter) return false;
+    
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      const matchName = op.name.toLowerCase().includes(q);
+      const matchCtx = op.project_manager.toLowerCase().includes(q);
+      const matchPromoter = op.promoter_name?.toLowerCase().includes(q) || false;
+      const matchRealisateur = (op as any).observations?.some((obs: any) => obs.responsible_person?.toLowerCase().includes(q));
+      
+      if (!matchName && !matchCtx && !matchPromoter && !matchRealisateur) {
+        return false;
+      }
+    }
+
     return true;
   });
 
@@ -81,7 +95,17 @@ export default function Dashboard() {
           <p className="text-slate-500 mt-1">Gérez vos programmes immobiliers et suivez leur avancement.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text" 
+                placeholder="Rechercher (Nom, CTX, Réalisateur)..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[250px]"
+              />
+            </div>
             <select 
               value={filterManager} 
               onChange={(e) => setFilterManager(e.target.value)}

@@ -33,3 +33,7 @@ export const triggerSuccessToast = (userEmail: string | undefined, defaultMsg: s
     useStore.getState().setToastMessage(`✅ ${defaultMsg}`);
   }
 };
+
+export const triggerErrorToast = (defaultMsg: string = "Une erreur est survenue.") => {
+  useStore.getState().setToastMessage(`❌ ${defaultMsg}`);
+};

@@ -2,7 +2,8 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, Eye, EyeOff } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { Search, Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, Eye, EyeOff, PlusCircle } from 'lucide-react';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -11,6 +12,7 @@ type ViewMode = 'structuree' | 'tabulaire';
 type TabularFilter = 'statut' | 'vefa' | 'mod' | 'all';
 
 export default function Observations() {
+  const navigate = useNavigate();
   const [observations, setObservations] = useState<any[]>([]);
   const [allOperations, setAllOperations] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -23,8 +25,19 @@ export default function Observations() {
   const [filterCtx, setFilterCtx] = useState('');
   const [filterRealisateur, setFilterRealisateur] = useState('');
   const [filterStatus, setFilterStatus] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
 
   const [editingObs, setEditingObs] = useState<any | null>(null);
+
+  const [isAddingObs, setIsAddingObs] = useState(false);
+  const [newObsForm, setNewObsForm] = useState({
+    operation_id: '',
+    info_date: new Date().toISOString().split('T')[0],
+    description: '',
+    responsible_person: '',
+    deadline_date: '',
+    _custom_status: 'En cours'
+  });
 
   useEffect(() => {
     fetchData();
@@ -39,7 +52,15 @@ export default function Observations() {
         .select(`*, operations (*)`)
         .order('deadline_date', { ascending: true });
       if (obsError) throw obsError;
-      setObservations(obsData || []);
+      const processedObsData = (obsData || []).map(obs => {
+        const match = obs.description?.match(/\n\n\[STATUT: (.*?)\]/);
+        if (match) {
+            obs._custom_status = match[1];
+            obs.description = obs.description.replace(/\n\n\[STATUT: .*?\]/, '');
+        }
+        return obs;
+      });
+      setObservations(processedObsData);
 
       // Fetch All Operations (to show those without obs)
       const { data: opsData, error: opsError } = await supabase
@@ -57,6 +78,11 @@ export default function Observations() {
   };
 
   const getStatus = (obs: any) => {
+    if (obs._custom_status) {
+        if (obs._custom_status === 'Réussi') return { label: 'Réussi', color: 'text-emerald-600 bg-emerald-50 border-emerald-100', dot: 'bg-emerald-500' };
+        if (obs._custom_status === 'Échec') return { label: 'Échec', color: 'text-red-600 bg-red-50 border-red-100', dot: 'bg-red-500' };
+        if (obs._custom_status === 'Bloqué') return { label: 'Bloqué', color: 'text-orange-600 bg-orange-50 border-orange-100', dot: 'bg-orange-500' };
+    }
     if (obs.completion_date) return { label: 'Terminé', color: 'text-emerald-600 bg-emerald-50 border-emerald-100', dot: 'bg-emerald-500' };
     const deadline = new Date(obs.deadline_date);
     const today = new Date();
@@ -81,12 +107,21 @@ export default function Observations() {
     e.preventDefault();
     if (!editingObs) return;
     try {
+      let finalDescription = editingObs.description;
+      if (editingObs._custom_status && editingObs._custom_status !== 'En cours') {
+          finalDescription = `${editingObs.description}\n\n[STATUT: ${editingObs._custom_status}]`;
+      }
+
+      const isCompletedStatus = editingObs._custom_status === 'Réussi' || editingObs._custom_status === 'Échec';
+
       const payload = {
         info_date: editingObs.info_date,
-        description: editingObs.description,
+        description: finalDescription,
         responsible_person: editingObs.responsible_person,
         deadline_date: editingObs.deadline_date,
-        completion_date: editingObs.completion_date || null
+        completion_date: isCompletedStatus 
+            ? (editingObs.completion_date || new Date().toISOString().split('T')[0])
+            : (editingObs.completion_date || null)
       };
       const { error } = await supabase.from('observations').update(payload).eq('id', editingObs.id);
       if (error) throw error;
@@ -95,6 +130,47 @@ export default function Observations() {
       fetchData();
     } catch (err) {
       console.error('Error updating observation:', err);
+    }
+  };
+
+  const handleAddSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      const { data: userData } = await supabase.auth.getUser();
+
+      let finalDescription = newObsForm.description;
+      if (newObsForm._custom_status && newObsForm._custom_status !== 'En cours') {
+          finalDescription = `${newObsForm.description}\n\n[STATUT: ${newObsForm._custom_status}]`;
+      }
+
+      const isCompletedStatus = newObsForm._custom_status === 'Réussi' || newObsForm._custom_status === 'Échec';
+
+      const payload = {
+        operation_id: newObsForm.operation_id,
+        user_id: userData.user?.id,
+        info_date: newObsForm.info_date,
+        description: finalDescription,
+        responsible_person: newObsForm.responsible_person,
+        deadline_date: newObsForm.deadline_date,
+        completion_date: isCompletedStatus ? new Date().toISOString().split('T')[0] : null
+      };
+
+      const { error } = await supabase.from('observations').insert([payload]);
+      if (error) throw error;
+      
+      triggerSuccessToast(useStore.getState().user?.email, 'Observation ajoutée avec succès.');
+      setIsAddingObs(false);
+      setNewObsForm({
+        operation_id: '',
+        info_date: new Date().toISOString().split('T')[0],
+        description: '',
+        responsible_person: '',
+        deadline_date: '',
+        _custom_status: 'En cours'
+      });
+      fetchData();
+    } catch (err) {
+      console.error('Error adding observation:', err);
     }
   };
 
@@ -445,6 +521,20 @@ export default function Observations() {
       if (tabularFilter === 'vefa' && obs.operations.operation_type !== 'VEFA') return false;
       if (tabularFilter === 'mod' && obs.operations.operation_type === 'VEFA') return false;
     }
+
+    if (searchQuery) {
+        const q = searchQuery.toLowerCase();
+        const matchName = obs.operations.name.toLowerCase().includes(q);
+        const matchType = obs.operations.operation_type?.toLowerCase().includes(q);
+        const matchPromoter = obs.operations.promoter_name?.toLowerCase().includes(q) || false;
+        const matchResp = obs.responsible_person?.toLowerCase().includes(q) || false;
+        const matchDesc = obs.description?.toLowerCase().includes(q) || false;
+        const matchCtx = obs.operations.project_manager?.toLowerCase().includes(q) || false;
+
+        if (!matchName && !matchType && !matchPromoter && !matchResp && !matchDesc && !matchCtx) {
+            return false;
+        }
+    }
     
     return true;
   });
@@ -479,7 +569,13 @@ export default function Observations() {
           <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Suivi des Observations</h1>
           <p className="text-slate-500 mt-1">Gérez et exportez vos points de vigilance par opération ou par statut.</p>
         </div>
-        <div className="flex items-center gap-3">
+        <div className="flex flex-wrap items-center gap-3">
+          <button 
+            onClick={() => navigate('/operations/new')}
+            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm"
+          >
+            <PlusCircle size={18} /> Nouvelle Opération
+          </button>
           <div className="bg-white border border-slate-200 rounded-lg p-1 flex">
             <button 
               onClick={() => setViewMode('structuree')}
@@ -510,6 +606,21 @@ export default function Observations() {
       </div>
 
       <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8 print:hidden">
+        <div className="flex flex-wrap gap-4 items-end mb-4">
+          <div className="flex-1 min-w-[200px] w-full">
+            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Recherche globale</label>
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+              <input 
+                type="text"
+                placeholder="Nom, Type, Promoteur, Réalisateur, CTX, Desc..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
+              />
+            </div>
+          </div>
+        </div>
         <div className="flex flex-wrap gap-4 items-end">
           <div className="flex-1 min-w-[180px]">
             <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Opération</label>
@@ -539,6 +650,9 @@ export default function Observations() {
               <option value="En retard">En retard</option>
               <option value="En cours">En cours</option>
               <option value="Terminé">Terminé</option>
+              <option value="Réussi">Réussi</option>
+              <option value="Échec">Échec</option>
+              <option value="Bloqué">Bloqué</option>
             </select>
           </div>
           
@@ -552,7 +666,7 @@ export default function Observations() {
               <span className="hidden sm:inline">{showEmptyOps ? "Opérations Vides Visibles" : "Afficher Opérations Vides"}</span>
             </button>
             <button 
-              onClick={() => {setFilterOp(''); setFilterCtx(''); setFilterRealisateur(''); setFilterStatus(''); setShowEmptyOps(false);}}
+              onClick={() => {setFilterOp(''); setFilterCtx(''); setFilterRealisateur(''); setFilterStatus(''); setShowEmptyOps(false); setSearchQuery('');}}
               className="px-4 py-2 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 text-sm font-semibold transition bg-white shadow-sm"
             >
               Effacer
@@ -653,6 +767,20 @@ export default function Observations() {
                           </td>
                         </tr>
                       )}
+                      <tr 
+                        onClick={() => {
+                          setNewObsForm(prev => ({...prev, operation_id: opId}));
+                          setIsAddingObs(true);
+                        }}
+                        className="cursor-pointer group hover:bg-slate-50 transition-colors print:hidden"
+                      >
+                        <td colSpan={6} className="p-3 border-t-2 border-dashed border-slate-200">
+                          <div className="flex items-center justify-center gap-2 text-slate-400 group-hover:text-primary font-medium text-sm transition-colors py-1">
+                            <PlusCircle size={16} />
+                            <span>Ajouter une nouvelle observation</span>
+                          </div>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -734,7 +862,7 @@ export default function Observations() {
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-24"
                 />
               </div>
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Réalisateur *</label>
                   <input required value={editingObs.responsible_person} onChange={(e) => setEditingObs({...editingObs, responsible_person: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
@@ -743,10 +871,87 @@ export default function Observations() {
                   <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date Butoire *</label>
                   <input type="date" value={editingObs.deadline_date} onChange={(e) => setEditingObs({...editingObs, deadline_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
                 </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Statut</label>
+                  <select 
+                    value={editingObs._custom_status || 'En cours'} 
+                    onChange={(e) => setEditingObs({...editingObs, _custom_status: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="En cours">En cours</option>
+                    <option value="Réussi">Réussi</option>
+                    <option value="Échec">Échec</option>
+                    <option value="Bloqué">Bloqué</option>
+                  </select>
+                </div>
               </div>
               <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
                 <button type="button" onClick={() => setEditingObs(null)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
                 <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Enregistrer</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {isAddingObs && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 print:hidden">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800">Ajouter une observation</h2>
+              <button onClick={() => setIsAddingObs(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Opération *</label>
+                <select 
+                  required 
+                  value={newObsForm.operation_id} 
+                  onChange={(e) => setNewObsForm({...newObsForm, operation_id: e.target.value})}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                >
+                  <option value="" disabled>Sélectionner une opération</option>
+                  {uniqueOps.map(opName => {
+                    const op = allOperations.find(o => o.name === opName);
+                    return op ? <option key={op.id} value={op.id}>{op.name}</option> : null;
+                  })}
+                </select>
+              </div>
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description *</label>
+                <textarea 
+                  required 
+                  value={newObsForm.description} 
+                  onChange={(e) => setNewObsForm({...newObsForm, description: e.target.value})} 
+                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-24"
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Réalisateur *</label>
+                  <input required value={newObsForm.responsible_person} onChange={(e) => setNewObsForm({...newObsForm, responsible_person: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date Butoire *</label>
+                  <input required type="date" value={newObsForm.deadline_date} onChange={(e) => setNewObsForm({...newObsForm, deadline_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Statut</label>
+                  <select 
+                    value={newObsForm._custom_status} 
+                    onChange={(e) => setNewObsForm({...newObsForm, _custom_status: e.target.value})}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
+                  >
+                    <option value="En cours">En cours</option>
+                    <option value="Réussi">Réussi</option>
+                    <option value="Échec">Échec</option>
+                    <option value="Bloqué">Bloqué</option>
+                  </select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
+                <button type="button" onClick={() => setIsAddingObs(false)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
+                <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Créer</button>
               </div>
             </form>
           </div>

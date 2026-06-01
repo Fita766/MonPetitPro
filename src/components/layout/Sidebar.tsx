@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Building2, LayoutDashboard, ListTodo, LogOut } from 'lucide-react';
+import { Building2, LayoutDashboard, ListTodo, LogOut, CalendarDays } from 'lucide-react';
 
 export default function Sidebar() {
   const navigate = useNavigate();
@@ -39,6 +39,10 @@ export default function Sidebar() {
         <NavLink to="/observations" className={navItemClass}>
           <ListTodo size={20} />
           <span className="font-medium">Toutes les observations</span>
+        </NavLink>
+        <NavLink to="/calendar" className={navItemClass}>
+          <CalendarDays size={20} />
+          <span className="font-medium">Calendrier</span>
         </NavLink>
       </nav>
 
