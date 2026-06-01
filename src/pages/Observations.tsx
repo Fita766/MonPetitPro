@@ -693,7 +693,16 @@ export default function Observations() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 p-4 gap-y-6 gap-x-4 text-[10px] uppercase font-bold tracking-wider">
                     <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
                       <span className="text-slate-500 block mb-1">Nom de l'OP</span>
-                      <span className="text-sm md:text-base text-white block" title={op.name}>{op.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm md:text-base text-white block truncate" title={op.name}>{op.name}</span>
+                        <button 
+                          onClick={() => navigate(`/operations/${opId}/edit`)} 
+                          className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-primary transition-colors print:hidden shrink-0" 
+                          title="Modifier l'opération"
+                        >
+                          <Edit size={14} />
+                        </button>
+                      </div>
                     </div>
                     <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
                       <span className="text-slate-500 block mb-1">Nbre logt</span>
@@ -815,7 +824,18 @@ export default function Observations() {
                       const status = getStatus(obs);
                       return (
                         <tr key={obs.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-4 pl-6 text-sm font-bold text-slate-900">{obs.operations.name}</td>
+                          <td className="p-4 pl-6 text-sm font-bold text-slate-900 border-r border-slate-100 group/op">
+                            <div className="flex items-center justify-between gap-2">
+                              <span className="truncate">{obs.operations?.name}</span>
+                              <button 
+                                onClick={() => navigate(`/operations/${obs.operation_id}/edit`)} 
+                                className="p-1 opacity-0 group-hover/op:opacity-100 hover:bg-slate-200 rounded text-slate-400 hover:text-primary transition-colors print:hidden shrink-0" 
+                                title="Modifier l'opération"
+                              >
+                                <Edit size={14} />
+                              </button>
+                            </div>
+                          </td>
                           {tabularFilter === 'vefa' && <td className="p-4 text-xs text-slate-600 font-medium uppercase">{obs.operations.promoter_name || '-'}</td>}
                           {(tabularFilter === 'vefa' || tabularFilter === 'mod') && <td className="p-4 text-xs text-slate-700">{obs.operations.total_housing_units}</td>}
                           <td className="p-4 text-xs text-slate-700 font-semibold">{obs.operations.project_manager}</td>
