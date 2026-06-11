@@ -8,10 +8,11 @@ import {
   isSameMonth, isSameDay, eachDayOfInterval, eachMonthOfInterval,
   parseISO
 } from 'date-fns';
-import { fr } from 'date-fns/locale';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { 
   ChevronLeft, ChevronRight, PlusCircle, X, MapPin, Video, 
-  AlignLeft, AlertTriangle, Calendar as CalendarIcon
+  AlignLeft, AlertTriangle, Calendar as CalendarIcon, Building, Download
 } from 'lucide-react';
 
 type ViewMode = 'day' | 'week' | 'month' | 'year';
@@ -60,7 +61,7 @@ export default function CalendarView() {
 
   const fetchData = async () => {
     try {
-      const { data: ops } = await supabase.from('operations').select('id, name');
+      const { data: ops } = await supabase.from('operations').select('id, name, expected_delivery_date, contractual_delivery_date, actual_delivery_date, operation_type, project_manager');
       if (ops) setOperations(ops);
 
       const { data: obsData } = await supabase
@@ -227,13 +228,128 @@ export default function CalendarView() {
     }
   };
 
+  const exportAnnualPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    const year = format(currentDate, 'yyyy');
+    
+    doc.setFontSize(22);
+    doc.setTextColor(15, 23, 42); 
+    doc.text("Suivi Action Immo", 14, 20);
+    
+    doc.setFontSize(14);
+    doc.setTextColor(100, 116, 139); 
+    doc.text(`Calendrier Annuel des Évènements - ${year}`, 14, 30);
+    
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
+    const processedOps = operations.map(op => {
+      let dDate = op.expected_delivery_date;
+      if (dDate && dDate < todayStr && op.contractual_delivery_date) {
+        dDate = op.contractual_delivery_date;
+      }
+      return { ...op, effective_date: dDate };
+    }).filter(op => op.effective_date && op.effective_date.startsWith(year) && !op.actual_delivery_date);
+    
+    const processedEvts = events.filter(e => e.event_date.startsWith(year));
+    const processedObs = observations.filter(o => o.deadline_date?.startsWith(year) && !o.completion_date);
+
+    let currentY = 40;
+    
+    const months = eachMonthOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
+    
+    months.forEach((monthDate) => {
+      const monthPrefix = format(monthDate, 'yyyy-MM');
+      const monthOps = processedOps.filter(o => o.effective_date?.startsWith(monthPrefix));
+      const monthEvts = processedEvts.filter(e => e.event_date.startsWith(monthPrefix));
+      const monthObs = processedObs.filter(o => o.deadline_date?.startsWith(monthPrefix));
+      
+      if (monthOps.length === 0 && monthEvts.length === 0 && monthObs.length === 0) return;
+      
+      if (currentY > 250) {
+        doc.addPage();
+        currentY = 20;
+      }
+      
+      doc.setFillColor(15, 23, 42); 
+      doc.rect(14, currentY, 269, 10, 'F');
+      doc.setTextColor(255, 255, 255);
+      doc.setFontSize(12);
+      doc.text(format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase(), 18, currentY + 7);
+      
+      currentY += 10;
+      
+      const rows: any[] = [];
+      monthOps.forEach(op => {
+        rows.push([
+          format(parseISO(op.effective_date), 'dd/MM/yyyy'),
+          'Opération (Livraison)',
+          op.name,
+          op.project_manager || '-',
+          op.effective_date < todayStr ? 'En retard' : 'À venir'
+        ]);
+      });
+      monthObs.forEach(obs => {
+        rows.push([
+          format(parseISO(obs.deadline_date), 'dd/MM/yyyy'),
+          'Observation',
+          obs.description?.split('\n')[0] || '-',
+          obs.operations?.name || '-',
+          obs.deadline_date < todayStr ? 'En retard' : 'À venir'
+        ]);
+      });
+      monthEvts.forEach(evt => {
+        rows.push([
+          format(parseISO(evt.event_date), 'dd/MM/yyyy'),
+          'Évènement',
+          evt.title,
+          evt.event_time || '-',
+          '-'
+        ]);
+      });
+      
+      rows.sort((a, b) => {
+        const dA = a[0].split('/').reverse().join('-');
+        const dB = b[0].split('/').reverse().join('-');
+        return dA.localeCompare(dB);
+      });
+      
+      autoTable(doc, {
+        startY: currentY,
+        head: [['Date', 'Type', 'Description / Nom', 'Détails / CTX', 'Statut']],
+        body: rows,
+        theme: 'striped',
+        styles: { fontSize: 9 },
+        headStyles: { fillColor: [51, 65, 85] }
+      });
+      
+      currentY = (doc as any).lastAutoTable.finalY + 15;
+    });
+    
+    if (currentY === 40) {
+       doc.setFontSize(12);
+       doc.text("Aucun évènement ou livraison prévu cette année.", 14, 50);
+    }
+    
+    doc.save(`Calendrier_Annuel_${year}.pdf`);
+    triggerSuccessToast(useStore.getState().user?.email, "PDF annuel généré avec succès !");
+  };
+
   // Rendering Helpers
   const renderEventsList = (dayStr: string, isSmall: boolean = false) => {
+    const todayStr = format(new Date(), 'yyyy-MM-dd');
     const dayEvents = events.filter(e => e.event_date === dayStr);
     const obsDeadlines = observations.filter(o => !o.completion_date && o.deadline_date === dayStr);
     const obsCompletions = observations.filter(o => o.completion_date === dayStr);
+    
+    const opDeliveries = operations.filter(op => {
+      if (op.actual_delivery_date) return false;
+      let effectiveDate = op.expected_delivery_date;
+      if (effectiveDate && effectiveDate < todayStr && op.contractual_delivery_date) {
+        effectiveDate = op.contractual_delivery_date;
+      }
+      return effectiveDate === dayStr;
+    });
 
-    if (dayEvents.length === 0 && obsDeadlines.length === 0 && obsCompletions.length === 0) return null;
+    if (dayEvents.length === 0 && obsDeadlines.length === 0 && obsCompletions.length === 0 && opDeliveries.length === 0) return null;
 
     return (
       <div className={`space-y-1.5 flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${isSmall ? 'mt-1' : 'mt-2'}`}>
@@ -267,6 +383,18 @@ export default function CalendarView() {
           >
             <span className={`rounded-full bg-emerald-500 shrink-0 ${isSmall ? 'w-1 h-1' : 'w-1.5 h-1.5'}`}></span>
             <span className="truncate">{obs.description?.split('\n')[0] || 'Observation'}</span>
+          </div>
+        ))}
+        {opDeliveries.map(op => (
+          <div 
+            key={`op-${op.id}`} 
+            className={`px-2 py-1 rounded border font-medium truncate flex items-center gap-1 cursor-default
+              ${dayStr < todayStr ? 'bg-red-50 border-red-100 text-red-700' : 'bg-purple-50 border-purple-100 text-purple-700'} 
+              ${isSmall ? 'text-[9px]' : 'text-xs'}`}
+            title={`Livraison OP : ${op.name}`}
+          >
+            <Building size={isSmall ? 8 : 10} className="shrink-0" />
+            <span className="truncate">{op.name}</span>
           </div>
         ))}
       </div>
@@ -427,7 +555,15 @@ export default function CalendarView() {
           <p className="text-slate-500 mt-1">Planifiez vos évènements et suivez vos échéances.</p>
         </div>
 
-        <div className="flex items-center gap-4">
+        <div className="flex items-center gap-4 flex-wrap justify-end">
+          <button 
+            onClick={exportAnnualPDF}
+            className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition font-medium text-sm shadow-sm"
+          >
+            <Download size={16} />
+            <span className="hidden sm:inline">Export Annuel</span>
+          </button>
+
           <div className="bg-white border border-slate-200 rounded-lg p-1 flex">
             {['day', 'week', 'month', 'year'].map((mode) => (
               <button 
