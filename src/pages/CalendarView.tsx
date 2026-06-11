@@ -10,6 +10,7 @@ import {
 } from 'date-fns';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import ExcelJS from 'exceljs';
 import { 
   ChevronLeft, ChevronRight, PlusCircle, X, MapPin, Video, 
   AlignLeft, AlertTriangle, Calendar as CalendarIcon, Building, Download
@@ -42,6 +43,9 @@ export default function CalendarView() {
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedDate, setSelectedDate] = useState<Date>(new Date());
   const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
+  const [editingObs, setEditingObs] = useState<any | null>(null);
+  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
+  const [exportConfig, setExportConfig] = useState<{format: 'pdf' | 'xls', includeEmpty: boolean}>({ format: 'pdf', includeEmpty: false });
 
   const [form, setForm] = useState<Partial<EventItem>>({
     title: '',
@@ -228,17 +232,9 @@ export default function CalendarView() {
     }
   };
 
-  const exportAnnualPDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4');
+  const handleExportData = async () => {
+    const { format: exportFormat, includeEmpty } = exportConfig;
     const year = format(currentDate, 'yyyy');
-    
-    doc.setFontSize(22);
-    doc.setTextColor(15, 23, 42); 
-    doc.text("Suivi Action Immo", 14, 20);
-    
-    doc.setFontSize(14);
-    doc.setTextColor(100, 116, 139); 
-    doc.text(`Calendrier Annuel des Évènements - ${year}`, 14, 30);
     
     const todayStr = format(new Date(), 'yyyy-MM-dd');
     const processedOps = operations.map(op => {
@@ -252,85 +248,98 @@ export default function CalendarView() {
     const processedEvts = events.filter(e => e.event_date.startsWith(year));
     const processedObs = observations.filter(o => o.deadline_date?.startsWith(year) && !o.completion_date);
 
-    let currentY = 40;
+    const days = eachDayOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
+    const rows: any[] = [];
     
-    const months = eachMonthOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
-    
-    months.forEach((monthDate) => {
-      const monthPrefix = format(monthDate, 'yyyy-MM');
-      const monthOps = processedOps.filter(o => o.effective_date?.startsWith(monthPrefix));
-      const monthEvts = processedEvts.filter(e => e.event_date.startsWith(monthPrefix));
-      const monthObs = processedObs.filter(o => o.deadline_date?.startsWith(monthPrefix));
+    days.forEach(day => {
+      const dayStr = format(day, 'yyyy-MM-dd');
+      const dayOps = processedOps.filter(o => o.effective_date === dayStr);
+      const dayEvts = processedEvts.filter(e => e.event_date === dayStr);
+      const dayObs = processedObs.filter(o => o.deadline_date === dayStr);
       
-      if (monthOps.length === 0 && monthEvts.length === 0 && monthObs.length === 0) return;
+      const hasEvents = dayOps.length > 0 || dayEvts.length > 0 || dayObs.length > 0;
+      if (!hasEvents && !includeEmpty) return;
       
-      if (currentY > 250) {
-        doc.addPage();
-        currentY = 20;
+      const dateDisplay = format(day, 'dd/MM/yyyy');
+      
+      if (!hasEvents) {
+         rows.push([dateDisplay, '-', 'Aucun évènement', '-', '-']);
+         return;
       }
       
-      doc.setFillColor(15, 23, 42); 
-      doc.rect(14, currentY, 269, 10, 'F');
-      doc.setTextColor(255, 255, 255);
-      doc.setFontSize(12);
-      doc.text(format(monthDate, 'MMMM yyyy', { locale: fr }).toUpperCase(), 18, currentY + 7);
-      
-      currentY += 10;
-      
-      const rows: any[] = [];
-      monthOps.forEach(op => {
-        rows.push([
-          format(parseISO(op.effective_date), 'dd/MM/yyyy'),
-          'Opération (Livraison)',
-          op.name,
-          op.project_manager || '-',
-          op.effective_date < todayStr ? 'En retard' : 'À venir'
-        ]);
+      dayOps.forEach(op => {
+        rows.push([dateDisplay, 'Livraison OP', op.name, op.project_manager || '-', op.effective_date < todayStr ? 'En retard' : 'À venir']);
       });
-      monthObs.forEach(obs => {
-        rows.push([
-          format(parseISO(obs.deadline_date), 'dd/MM/yyyy'),
-          'Observation',
-          obs.description?.split('\n')[0] || '-',
-          obs.operations?.name || '-',
-          obs.deadline_date < todayStr ? 'En retard' : 'À venir'
-        ]);
+      dayObs.forEach(obs => {
+        rows.push([dateDisplay, 'Observation', obs.description?.split('\n')[0] || '-', obs.operations?.name || '-', obs.deadline_date < todayStr ? 'En retard' : 'À venir']);
       });
-      monthEvts.forEach(evt => {
-        rows.push([
-          format(parseISO(evt.event_date), 'dd/MM/yyyy'),
-          'Évènement',
-          evt.title,
-          evt.event_time || '-',
-          '-'
-        ]);
+      dayEvts.forEach(evt => {
+        rows.push([dateDisplay, 'Évènement', evt.title, evt.event_time || '-', '-']);
       });
-      
-      rows.sort((a, b) => {
-        const dA = a[0].split('/').reverse().join('-');
-        const dB = b[0].split('/').reverse().join('-');
-        return dA.localeCompare(dB);
-      });
+    });
+
+    if (exportFormat === 'pdf') {
+      const doc = new jsPDF('l', 'mm', 'a4');
+      doc.setFontSize(22);
+      doc.setTextColor(15, 23, 42); 
+      doc.text("Suivi Action Immo", 14, 20);
+      doc.setFontSize(14);
+      doc.setTextColor(100, 116, 139); 
+      doc.text(`Calendrier Annuel des Évènements - ${year}`, 14, 30);
       
       autoTable(doc, {
-        startY: currentY,
+        startY: 40,
         head: [['Date', 'Type', 'Description / Nom', 'Détails / CTX', 'Statut']],
         body: rows,
         theme: 'striped',
         styles: { fontSize: 9 },
         headStyles: { fillColor: [51, 65, 85] }
       });
+      doc.save(`Calendrier_Annuel_${year}.pdf`);
+      triggerSuccessToast(useStore.getState().user?.email, "PDF annuel généré avec succès !");
+    } else {
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet(`Calendrier ${year}`);
       
-      currentY = (doc as any).lastAutoTable.finalY + 15;
-    });
-    
-    if (currentY === 40) {
-       doc.setFontSize(12);
-       doc.text("Aucun évènement ou livraison prévu cette année.", 14, 50);
+      sheet.columns = [
+        { header: 'Date', width: 15 },
+        { header: 'Type', width: 20 },
+        { header: 'Description / Nom', width: 45 },
+        { header: 'Détails / CTX', width: 25 },
+        { header: 'Statut', width: 15 }
+      ];
+      
+      const headerRow = sheet.getRow(1);
+      headerRow.font = { bold: true };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
+      headerRow.eachCell(cell => {
+         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+      });
+
+      rows.forEach((r) => {
+         const row = sheet.addRow(r);
+         if (r[2] === 'Aucun évènement') {
+            row.font = { italic: true, color: { argb: '94A3B8' } };
+         }
+         row.eachCell(cell => {
+             cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
+         });
+      });
+      
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const anchor = document.createElement('a');
+      anchor.href = url;
+      anchor.download = `Calendrier_Annuel_${year}.xlsx`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      document.body.removeChild(anchor);
+      window.URL.revokeObjectURL(url);
+      triggerSuccessToast(useStore.getState().user?.email, "Excel annuel généré avec succès !");
     }
     
-    doc.save(`Calendrier_Annuel_${year}.pdf`);
-    triggerSuccessToast(useStore.getState().user?.email, "PDF annuel généré avec succès !");
+    setIsExportModalOpen(false);
   };
 
   // Rendering Helpers
@@ -557,7 +566,7 @@ export default function CalendarView() {
 
         <div className="flex items-center gap-4 flex-wrap justify-end">
           <button 
-            onClick={exportAnnualPDF}
+            onClick={() => setIsExportModalOpen(true)}
             className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition font-medium text-sm shadow-sm"
           >
             <Download size={16} />
@@ -753,6 +762,44 @@ export default function CalendarView() {
                 <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Enregistrer</button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal - Export Options */}
+      {isExportModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-slate-200">
+            <div className="flex justify-between items-center p-5 border-b border-slate-100">
+              <h2 className="text-lg font-bold text-slate-800">Options d'export annuel</h2>
+              <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
+            </div>
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Format</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="format" value="pdf" checked={exportConfig.format === 'pdf'} onChange={() => setExportConfig({...exportConfig, format: 'pdf'})} className="text-primary focus:ring-primary" />
+                    <span className="text-sm font-medium">PDF</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="format" value="xls" checked={exportConfig.format === 'xls'} onChange={() => setExportConfig({...exportConfig, format: 'xls'})} className="text-primary focus:ring-primary" />
+                    <span className="text-sm font-medium">Excel (XLSX)</span>
+                  </label>
+                </div>
+              </div>
+              <div className="pt-2">
+                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Contenu</label>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={exportConfig.includeEmpty} onChange={(e) => setExportConfig({...exportConfig, includeEmpty: e.target.checked})} className="text-primary rounded focus:ring-primary" />
+                  <span className="text-sm font-medium text-slate-700">Inclure tous les jours de l'année<br/><span className="text-xs text-slate-400 font-normal">(Même sans évènement)</span></span>
+                </label>
+              </div>
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
+                <button type="button" onClick={() => setIsExportModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
+                <button onClick={handleExportData} className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Exporter</button>
+              </div>
+            </div>
           </div>
         </div>
       )}
