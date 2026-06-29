@@ -8,6 +8,7 @@ import {
   isSameMonth, isSameDay, eachDayOfInterval, eachMonthOfInterval,
   parseISO
 } from 'date-fns';
+import { fr } from 'date-fns/locale';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
 import ExcelJS from 'exceljs';
@@ -57,7 +58,6 @@ export default function CalendarView() {
   });
 
   // Observation Edit Modal
-  const [editingObs, setEditingObs] = useState<any | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -246,16 +246,42 @@ export default function CalendarView() {
     }).filter(op => op.effective_date && op.effective_date.startsWith(year) && !op.actual_delivery_date);
     
     const processedEvts = events.filter(e => e.event_date.startsWith(year));
-    const processedObs = observations.filter(o => o.deadline_date?.startsWith(year) && !o.completion_date);
+    
+    // Include observations that have either completion_date or deadline_date in the target year
+    const processedObs = observations.filter(o => {
+      const dateToCheck = o.completion_date || o.deadline_date;
+      return dateToCheck?.startsWith(year);
+    });
 
     const days = eachDayOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
     const rows: any[] = [];
     
+    const getObsStatusLabel = (obs: any) => {
+      if (obs._custom_status) {
+        if (obs._custom_status === 'Réussi') return 'Réussi';
+        if (obs._custom_status === 'Échec') return 'Échec';
+        if (obs._custom_status === 'Bloqué') return 'Bloqué';
+      }
+      if (obs.completion_date) return 'Terminé';
+      if (obs.deadline_date) {
+        const deadline = new Date(obs.deadline_date);
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        if (deadline < today) return 'En retard';
+      }
+      return 'En cours';
+    };
+
     days.forEach(day => {
       const dayStr = format(day, 'yyyy-MM-dd');
       const dayOps = processedOps.filter(o => o.effective_date === dayStr);
       const dayEvts = processedEvts.filter(e => e.event_date === dayStr);
-      const dayObs = processedObs.filter(o => o.deadline_date === dayStr);
+      
+      // An observation appears on its completion_date if completed, or deadline_date if not completed
+      const dayObs = processedObs.filter(o => {
+        const dateToCheck = o.completion_date || o.deadline_date;
+        return dateToCheck === dayStr;
+      });
       
       const hasEvents = dayOps.length > 0 || dayEvts.length > 0 || dayObs.length > 0;
       if (!hasEvents && !includeEmpty) return;
@@ -271,7 +297,8 @@ export default function CalendarView() {
         rows.push([dateDisplay, 'Livraison OP', op.name, op.project_manager || '-', op.effective_date < todayStr ? 'En retard' : 'À venir']);
       });
       dayObs.forEach(obs => {
-        rows.push([dateDisplay, 'Observation', obs.description?.split('\n')[0] || '-', obs.operations?.name || '-', obs.deadline_date < todayStr ? 'En retard' : 'À venir']);
+        const statusLabel = getObsStatusLabel(obs);
+        rows.push([dateDisplay, 'Observation', obs.description?.split('\n')[0] || '-', obs.operations?.name || '-', statusLabel]);
       });
       dayEvts.forEach(evt => {
         rows.push([dateDisplay, 'Évènement', evt.title, evt.event_time || '-', '-']);
@@ -293,7 +320,28 @@ export default function CalendarView() {
         body: rows,
         theme: 'striped',
         styles: { fontSize: 9 },
-        headStyles: { fillColor: [51, 65, 85] }
+        headStyles: { fillColor: [51, 65, 85] },
+        didParseCell: (data) => {
+          if (data.section === 'body' && data.column.index === 4) {
+            const val = data.cell.raw;
+            if (val === 'Réussi' || val === 'Terminé') {
+              data.cell.styles.textColor = [6, 95, 70];
+              data.cell.styles.fontStyle = 'bold';
+            } else if (val === 'Échec' || val === 'En retard') {
+              data.cell.styles.textColor = [153, 27, 27];
+              data.cell.styles.fontStyle = 'bold';
+            } else if (val === 'En cours') {
+              data.cell.styles.textColor = [146, 64, 14];
+              data.cell.styles.fontStyle = 'bold';
+            } else if (val === 'Bloqué') {
+              data.cell.styles.textColor = [194, 65, 12];
+              data.cell.styles.fontStyle = 'bold';
+            } else if (val === 'À venir') {
+              data.cell.styles.textColor = [107, 33, 168];
+              data.cell.styles.fontStyle = 'bold';
+            }
+          }
+        }
       });
       doc.save(`Calendrier_Annuel_${year}.pdf`);
       triggerSuccessToast(useStore.getState().user?.email, "PDF annuel généré avec succès !");
@@ -321,6 +369,35 @@ export default function CalendarView() {
          if (r[2] === 'Aucun évènement') {
             row.font = { italic: true, color: { argb: '94A3B8' } };
          }
+         
+         const val = r[4];
+         if (val) {
+           let bgColor = 'FFFFFF';
+           let fgColor = '000000';
+           if (val === 'Réussi' || val === 'Terminé') {
+             bgColor = 'D1FAE5';
+             fgColor = '065F46';
+           } else if (val === 'Échec' || val === 'En retard') {
+             bgColor = 'FEE2E2';
+             fgColor = '991B1B';
+           } else if (val === 'En cours') {
+             bgColor = 'FEF3C7';
+             fgColor = '92400E';
+           } else if (val === 'Bloqué') {
+             bgColor = 'FFEDD5';
+             fgColor = 'C2410C';
+           } else if (val === 'À venir') {
+             bgColor = 'F3E8FF';
+             fgColor = '6B21A8';
+           }
+           
+           if (bgColor !== 'FFFFFF') {
+             const statusCell = row.getCell(5);
+             statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
+             statusCell.font = { bold: true, color: { argb: fgColor } };
+           }
+         }
+
          row.eachCell(cell => {
              cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
          });
