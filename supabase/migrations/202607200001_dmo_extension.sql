@@ -174,6 +174,21 @@ create table if not exists public.document_review_items (
   updated_at timestamptz not null default now()
 );
 
+-- Agenda libre conservé à côté des calendriers métier calculés.
+create table if not exists public.events (
+  id uuid primary key default uuid_generate_v4(),
+  title text not null,
+  event_date date not null,
+  event_time time,
+  description text,
+  operation_id uuid references public.operations(id) on delete cascade,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+create index if not exists events_date_idx on public.events(event_date);
+create index if not exists events_operation_idx on public.events(operation_id);
+
 alter table public.observations
   add column if not exists author_initials text,
   add column if not exists resolution_date date,
@@ -196,6 +211,13 @@ create table if not exists public.audit_log (
   changed_at timestamptz not null default now()
 );
 create index if not exists audit_log_record_idx on public.audit_log(table_name, record_id, changed_at desc);
+
+-- Les comptes créés avant cette migration reçoivent eux aussi un profil.
+insert into public.profiles (id, email, display_name, initials)
+select id, email, coalesce(raw_user_meta_data ->> 'full_name', split_part(coalesce(email, ''), '@', 1)),
+       upper(left(coalesce(raw_user_meta_data ->> 'full_name', email, '??'), 2))
+from auth.users
+on conflict (id) do nothing;
 
 create or replace function public.set_updated_at()
 returns trigger language plpgsql set search_path = public as $$
@@ -289,7 +311,7 @@ declare table_to_audit text;
 begin
   foreach table_to_audit in array array[
     'operations', 'observations', 'operation_typologies', 'operation_subsidies',
-    'suspensive_conditions', 'operation_documents', 'document_review_items', 'profiles'
+    'suspensive_conditions', 'operation_documents', 'document_review_items', 'events', 'profiles'
   ] loop
     execute format('drop trigger if exists audit_%I on public.%I', table_to_audit, table_to_audit);
     execute format(
@@ -304,7 +326,7 @@ declare table_with_updated_at text;
 begin
   foreach table_with_updated_at in array array[
     'operations', 'profiles', 'operation_typologies', 'operation_subsidies',
-    'suspensive_conditions', 'document_review_items'
+    'suspensive_conditions', 'document_review_items', 'events'
   ] loop
     execute format('drop trigger if exists set_%I_updated_at on public.%I', table_with_updated_at, table_with_updated_at);
     execute format(
@@ -323,6 +345,7 @@ alter table public.operation_subsidies enable row level security;
 alter table public.suspensive_conditions enable row level security;
 alter table public.operation_documents enable row level security;
 alter table public.document_review_items enable row level security;
+alter table public.events enable row level security;
 alter table public.audit_log enable row level security;
 
 do $$
@@ -330,7 +353,7 @@ declare shared_table text;
 begin
   foreach shared_table in array array[
     'operations', 'operation_typologies', 'operation_subsidies',
-    'suspensive_conditions', 'operation_documents', 'document_review_items'
+    'suspensive_conditions', 'operation_documents', 'document_review_items', 'events'
   ] loop
     execute format('drop policy if exists authenticated_read on public.%I', shared_table);
     execute format('create policy authenticated_read on public.%I for select to authenticated using (true)', shared_table);
@@ -399,7 +422,7 @@ begin
   from (values
     ('profiles'), ('operation_typologies'), ('operation_subsidies'),
     ('suspensive_conditions'), ('operation_documents'),
-    ('document_review_items'), ('audit_log')
+    ('document_review_items'), ('events'), ('audit_log')
   ) expected(table_name)
   where to_regclass('public.' || expected.table_name) is null;
 
