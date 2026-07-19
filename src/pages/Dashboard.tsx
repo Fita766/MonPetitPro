@@ -1,197 +1,145 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { ArrowUpDown, Building2, CalendarDays, Edit3, FileDown, FileSpreadsheet, Plus, RotateCcw, Search, Trash2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { can } from '../lib/permissions';
+import { getStageConfig } from '../lib/stage';
+import { filterOperations, sortOperations, uniqueFilterValues, type FilterableOperation, type OperationFilters } from '../lib/operationFilters';
+import { exportOperationsExcel, exportOperationsPdf, formatOperationValue, OPERATION_COLUMNS } from '../lib/operationExport';
+import MultiSelectFilter from '../components/filters/MultiSelectFilter';
+import ColumnPicker from '../components/operations/ColumnPicker';
+import type { OperationStage } from '../types/domain';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Search, PlusCircle, Building, Calendar, Edit, Trash2 } from 'lucide-react';
 
-interface Operation {
+interface DashboardOperation extends FilterableOperation {
   id: string;
   name: string;
+  stage: OperationStage | null;
   project_manager: string;
+  operations_manager: string | null;
   operation_type: string;
-  expected_delivery_date: string;
-  actual_delivery_date: string;
-  promoter_name: string;
+  promoter_name: string | null;
+  department: string | null;
+  commune: string | null;
+  certification: string | null;
+  total_housing_units: number | null;
+  expected_delivery_date: string | null;
+  actual_delivery_date: string | null;
+  observations?: { responsible_person: string | null }[];
+}
+
+const EMPTY_FILTERS: OperationFilters = {
+  stages: [], departments: [], communes: [], cops: [], ctxs: [], promoters: [], operationTypes: [], labels: [],
+  deliveryFrom: '', deliveryTo: '', query: '',
+};
+
+const DEFAULT_COLUMNS = ['stage', 'name', 'department', 'commune', 'total_housing_units', 'operations_manager', 'project_manager', 'operation_type', 'promoter_name', 'expected_delivery_date', 'actual_delivery_date'];
+
+function shortDate(value: string | null | undefined): string {
+  return value ? new Date(`${value}T12:00:00`).toLocaleDateString('fr-FR') : 'Non renseignée';
 }
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const [operations, setOperations] = useState<Operation[]>([]);
+  const profile = useStore((state) => state.profile);
+  const user = useStore((state) => state.user);
+  const [operations, setOperations] = useState<DashboardOperation[]>([]);
   const [loading, setLoading] = useState(true);
-  const [filterManager, setFilterManager] = useState('');
-  const [filterPromoter, setFilterPromoter] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  useEffect(() => {
-    fetchOperations();
-  }, []);
+  const [error, setError] = useState<string | null>(null);
+  const [filters, setFilters] = useState<OperationFilters>(EMPTY_FILTERS);
+  const [columns, setColumns] = useState<string[]>(DEFAULT_COLUMNS);
+  const [sort, setSort] = useState<{ key: keyof DashboardOperation; direction: 'asc' | 'desc' }>({ key: 'name', direction: 'asc' });
 
   const fetchOperations = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('operations')
-        .select('*, observations(responsible_person)')
-        .order('name', { ascending: true });
+    setLoading(true);
+    const { data, error: fetchError } = await supabase.from('operations').select('*, observations(responsible_person)').order('name');
+    if (fetchError) setError(fetchError.message);
+    else setOperations((data as DashboardOperation[] | null) ?? []);
+    setLoading(false);
+  };
 
-      if (error) throw error;
-      setOperations(data || []);
-    } catch (error) {
-      console.error('Error fetching operations:', error);
-    } finally {
+  useEffect(() => {
+    void supabase.from('operations').select('*, observations(responsible_person)').order('name').then(({ data, error: fetchError }) => {
+      if (fetchError) setError(fetchError.message);
+      else setOperations((data as DashboardOperation[] | null) ?? []);
       setLoading(false);
-    }
-  };
+    });
+  }, []);
 
-  if (loading) {
-    return <div className="flex items-center justify-center h-64 text-slate-500">Chargement des opérations...</div>;
-  }
+  const options = useMemo(() => ({
+    stages: uniqueFilterValues(operations, 'stage'), departments: uniqueFilterValues(operations, 'department'),
+    communes: uniqueFilterValues(operations, 'commune'), cops: uniqueFilterValues(operations, 'operations_manager'),
+    ctxs: uniqueFilterValues(operations, 'project_manager'), promoters: uniqueFilterValues(operations, 'promoter_name'),
+    operationTypes: uniqueFilterValues(operations, 'operation_type'),
+    labels: [...new Set([...uniqueFilterValues(operations, 'certification'), ...uniqueFilterValues(operations, 'thermal_regulation')])].sort(),
+  }), [operations]);
 
-  const handleDelete = async (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    if (!confirm('Êtes-vous sûr de vouloir supprimer cette opération ET toutes ses observations ? Cette action est irréversible.')) return;
-    try {
-      const { error } = await supabase.from('operations').delete().eq('id', id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Opération supprimée avec succès.');
-      fetchOperations();
-    } catch (err) {
-      console.error('Error deleting operation:', err);
-    }
-  };
-
-  const handleEdit = (e: React.MouseEvent, id: string) => {
-    e.stopPropagation();
-    navigate(`/operations/${id}/edit`);
-  };
-
-  const filteredOperations = operations.filter(op => {
-    if (filterManager && op.project_manager !== filterManager) return false;
-    if (filterPromoter && op.promoter_name !== filterPromoter) return false;
-    
-    if (searchQuery) {
-      const q = searchQuery.toLowerCase();
-      const matchName = op.name.toLowerCase().includes(q);
-      const matchCtx = op.project_manager.toLowerCase().includes(q);
-      const matchPromoter = op.promoter_name?.toLowerCase().includes(q) || false;
-      const matchRealisateur = (op as any).observations?.some((obs: any) => obs.responsible_person?.toLowerCase().includes(q));
-      
-      if (!matchName && !matchCtx && !matchPromoter && !matchRealisateur) {
-        return false;
-      }
-    }
-
-    return true;
+  const filtered = useMemo(() => sortOperations(filterOperations(operations, filters), sort.key, sort.direction), [filters, operations, sort]);
+  const selectedColumns = columns.flatMap((key) => {
+    const column = OPERATION_COLUMNS.find((candidate) => candidate.key === key);
+    return column ? [column] : [];
   });
 
-  const uniqueManagers = Array.from(new Set(operations.map(o => o.project_manager))).sort();
-  const uniquePromoters = Array.from(new Set(operations.map(o => o.promoter_name).filter(Boolean))).sort();
+  const setFilter = <K extends keyof OperationFilters>(key: K, value: OperationFilters[K]) => setFilters((current) => ({ ...current, [key]: value }));
+  const toggleSort = (key: keyof DashboardOperation) => setSort((current) => ({ key, direction: current.key === key && current.direction === 'asc' ? 'desc' : 'asc' }));
+
+  const handleDelete = async (event: React.MouseEvent, operation: DashboardOperation) => {
+    event.stopPropagation();
+    if (!can(profile?.role, 'deleteOperation')) return;
+    if (!window.confirm(`Supprimer « ${operation.name} » et toutes ses observations ?`)) return;
+    const { error: observationsError } = await supabase.from('observations').delete().eq('operation_id', operation.id);
+    if (observationsError) { setError(observationsError.message); return; }
+    const { error: operationError } = await supabase.from('operations').delete().eq('id', operation.id);
+    if (operationError) setError(operationError.message);
+    else { triggerSuccessToast(user?.email, 'Opération supprimée.'); await fetchOperations(); }
+  };
+
+  if (loading) return <div className="flex min-h-[55vh] items-center justify-center text-slate-500">Chargement des opérations…</div>;
 
   return (
-    <div>
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900">Mes Opérations</h1>
-          <p className="text-slate-500 mt-1">Gérez vos programmes immobiliers et suivez leur avancement.</p>
+    <div className="mx-auto max-w-[1700px] pb-12">
+      <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
+        <div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">Portefeuille immobilier</p><h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">Opérations</h1><p className="mt-2 text-sm text-slate-500">{filtered.length} affichée{filtered.length > 1 ? 's' : ''} sur {operations.length} · filtres cumulables</p></div>
+        <div className="flex flex-wrap items-center gap-2">
+          <ColumnPicker columns={OPERATION_COLUMNS} selected={columns} onChange={setColumns} />
+          <button type="button" onClick={() => void exportOperationsExcel(filtered, columns)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"><FileSpreadsheet size={15} /> Excel</button>
+          <button type="button" onClick={() => exportOperationsPdf(filtered, columns)} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"><FileDown size={15} /> PDF</button>
+          {can(profile?.role, 'contribute') && <button type="button" onClick={() => navigate('/operations/new')} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-950/15 hover:bg-teal-900"><Plus size={17} /> Nouvelle opération</button>}
         </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <div className="flex flex-wrap gap-2">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text" 
-                placeholder="Rechercher (Nom, CTX, Réalisateur)..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="bg-white border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[250px]"
-              />
-            </div>
-            <select 
-              value={filterManager} 
-              onChange={(e) => setFilterManager(e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[150px]"
-            >
-              <option value="">Tous les conducteurs</option>
-              {uniqueManagers.map(m => <option key={m} value={m}>{m}</option>)}
-            </select>
-            <select 
-              value={filterPromoter} 
-              onChange={(e) => setFilterPromoter(e.target.value)}
-              className="bg-white border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none min-w-[150px]"
-            >
-              <option value="">Tous les promoteurs</option>
-              {uniquePromoters.map(p => <option key={p} value={p}>{p}</option>)}
-            </select>
-          </div>
-          <button 
-            onClick={() => navigate('/operations/new')}
-            className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-medium flex items-center gap-2 transition-colors whitespace-nowrap"
-          >
-            <PlusCircle size={20} />
-            <span>Nouvelle Opération</span>
-          </button>
+      </header>
+
+      {error && <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{error}</div>}
+
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-[#f3f5f1] p-4 shadow-sm">
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="relative min-w-[260px] flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} /><input value={filters.query} onChange={(event) => setFilter('query', event.target.value)} placeholder="Nom, ville, CTX, COP, promoteur…" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-teal-600" /></div>
+          <MultiSelectFilter label="Stades" options={options.stages} values={filters.stages} onChange={(value) => setFilter('stages', value)} />
+          <MultiSelectFilter label="Départements" options={options.departments} values={filters.departments} onChange={(value) => setFilter('departments', value)} />
+          <MultiSelectFilter label="Communes" options={options.communes} values={filters.communes} onChange={(value) => setFilter('communes', value)} />
+          <MultiSelectFilter label="COP" options={options.cops} values={filters.cops} onChange={(value) => setFilter('cops', value)} />
+          <MultiSelectFilter label="CTX" options={options.ctxs} values={filters.ctxs} onChange={(value) => setFilter('ctxs', value)} />
+          <MultiSelectFilter label="Promoteurs" options={options.promoters} values={filters.promoters} onChange={(value) => setFilter('promoters', value)} />
+          <MultiSelectFilter label="Types" options={options.operationTypes} values={filters.operationTypes} onChange={(value) => setFilter('operationTypes', value)} />
+          <MultiSelectFilter label="Labels" options={options.labels} values={filters.labels} onChange={(value) => setFilter('labels', value)} />
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">Du <input aria-label="Livraison à partir du" type="date" value={filters.deliveryFrom} onChange={(event) => setFilter('deliveryFrom', event.target.value)} className="outline-none" /></label>
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">Au <input aria-label="Livraison jusqu’au" type="date" value={filters.deliveryTo} onChange={(event) => setFilter('deliveryTo', event.target.value)} className="outline-none" /></label>
+          <button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="rounded-xl border border-slate-200 bg-white p-2.5 text-slate-500 hover:text-teal-800" title="Réinitialiser"><RotateCcw size={16} /></button>
         </div>
       </div>
 
       {operations.length === 0 ? (
-        <div className="bg-white border border-slate-200 rounded-xl p-12 text-center shadow-sm">
-          <Building className="mx-auto text-slate-300 mb-4" size={48} />
-          <h3 className="text-lg font-medium text-slate-800 mb-2">Aucune opération trouvée</h3>
-          <p className="text-slate-500 max-w-md mx-auto mb-6">Commencez par créer votre première opération immobilière pour y lier des observations et suivre leur avancement.</p>
-          <button 
-            onClick={() => navigate('/operations/new')}
-            className="bg-primary hover:bg-primary/90 text-white px-4 py-2 rounded-lg font-medium inline-flex items-center gap-2 transition-colors"
-          >
-            <PlusCircle size={20} />
-            <span>Créer une opération</span>
-          </button>
-        </div>
+        <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-16 text-center"><Building2 className="mx-auto text-slate-300" size={42} /><h2 className="mt-4 text-xl font-black text-slate-800">Aucune opération</h2><p className="mt-2 text-sm text-slate-500">Créez la première fiche pour démarrer le suivi.</p></div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-3xl border border-slate-200 bg-white p-14 text-center text-slate-500">Aucune opération ne correspond à tous les filtres sélectionnés.</div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredOperations.map((op) => (
-            <div 
-              key={op.id} 
-              onClick={() => navigate(`/operations/${op.id}`)}
-              className="bg-white border border-slate-200 rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow cursor-pointer relative group"
-            >
-              <div className="absolute top-4 right-4 flex items-center gap-2">
-                <span className="bg-slate-100 text-slate-600 text-xs px-2 py-1 rounded font-medium">
-                  {op.operation_type}
-                </span>
-                <div className="opacity-0 group-hover:opacity-100 transition-opacity flex bg-white/90 backdrop-blur rounded shadow-sm border border-slate-200">
-                  <button onClick={(e) => handleEdit(e, op.id)} className="p-1.5 text-slate-500 hover:text-primary transition" title="Modifier">
-                    <Edit size={14} />
-                  </button>
-                  <button onClick={(e) => handleDelete(e, op.id)} className="p-1.5 text-slate-500 hover:text-danger transition" title="Supprimer">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-              </div>
-              <h3 className="text-xl font-bold text-slate-800 mb-2 pr-24 line-clamp-1">{op.name}</h3>
-              <p className="text-sm text-slate-500 mb-4 flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                  {op.project_manager.charAt(0).toUpperCase()}
-                </span>
-                {op.project_manager}
-              </p>
-              
-              <div className="pt-4 border-t border-slate-100 space-y-2">
-                <div className="flex items-center text-xs text-slate-600 gap-1.5">
-                  <Calendar size={14} className="text-slate-400" />
-                  <span className="font-medium">Livraison Prev :</span>
-                  <span>{op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : 'N/A'}</span>
-                </div>
-                <div className="flex items-center text-xs text-slate-600 gap-1.5">
-                  <Calendar size={14} className="text-slate-400" />
-                  <span className="font-medium">Livraison réelle :</span>
-                  <span className={op.actual_delivery_date ? 'text-emerald-600 font-bold' : 'text-slate-400 italic'}>
-                    {op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'Non livré/Saisi'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
+        <>
+          <div className="hidden overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm lg:block">
+            <div className="overflow-x-auto"><table className="w-full min-w-[1100px] text-left text-xs"><thead className="bg-slate-950 text-slate-200"><tr>{selectedColumns.map((column) => <th key={column.key} className="whitespace-nowrap px-3 py-3 font-black uppercase tracking-wider"><button type="button" onClick={() => toggleSort(column.key as keyof DashboardOperation)} className="inline-flex items-center gap-1.5">{column.label}<ArrowUpDown size={11} className="text-teal-300" /></button></th>)}<th className="sticky right-0 bg-slate-950 px-3 py-3 text-right">Actions</th></tr></thead><tbody>{filtered.map((operation) => { const stage = getStageConfig(operation.stage); return <tr key={operation.id} onClick={() => navigate(`/operations/${operation.id}`)} className="cursor-pointer border-b border-slate-100 transition hover:bg-teal-50/40">{selectedColumns.map((column) => <td key={column.key} className="max-w-[260px] px-3 py-3 font-medium text-slate-700">{column.key === 'stage' ? <span style={{ backgroundColor: stage.color, color: stage.textColor }} className="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black">{operation.stage ? `${operation.stage} · ${stage.label}` : stage.label}</span> : column.key === 'name' ? <span className="font-black text-slate-950">{operation.name}</span> : formatOperationValue(operation, column) || <span className="text-slate-300">—</span>}</td>)}<td className="sticky right-0 bg-white px-3 py-2"><div className="flex justify-end gap-1">{can(profile?.role, 'contribute') && <button type="button" aria-label="Modifier" onClick={(event) => { event.stopPropagation(); navigate(`/operations/${operation.id}/edit`); }} className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700"><Edit3 size={15} /></button>}{can(profile?.role, 'deleteOperation') && <button type="button" aria-label="Supprimer" onClick={(event) => void handleDelete(event, operation)} className="rounded-lg p-2 text-slate-400 hover:bg-red-50 hover:text-red-600"><Trash2 size={15} /></button>}</div></td></tr>; })}</tbody></table></div>
+          </div>
+
+          <div className="grid grid-cols-1 gap-4 lg:hidden">{filtered.map((operation) => { const stage = getStageConfig(operation.stage); return <article key={operation.id} onClick={() => navigate(`/operations/${operation.id}`)} className="cursor-pointer overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><div style={{ backgroundColor: stage.color, color: stage.textColor }} className="px-5 py-3"><p className="text-[10px] font-black uppercase tracking-[0.2em]">Stade {operation.stage ?? '—'} · {stage.label}</p></div><div className="p-5"><h2 className="break-words text-xl font-black text-slate-950">{operation.name}</h2><p className="mt-2 text-sm font-semibold text-slate-500">{[operation.department, operation.commune].filter(Boolean).join(' · ') || 'Localisation non renseignée'}</p><div className="mt-4 grid grid-cols-2 gap-3 text-xs"><div className="rounded-xl bg-slate-50 p-3"><p className="font-black uppercase text-slate-400">CTX</p><p className="mt-1 font-bold text-slate-800">{operation.project_manager || '—'}</p></div><div className="rounded-xl bg-slate-50 p-3"><p className="font-black uppercase text-slate-400">COP</p><p className="mt-1 font-bold text-slate-800">{operation.operations_manager || '—'}</p></div></div><div className="mt-4 flex items-center gap-2 border-t border-slate-100 pt-4 text-xs text-slate-600"><CalendarDays size={14} className="text-teal-700" /><span>Prévue {shortDate(operation.expected_delivery_date)}</span><span>·</span><span>Réelle {shortDate(operation.actual_delivery_date)}</span></div></div></article>; })}</div>
+        </>
       )}
     </div>
   );

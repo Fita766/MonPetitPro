@@ -1,982 +1,180 @@
-import { useEffect, useState } from 'react';
-import { supabase } from '../lib/supabase';
-import { useStore } from '../store/useStore';
-import { triggerSuccessToast } from '../lib/toastUtils';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Trash2, Edit, X, Printer, LayoutGrid, List, FileSpreadsheet, Eye, EyeOff, PlusCircle } from 'lucide-react';
+import { Download, Edit3, EyeOff, FileSpreadsheet, LayoutGrid, List, Plus, Search, X } from 'lucide-react';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
+import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
+import { can } from '../lib/permissions';
+import { buildObservationPayload, buildResolutionValidationPayload, EMPTY_OBSERVATION_FORM, getObservationStatus, normalizeObservation, type ObservationDisplayStatus, type ObservationFormData, type ObservationRow } from '../lib/observationStatus';
+import ObservationForm from '../components/observations/ObservationForm';
+import ResolutionActions from '../components/observations/ResolutionActions';
+import MultiSelectFilter from '../components/filters/MultiSelectFilter';
+import { triggerSuccessToast } from '../lib/toastUtils';
 
-type ViewMode = 'structuree' | 'tabulaire';
-type TabularFilter = 'statut' | 'vefa' | 'mod' | 'all';
+interface ObservationOperation {
+  id: string;
+  name: string;
+  project_manager: string | null;
+  operations_manager: string | null;
+  promoter_name: string | null;
+  operation_type: string | null;
+  stage: string | null;
+}
+
+interface ObservationWithOperation extends ObservationRow {
+  operations: ObservationOperation | null;
+  status: string;
+  is_dg: boolean;
+}
+
+interface ObservationFilters {
+  operations: string[];
+  ctxs: string[];
+  cops: string[];
+  promoters: string[];
+  operationTypes: string[];
+  responsibles: string[];
+  statuses: string[];
+  dg: 'all' | 'only' | 'exclude';
+  query: string;
+}
+
+const EMPTY_FILTERS: ObservationFilters = { operations: [], ctxs: [], cops: [], promoters: [], operationTypes: [], responsibles: [], statuses: [], dg: 'all', query: '' };
+const STATUS_STYLES: Record<ObservationDisplayStatus, string> = {
+  'En cours': 'bg-sky-50 text-sky-700 border-sky-200', 'En retard': 'bg-red-50 text-red-700 border-red-200',
+  'Terminé': 'bg-emerald-50 text-emerald-700 border-emerald-200', 'Réussi': 'bg-emerald-50 text-emerald-700 border-emerald-200',
+  'Échec': 'bg-rose-50 text-rose-700 border-rose-200', 'Bloqué': 'bg-amber-50 text-amber-800 border-amber-200',
+};
+
+function unique(values: (string | null | undefined)[]): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function downloadBlob(buffer: ExcelJS.Buffer, filename: string) {
+  const url = URL.createObjectURL(new Blob([buffer]));
+  const anchor = document.createElement('a'); anchor.href = url; anchor.download = filename; anchor.click(); URL.revokeObjectURL(url);
+}
 
 export default function Observations() {
   const navigate = useNavigate();
-  const [observations, setObservations] = useState<any[]>([]);
-  const [allOperations, setAllOperations] = useState<any[]>([]);
+  const profile = useStore((state) => state.profile);
+  const user = useStore((state) => state.user);
+  const [observations, setObservations] = useState<ObservationWithOperation[]>([]);
+  const [operations, setOperations] = useState<ObservationOperation[]>([]);
+  const [filters, setFilters] = useState<ObservationFilters>(EMPTY_FILTERS);
+  const [view, setView] = useState<'structured' | 'table'>('structured');
+  const [showEmpty, setShowEmpty] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<ViewMode>('structuree');
-  const [tabularFilter, setTabularFilter] = useState<TabularFilter>('all');
-  const [showEmptyOps, setShowEmptyOps] = useState(false);
-  
-  // Basic Filters
-  const [filterOp, setFilterOp] = useState('');
-  const [filterCtx, setFilterCtx] = useState('');
-  const [filterRealisateur, setFilterRealisateur] = useState('');
-  const [filterStatus, setFilterStatus] = useState('');
-  const [searchQuery, setSearchQuery] = useState('');
-
-  const [editingObs, setEditingObs] = useState<any | null>(null);
-
-  const [isAddingObs, setIsAddingObs] = useState(false);
-  const [newObsForm, setNewObsForm] = useState({
-    operation_id: '',
-    info_date: new Date().toISOString().split('T')[0],
-    description: '',
-    responsible_person: '',
-    deadline_date: '',
-    _custom_status: 'En cours'
-  });
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<ObservationFormData | null>(null);
+  const [editing, setEditing] = useState<ObservationWithOperation | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      // Fetch Observations
-      const { data: obsData, error: obsError } = await supabase
-        .from('observations')
-        .select(`*, operations (*)`)
-        .order('deadline_date', { ascending: true });
-      if (obsError) throw obsError;
-      const processedObsData = (obsData || []).map(obs => {
-        const match = obs.description?.match(/\n\n\[STATUT: (.*?)\]/);
-        if (match) {
-            obs._custom_status = match[1];
-            obs.description = obs.description.replace(/\n\n\[STATUT: .*?\]/, '');
-        }
-        return obs;
-      });
-      setObservations(processedObsData);
-
-      // Fetch All Operations (to show those without obs)
-      const { data: opsData, error: opsError } = await supabase
-        .from('operations')
-        .select('*')
-        .order('name');
-      if (opsError) throw opsError;
-      setAllOperations(opsData || []);
-
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('observations').select('*, operations(id, name, project_manager, operations_manager, promoter_name, operation_type, stage)').order('deadline_date'),
+      supabase.from('operations').select('id, name, project_manager, operations_manager, promoter_name, operation_type, stage').order('name'),
+    ]).then(([observationResult, operationResult]) => {
+      if (cancelled) return;
+      const firstError = observationResult.error || operationResult.error;
+      if (firstError) setError(firstError.message);
+      else {
+        setObservations(((observationResult.data ?? []) as ObservationWithOperation[]).map(normalizeObservation));
+        setOperations((operationResult.data as ObservationOperation[] | null) ?? []);
+      }
       setLoading(false);
-    }
+    });
+    return () => { cancelled = true; };
+  }, [refreshKey]);
+
+  const statusFor = (observation: ObservationWithOperation) => getObservationStatus(observation);
+  const options = useMemo(() => ({
+    operations: operations.map((operation) => operation.name), ctxs: unique(operations.map((operation) => operation.project_manager)),
+    cops: unique(operations.map((operation) => operation.operations_manager)), promoters: unique(operations.map((operation) => operation.promoter_name)),
+    operationTypes: unique(operations.map((operation) => operation.operation_type)), responsibles: unique(observations.map((observation) => observation.responsible_person)),
+    statuses: unique(observations.map(statusFor)),
+  }), [observations, operations]);
+
+  const filtered = useMemo(() => observations.filter((observation) => {
+    const operation = observation.operations;
+    if (filters.operations.length && (!operation || !filters.operations.includes(operation.name))) return false;
+    if (filters.ctxs.length && (!operation?.project_manager || !filters.ctxs.includes(operation.project_manager))) return false;
+    if (filters.cops.length && (!operation?.operations_manager || !filters.cops.includes(operation.operations_manager))) return false;
+    if (filters.promoters.length && (!operation?.promoter_name || !filters.promoters.includes(operation.promoter_name))) return false;
+    if (filters.operationTypes.length && (!operation?.operation_type || !filters.operationTypes.includes(operation.operation_type))) return false;
+    if (filters.responsibles.length && !filters.responsibles.includes(observation.responsible_person)) return false;
+    if (filters.statuses.length && !filters.statuses.includes(statusFor(observation))) return false;
+    if (filters.dg === 'only' && !observation.is_dg) return false;
+    if (filters.dg === 'exclude' && observation.is_dg) return false;
+    const query = filters.query.trim().toLocaleLowerCase('fr');
+    return !query || [observation.description, observation.responsible_person, operation?.name, operation?.project_manager, operation?.operations_manager].some((value) => value?.toLocaleLowerCase('fr').includes(query));
+  }), [filters, observations]);
+
+  const grouped = useMemo(() => operations.flatMap((operation) => {
+    const items = filtered.filter((observation) => observation.operation_id === operation.id);
+    return items.length || showEmpty ? [{ operation, items }] : [];
+  }), [filtered, operations, showEmpty]);
+
+  const openCreate = (operationId = '') => { setEditing(null); setForm(EMPTY_OBSERVATION_FORM(operationId)); };
+  const openEdit = (observation: ObservationWithOperation) => {
+    setEditing(observation);
+    setForm({ operation_id: observation.operation_id, info_date: observation.info_date, description: observation.description, responsible_person: observation.responsible_person, deadline_date: observation.deadline_date, completion_date: observation.completion_date ?? '', resolution_date: observation.resolution_date ?? '', status: observation.status as ObservationFormData['status'], is_dg: observation.is_dg });
   };
 
-  const getStatus = (obs: any) => {
-    if (obs._custom_status) {
-        if (obs._custom_status === 'Réussi') return { label: 'Réussi', color: 'text-emerald-600 bg-emerald-50 border-emerald-100', dot: 'bg-emerald-500' };
-        if (obs._custom_status === 'Échec') return { label: 'Échec', color: 'text-red-600 bg-red-50 border-red-100', dot: 'bg-red-500' };
-        if (obs._custom_status === 'Bloqué') return { label: 'Bloqué', color: 'text-orange-600 bg-orange-50 border-orange-100', dot: 'bg-orange-500' };
-    }
-    if (obs.completion_date) return { label: 'Terminé', color: 'text-emerald-600 bg-emerald-50 border-emerald-100', dot: 'bg-emerald-500' };
-    const deadline = new Date(obs.deadline_date);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    if (deadline < today) return { label: 'En retard', color: 'text-red-600 bg-red-50 border-red-100', dot: 'bg-red-500' };
-    return { label: 'En cours', color: 'text-amber-600 bg-amber-50 border-amber-100', dot: 'bg-amber-500' };
+  const saveObservation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form || !user || !can(profile?.role, 'contribute')) return;
+    setSaving(true); setError(null);
+    const payload = buildObservationPayload(form, { userId: editing?.user_id ?? user.id, initials: editing?.author_initials ?? profile?.initials ?? user.email?.slice(0, 2).toUpperCase() ?? '??' });
+    const result = editing ? await supabase.from('observations').update(payload).eq('id', editing.id) : await supabase.from('observations').insert(payload);
+    if (result.error) setError(result.error.message);
+    else { triggerSuccessToast(user.email, editing ? 'Observation modifiée.' : 'Observation ajoutée.'); setForm(null); setEditing(null); setRefreshKey((key) => key + 1); }
+    setSaving(false);
   };
 
-  const deleteObservation = async (id: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
-    try {
-      const { error } = await supabase.from('observations').delete().eq('id', id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation supprimée avec succès.');
-      fetchData();
-    } catch (err) {
-      console.error('Error deleting observation:', err);
-    }
+  const validateResolution = async (observation: ObservationWithOperation) => {
+    if (!user || !can(profile?.role, 'validateResolution')) return;
+    const { error: validationError } = await supabase.from('observations').update(buildResolutionValidationPayload(user.id)).eq('id', observation.id);
+    if (validationError) setError(validationError.message); else { triggerSuccessToast(user.email, 'Résolution validée.'); setRefreshKey((key) => key + 1); }
   };
 
-  const handleEditSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingObs) return;
-    try {
-      let finalDescription = editingObs.description;
-      if (editingObs._custom_status && editingObs._custom_status !== 'En cours') {
-          finalDescription = `${editingObs.description}\n\n[STATUT: ${editingObs._custom_status}]`;
-      }
-
-      const isCompletedStatus = editingObs._custom_status === 'Réussi' || editingObs._custom_status === 'Échec';
-
-      const payload = {
-        info_date: editingObs.info_date,
-        description: finalDescription,
-        responsible_person: editingObs.responsible_person,
-        deadline_date: editingObs.deadline_date,
-        completion_date: isCompletedStatus 
-            ? (editingObs.completion_date || new Date().toISOString().split('T')[0])
-            : (editingObs.completion_date || null)
-      };
-      const { error } = await supabase.from('observations').update(payload).eq('id', editingObs.id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation modifiée avec succès.');
-      setEditingObs(null);
-      fetchData();
-    } catch (err) {
-      console.error('Error updating observation:', err);
-    }
+  const deleteObservation = async (observation: ObservationWithOperation) => {
+    if (!can(profile?.role, 'deleteObservation') || !window.confirm('Supprimer cette observation ?')) return;
+    const { error: deleteError } = await supabase.from('observations').delete().eq('id', observation.id);
+    if (deleteError) setError(deleteError.message); else { triggerSuccessToast(user?.email, 'Observation supprimée.'); setRefreshKey((key) => key + 1); }
   };
 
-  const handleAddSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-
-      let finalDescription = newObsForm.description;
-      if (newObsForm._custom_status && newObsForm._custom_status !== 'En cours') {
-          finalDescription = `${newObsForm.description}\n\n[STATUT: ${newObsForm._custom_status}]`;
-      }
-
-      const isCompletedStatus = newObsForm._custom_status === 'Réussi' || newObsForm._custom_status === 'Échec';
-
-      const payload = {
-        operation_id: newObsForm.operation_id,
-        user_id: userData.user?.id,
-        info_date: newObsForm.info_date,
-        description: finalDescription,
-        responsible_person: newObsForm.responsible_person,
-        deadline_date: newObsForm.deadline_date,
-        completion_date: isCompletedStatus ? new Date().toISOString().split('T')[0] : null
-      };
-
-      const { error } = await supabase.from('observations').insert([payload]);
-      if (error) throw error;
-      
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation ajoutée avec succès.');
-      setIsAddingObs(false);
-      setNewObsForm({
-        operation_id: '',
-        info_date: new Date().toISOString().split('T')[0],
-        description: '',
-        responsible_person: '',
-        deadline_date: '',
-        _custom_status: 'En cours'
-      });
-      fetchData();
-    } catch (err) {
-      console.error('Error adding observation:', err);
-    }
+  const exportExcel = async () => {
+    const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('Observations');
+    sheet.columns = [{ header: 'Opération', key: 'operation', width: 30 }, { header: 'Type', key: 'type', width: 14 }, { header: 'CTX', key: 'ctx', width: 12 }, { header: 'COP', key: 'cop', width: 12 }, { header: 'Date info', key: 'info', width: 13 }, { header: 'Description', key: 'description', width: 55 }, { header: 'Réalisateur', key: 'responsible', width: 18 }, { header: 'Butoir', key: 'deadline', width: 13 }, { header: 'Résolution', key: 'resolution', width: 13 }, { header: 'Validation', key: 'validation', width: 16 }, { header: 'Statut', key: 'status', width: 14 }, { header: 'DG', key: 'dg', width: 8 }, { header: 'Auteur', key: 'author', width: 10 }];
+    filtered.forEach((observation) => sheet.addRow({ operation: observation.operations?.name ?? '', type: observation.operations?.operation_type ?? '', ctx: observation.operations?.project_manager ?? '', cop: observation.operations?.operations_manager ?? '', info: observation.info_date, description: observation.description, responsible: observation.responsible_person, deadline: observation.deadline_date, resolution: observation.resolution_date ?? '', validation: observation.resolution_validated_at ? 'Validée' : '', status: statusFor(observation), dg: observation.is_dg ? 'Oui' : 'Non', author: observation.author_initials ?? '' }));
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } }; sheet.views = [{ state: 'frozen', ySplit: 1 }];
+    downloadBlob(await workbook.xlsx.writeBuffer(), `observations-${new Date().toISOString().slice(0, 10)}.xlsx`);
   };
 
-  const generatePDF = () => {
-    const doc = new jsPDF('l', 'mm', 'a4'); 
-    const dateStr = new Date().toLocaleDateString();
-    
-    doc.setFontSize(22);
-    doc.setTextColor(15, 23, 42); 
-    doc.text("Suivi Action Immo", 14, 20);
-    
-    doc.setFontSize(14);
-    doc.setTextColor(100, 116, 139); 
-    doc.text(`Rapport d'Observations - ${dateStr}`, 14, 30);
-    
-    let currentY = 40;
-
-    if (viewMode === 'structuree') {
-      (Object.entries(groupedData) as [string, {op: any, items: any[]}][]).forEach(([_, { op, items }]) => {
-        if (currentY > 250) {
-          doc.addPage();
-          currentY = 20;
-        }
-
-        doc.setFillColor(15, 23, 42); 
-        doc.rect(14, currentY, 269, 10, 'F');
-        doc.setTextColor(255, 255, 255);
-        doc.setFontSize(10);
-        doc.text(`${op.name} (${op.total_housing_units} logts) - CTX: ${op.project_manager} - Type: ${op.operation_type}`, 18, currentY + 7);
-        
-        currentY += 10;
-
-        autoTable(doc, {
-          startY: currentY,
-          head: [['Date Info', 'Description', 'Réalisateur', 'Butoire', 'Réalisation', 'Statut']],
-          body: items.map(obs => [
-            obs.info_date ? new Date(obs.info_date).toLocaleDateString() : '-',
-            obs.description,
-            obs.responsible_person || '-',
-            obs.deadline_date ? new Date(obs.deadline_date).toLocaleDateString() : '-',
-            obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '-',
-            getStatus(obs).label
-          ]),
-          theme: 'striped',
-          styles: { fontSize: 8, font: 'helvetica' },
-          headStyles: { fillColor: [51, 65, 85] },
-          margin: { left: 14, right: 14 }
-        });
-
-        currentY = (doc as any).lastAutoTable.finalY + 15;
-      });
-    } else {
-      autoTable(doc, {
-        startY: currentY,
-        head: [['Opération', 'CTX', 'Description', 'Réalisateur', 'Statut', 'Info']],
-        body: filteredData.map(obs => [
-          obs.operations.name,
-          obs.operations.project_manager,
-          obs.description,
-          obs.responsible_person || '-',
-          getStatus(obs).label,
-          obs.info_date ? new Date(obs.info_date).toLocaleDateString() : '-'
-        ]),
-        theme: 'striped',
-        styles: { fontSize: 8 },
-        headStyles: { fillColor: [15, 23, 42] }
-      });
-    }
-
-    doc.save(`Rapport_Suivi_Immo_${new Date().toISOString().split('T')[0]}.pdf`);
-    triggerSuccessToast(useStore.getState().user?.email, "PDF généré avec succès !");
+  const exportPdf = () => {
+    const document = new jsPDF({ orientation: 'landscape' }); document.setFontSize(16); document.text('MonPetitPro — Observations', 14, 15);
+    autoTable(document, { startY: 21, head: [['Opération', 'CTX/COP', 'Information', 'Description', 'Réalisateur', 'Butoir', 'Résolution', 'Statut', 'DG']], body: filtered.map((observation) => [observation.operations?.name ?? '', `${observation.operations?.project_manager ?? '—'} / ${observation.operations?.operations_manager ?? '—'}`, observation.info_date, observation.description, observation.responsible_person, observation.deadline_date, observation.resolution_date ?? '', statusFor(observation), observation.is_dg ? 'Oui' : '']), styles: { fontSize: 7, cellPadding: 1.5 }, headStyles: { fillColor: [15, 118, 110] } });
+    document.save(`observations-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
-  const exportToExcel = async () => {
-    const workbook = new ExcelJS.Workbook();
-    const exportDateStr = new Date().toLocaleDateString();
-    
-    // --- FONCTION UTILITAIRE : GÉNÉRER UNE FEUILLE STRUCTURÉE ---
-    const addStructuredSheet = (sheetName: string, mainTitle: string, data: any[]) => {
-      const sheet = workbook.addWorksheet(sheetName);
-      sheet.columns = [
-        { width: 15 }, // A: Statut
-        { width: 12 }, // B: Date Info
-        { width: 40 }, // C: Description
-        { width: 15 }, // D: Label Delivery
-        { width: 15 }, // E: Nbre logt / Réalisateur
-        { width: 15 }, // F: Value / Date butoire
-        { width: 15 }, // G: CTX / Date réalisation
-        { width: 25 }, // H: Value / CTX / PROMOTEUR
-      ];
+  const statusBadge = (observation: ObservationWithOperation) => { const status = statusFor(observation); return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${STATUS_STYLES[status]}`}>{status}</span>; };
 
-      const mainHeader = sheet.getCell('A1');
-      mainHeader.value = mainTitle;
-      sheet.mergeCells('A1:F1');
-      mainHeader.style = {
-        font: { bold: true, size: 14 },
-        alignment: { horizontal: 'center', vertical: 'middle' },
-        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'medium' } }
-      };
-
-      // Date d'export
-      const dateCell = sheet.getCell('G1');
-      dateCell.value = `Généré le: ${exportDateStr}`;
-      sheet.mergeCells('G1:H1');
-      dateCell.font = { italic: true, size: 10 };
-      dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
-      dateCell.border = { bottom: { style: 'medium' }, top: { style: 'medium' }, right: { style: 'medium' } };
-
-      let currentRow = 3;
-      const opsIds = Array.from(new Set(data.filter(o => o.operations).map(o => o.operations.id)));
-      
-      for (const opId of opsIds) {
-        const matchingData = data.find(o => o.operations.id === opId);
-        if (!matchingData) continue;
-        const op = matchingData.operations;
-        const opObs = data.filter(o => o.operations.id === opId && o.id); // Valid observations only
-
-        // Nom OP
-        const opNameCell = sheet.getCell(`A${currentRow}`);
-        opNameCell.value = op.name;
-        sheet.mergeCells(`A${currentRow}:D${currentRow}`);
-        opNameCell.font = { bold: true, size: 12 };
-        opNameCell.border = { top: { style: 'medium' }, left: { style: 'medium' } };
-        currentRow++;
-
-        // Livraison Labels
-        const delLabel = sheet.getCell(`A${currentRow}`);
-        delLabel.value = 'Date de livraison';
-        sheet.mergeCells(`A${currentRow}:B${currentRow + 1}`);
-        delLabel.alignment = { horizontal: 'center', vertical: 'middle' };
-        delLabel.border = { left: { style: 'medium' }, right: { style: 'thin' }, top: { style: 'thin' }, bottom: { style: 'thin' } };
-
-        sheet.getCell(`C${currentRow}`).value = 'Contractuelle';
-        sheet.getCell(`D${currentRow}`).value = op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-        sheet.getCell(`E${currentRow}`).value = 'Nbre logt';
-        sheet.getCell(`F${currentRow}`).value = op.total_housing_units || 0;
-        sheet.getCell(`G${currentRow}`).value = 'CTX';
-        sheet.getCell(`H${currentRow}`).value = op.project_manager || 'N/A';
-
-        ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-          sheet.getCell(`${col}${currentRow}`).border = { 
-            top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: col === 'H' ? 'medium' : 'thin' } 
-          };
-        });
-        currentRow++;
-
-        sheet.getCell(`C${currentRow}`).value = 'Réelle';
-        sheet.getCell(`D${currentRow}`).value = op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'XX/XX/XXXX';
-        sheet.getCell(`E${currentRow}`).value = 'VEFA / MOD';
-        sheet.getCell(`F${currentRow}`).value = op.operation_type || 'N/A';
-        sheet.getCell(`G${currentRow}`).value = 'PROMOTEUR';
-        sheet.getCell(`H${currentRow}`).value = op.promoter_name || '-';
-
-        ['C', 'D', 'E', 'F', 'G', 'H'].forEach(col => {
-          sheet.getCell(`${col}${currentRow}`).border = { 
-            top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: 'thin' }, right: { style: col === 'H' ? 'medium' : 'thin' } 
-          };
-        });
-        currentRow++;
-
-        // En-têtes Observations
-        const hCols = ['A', 'B', 'C', 'E', 'F', 'G'];
-        const hLabels = ['Statut', 'Date info', 'Description', 'Réalisateur', 'date butoire', 'date réalisation'];
-        hCols.forEach((col, i) => {
-          const cell = sheet.getCell(`${col}${currentRow}`);
-          cell.value = hLabels[i];
-          cell.font = { bold: true };
-          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-          cell.border = { top: { style: 'thin' }, bottom: { style: 'thin' }, left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' } };
-        });
-        currentRow++;
-
-        // Lignes Observations
-        if (opObs.length > 0) {
-          opObs.forEach((obs, idx) => {
-            const status = getStatus(obs).label;
-            sheet.getCell(`A${currentRow}`).value = status;
-            sheet.getCell(`B${currentRow}`).value = new Date(obs.info_date).toLocaleDateString();
-            sheet.getCell(`C${currentRow}`).value = obs.description;
-            sheet.getCell(`E${currentRow}`).value = obs.responsible_person || '-';
-            sheet.getCell(`F${currentRow}`).value = new Date(obs.deadline_date).toLocaleDateString();
-            sheet.getCell(`G${currentRow}`).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
-
-            ['A', 'B', 'C', 'E', 'F', 'G'].forEach(col => {
-              sheet.getCell(`${col}${currentRow}`).border = { 
-                left: { style: col === 'A' ? 'medium' : 'thin' }, right: { style: col === 'G' ? 'medium' : 'thin' },
-                bottom: { style: idx === opObs.length - 1 ? 'medium' : 'thin' } 
-              };
-            });
-            currentRow++;
-          });
-        } else {
-          // Empty row for op with no obs
-          sheet.getCell(`A${currentRow}`).value = "(Aucune observation)";
-          sheet.mergeCells(`A${currentRow}:G${currentRow}`);
-          sheet.getCell(`A${currentRow}`).font = { italic: true, color: { argb: '94A3B8' } };
-          sheet.getCell(`A${currentRow}`).border = { left: { style: 'medium' }, right: { style: 'medium' }, bottom: { style: 'medium' } };
-          currentRow++;
-        }
-        currentRow += 2;
-      }
-    };
-
-    // --- FONCTION UTILITAIRE : GÉNÉRER UNE FEUILLE TABULAIRE ---
-    const addTabularSheet = (sheetName: string, mainTitle: string, data: any[], includePromoteur: boolean = true) => {
-      const sheet = workbook.addWorksheet(sheetName);
-      
-      const cols = [
-        { header: 'Nom OP', width: 20 },
-        ...(includePromoteur ? [{ header: 'Promoteur', width: 20 }] : []),
-        { header: 'Nbre lot', width: 12 },
-        { header: 'CTx', width: 15 },
-        { header: 'Description', width: 45 },
-        { header: 'Statut', width: 18 },
-        { header: 'Réalisateur', width: 20 },
-        { header: 'Info', width: 15 },
-        { header: 'Butoire', width: 15 },
-        { header: 'Réalisation', width: 15 },
-      ];
-      sheet.columns = cols.map(c => ({ width: c.width }));
-
-      const totalCols = cols.length;
-      const lastColLetter = String.fromCharCode(64 + totalCols);
-      const dateStartColLetter = String.fromCharCode(64 + totalCols - 2);
-
-      const mainHeader = sheet.getCell('A1');
-      mainHeader.value = mainTitle;
-      sheet.mergeCells(`A1:${String.fromCharCode(dateStartColLetter.charCodeAt(0) - 1)}1`);
-      mainHeader.style = {
-        font: { bold: true, size: 14 },
-        alignment: { horizontal: 'center', vertical: 'middle' },
-        border: { bottom: { style: 'medium' }, top: { style: 'medium' }, left: { style: 'medium' }, right: { style: 'thin' } }
-      };
-
-      // Date d'export
-      const dateCell = sheet.getCell(`${dateStartColLetter}1`);
-      dateCell.value = `Généré le: ${exportDateStr}`;
-      sheet.mergeCells(`${dateStartColLetter}1:${lastColLetter}1`);
-      dateCell.font = { italic: true, size: 10 };
-      dateCell.alignment = { horizontal: 'right', vertical: 'middle' };
-      dateCell.border = { bottom: { style: 'medium' }, top: { style: 'medium' }, right: { style: 'medium' }, left: { style: 'thin' } };
-
-      // Header row 3 & 4
-      const hRow1 = 3;
-      const hRow2 = 4;
-      
-      const staticColsCount = includePromoteur ? 7 : 6;
-      for (let i = 0; i < staticColsCount; i++) {
-        const colLetter = String.fromCharCode(65 + i);
-        const cell = sheet.getCell(`${colLetter}${hRow1}`);
-        cell.value = cols[i].header;
-        cell.font = { bold: true };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-        sheet.mergeCells(`${colLetter}${hRow1}:${colLetter}${hRow2}`);
-      }
-
-      const dateHColLetter = String.fromCharCode(65 + staticColsCount);
-      const cellDates = sheet.getCell(`${dateHColLetter}${hRow1}`);
-      cellDates.value = 'Dates';
-      cellDates.font = { bold: true };
-      cellDates.alignment = { horizontal: 'center', vertical: 'middle' };
-      cellDates.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-      cellDates.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-      sheet.mergeCells(`${dateHColLetter}${hRow1}:${lastColLetter}${hRow1}`);
-
-      ['Info', 'Butoire', 'Réalisation'].forEach((h, idx) => {
-        const colLetter = String.fromCharCode(65 + staticColsCount + idx);
-        const cell = sheet.getCell(`${colLetter}${hRow2}`);
-        cell.value = h;
-        cell.font = { bold: true };
-        cell.alignment = { horizontal: 'center' };
-        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-        cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-      });
-
-      let r = 5;
-      data.forEach(obs => {
-        if (!obs.id) return; // Skip empty ops in tabular views usually, but let's see
-        const status = getStatus(obs);
-        let c = 1;
-        sheet.getCell(r, c++).value = obs.operations.name;
-        if (includePromoteur) sheet.getCell(r, c++).value = obs.operations.promoter_name || '-';
-        sheet.getCell(r, c++).value = obs.operations.total_housing_units || 0;
-        sheet.getCell(r, c++).value = obs.operations.project_manager;
-        sheet.getCell(r, c++).value = obs.description;
-        
-        const stCell = sheet.getCell(r, c++);
-        stCell.value = status.label;
-        let bgColor = 'FFFFFF';
-        if (status.label === 'Terminé') bgColor = 'D1FAE5';
-        if (status.label === 'En retard') bgColor = 'FEE2E2';
-        if (status.label === 'En cours') bgColor = 'FEF3C7';
-        stCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-        stCell.font = { italic: true };
-
-        sheet.getCell(r, c++).value = obs.responsible_person || '-';
-        sheet.getCell(r, c++).value = new Date(obs.info_date).toLocaleDateString();
-        sheet.getCell(r, c++).value = new Date(obs.deadline_date).toLocaleDateString();
-        sheet.getCell(r, c++).value = obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '';
-
-        for (let j = 1; j <= totalCols; j++) {
-          sheet.getCell(r, j).border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-          sheet.getCell(r, j).alignment = { vertical: 'middle' };
-        }
-        r++;
-      });
-    };
-
-    // --- GÉNÉRATION DES 5 FEUILLES ---
-    // In excel export, we might want to include empty ops too if they are visible in UI?
-    // Let's use groupedData object entries for CTX and OPERATIONS to match UI
-    const exportDataGroups = (Object.values(groupedData) as any[]).flatMap(g => g.items.length > 0 ? g.items : [{ operations: g.op }]);
-    
-    addStructuredSheet('CTX', 'FILTRE PAR CTX', exportDataGroups);
-    addTabularSheet('STATUT', 'FILTRE PAR STATUT', [...filteredData].sort((a, b) => getStatus(a).label.localeCompare(getStatus(b).label)), false);
-    addStructuredSheet('OPERATIONS', 'FILTRE PAR OPERATION', exportDataGroups);
-    addTabularSheet('VEFA', 'FILTRE PAR VEFA', filteredData.filter(o => o.operations?.operation_type === 'VEFA'));
-    addTabularSheet('MOD', 'FILTRE PAR MOD', filteredData.filter(o => o.operations?.operation_type !== 'VEFA'), false);
-
-    // --- FINALISATION ---
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-    const url = window.URL.createObjectURL(blob);
-    const anchor = document.createElement('a');
-    anchor.href = url;
-    anchor.download = `Export_Premium_Suivi_Immo_${new Date().toISOString().split('T')[0]}.xlsx`;
-    anchor.click();
-    window.URL.revokeObjectURL(url);
-
-    triggerSuccessToast(useStore.getState().user?.email, "Export Excel Premium généré (5 feuilles) !");
-  };
-
-  // Dynamic filter lists
-  const uniqueOps = Array.from(new Set(allOperations.map(o => o.name))).sort();
-  const uniqueCtx = Array.from(new Set(allOperations.map(o => o.project_manager))).sort();
-  const uniqueResponsables = Array.from(new Set(observations.map(o => o.responsible_person))).sort();
-
-  // Unified filtering
-  const filteredData = observations.filter(obs => {
-    if (filterOp && obs.operations.name !== filterOp) return false;
-    if (filterCtx && obs.operations.project_manager !== filterCtx) return false;
-    if (filterRealisateur && obs.responsible_person !== filterRealisateur) return false;
-    if (filterStatus && getStatus(obs).label !== filterStatus) return false;
-    
-    if (viewMode === 'tabulaire') {
-      if (tabularFilter === 'vefa' && obs.operations.operation_type !== 'VEFA') return false;
-      if (tabularFilter === 'mod' && obs.operations.operation_type === 'VEFA') return false;
-    }
-
-    if (searchQuery) {
-        const q = searchQuery.toLowerCase();
-        const matchName = obs.operations.name.toLowerCase().includes(q);
-        const matchType = obs.operations.operation_type?.toLowerCase().includes(q);
-        const matchPromoter = obs.operations.promoter_name?.toLowerCase().includes(q) || false;
-        const matchResp = obs.responsible_person?.toLowerCase().includes(q) || false;
-        const matchDesc = obs.description?.toLowerCase().includes(q) || false;
-        const matchCtx = obs.operations.project_manager?.toLowerCase().includes(q) || false;
-
-        if (!matchName && !matchType && !matchPromoter && !matchResp && !matchDesc && !matchCtx) {
-            return false;
-        }
-    }
-    
-    return true;
-  });
-
-  const groupedData = allOperations.reduce((acc, op) => {
-    // Apply op filters to the operation itself
-    if (filterOp && op.name !== filterOp) return acc;
-    if (filterCtx && op.project_manager !== filterCtx) return acc;
-
-    const opItems = filteredData.filter(obs => obs.operations.id === op.id);
-    
-    // If showEmptyOps is false, only include if there are observations
-    if (!showEmptyOps && opItems.length === 0) return acc;
-
-    // If there are observation-specific filters active, and no observations match, skip even if showEmptyOps is true
-    // because most likely the user wants to see results of the filter.
-    if (opItems.length === 0 && (filterStatus || filterRealisateur)) return acc;
-
-    acc[op.id] = {
-      op: op,
-      items: opItems
-    };
-    return acc;
-  }, {} as Record<string, { op: any, items: any[] }>);
-
-  if (loading) return <div className="p-8 text-center text-slate-500 font-medium">Chargement des données...</div>;
+  if (loading) return <div className="flex min-h-[55vh] items-center justify-center text-slate-500">Chargement des observations…</div>;
 
   return (
-    <div className="pb-12 max-w-[1600px] mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4 print:hidden">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Suivi des Observations</h1>
-          <p className="text-slate-500 mt-1">Gérez et exportez vos points de vigilance par opération ou par statut.</p>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button 
-            onClick={() => navigate('/operations/new')}
-            className="flex items-center gap-2 bg-primary text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-primary/90 transition shadow-sm"
-          >
-            <PlusCircle size={18} /> Nouvelle Opération
-          </button>
-          <div className="bg-white border border-slate-200 rounded-lg p-1 flex">
-            <button 
-              onClick={() => setViewMode('structuree')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${viewMode === 'structuree' ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-            >
-              <LayoutGrid size={16} /> Structurée
-            </button>
-            <button 
-              onClick={() => setViewMode('tabulaire')}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium transition ${viewMode === 'tabulaire' ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-            >
-              <List size={16} /> Tabulaire
-            </button>
-          </div>
-          <button 
-            onClick={exportToExcel}
-            className="flex items-center gap-2 bg-emerald-600 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-emerald-700 transition shadow-sm"
-          >
-            <FileSpreadsheet size={18} /> Exporter Excel
-          </button>
-          <button 
-            onClick={generatePDF}
-            className="flex items-center gap-2 bg-slate-900 text-white px-4 py-2 rounded-lg text-sm font-medium hover:bg-slate-800 transition shadow-sm"
-          >
-            <Printer size={18} /> Exporter PDF
-          </button>
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1700px] pb-12">
+      <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">Suivi collectif</p><h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">Observations</h1><p className="mt-2 text-sm text-slate-500">{filtered.length} point{filtered.length > 1 ? 's' : ''} visible{filtered.length > 1 ? 's' : ''} · chaque auteur est identifié</p></div><div className="flex flex-wrap gap-2"><div className="flex rounded-xl border border-slate-200 bg-white p-1"><button type="button" onClick={() => setView('structured')} className={`rounded-lg p-2 ${view === 'structured' ? 'bg-slate-950 text-white' : 'text-slate-500'}`} title="Vue structurée"><LayoutGrid size={16} /></button><button type="button" onClick={() => setView('table')} className={`rounded-lg p-2 ${view === 'table' ? 'bg-slate-950 text-white' : 'text-slate-500'}`} title="Vue tableau"><List size={16} /></button></div><button type="button" onClick={() => void exportExcel()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><FileSpreadsheet size={15} /> Excel</button><button type="button" onClick={exportPdf} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><Download size={15} /> PDF</button>{can(profile?.role, 'contribute') && <button type="button" onClick={() => openCreate()} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-black text-white"><Plus size={17} /> Ajouter</button>}</div></header>
+      {error && <div role="alert" className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{error}</div>}
+      <div className="mb-6 rounded-2xl border border-slate-200 bg-[#f3f5f1] p-4"><div className="flex flex-wrap gap-2"><div className="relative min-w-[260px] flex-1"><Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={15} /><input value={filters.query} onChange={(event) => setFilters({ ...filters, query: event.target.value })} placeholder="Rechercher une observation…" className="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-9 pr-3 text-sm outline-none focus:border-teal-600" /></div><MultiSelectFilter label="Opérations" options={options.operations} values={filters.operations} onChange={(value) => setFilters({ ...filters, operations: value })} /><MultiSelectFilter label="CTX" options={options.ctxs} values={filters.ctxs} onChange={(value) => setFilters({ ...filters, ctxs: value })} /><MultiSelectFilter label="COP" options={options.cops} values={filters.cops} onChange={(value) => setFilters({ ...filters, cops: value })} /><MultiSelectFilter label="Promoteurs" options={options.promoters} values={filters.promoters} onChange={(value) => setFilters({ ...filters, promoters: value })} /><MultiSelectFilter label="Types" options={options.operationTypes} values={filters.operationTypes} onChange={(value) => setFilters({ ...filters, operationTypes: value })} /><MultiSelectFilter label="Réalisateurs" options={options.responsibles} values={filters.responsibles} onChange={(value) => setFilters({ ...filters, responsibles: value })} /><MultiSelectFilter label="Statuts" options={options.statuses} values={filters.statuses} onChange={(value) => setFilters({ ...filters, statuses: value })} /><select aria-label="Filtre DG" value={filters.dg} onChange={(event) => setFilters({ ...filters, dg: event.target.value as ObservationFilters['dg'] })} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><option value="all">Toutes infos</option><option value="only">DG uniquement</option><option value="exclude">Hors DG</option></select><button type="button" onClick={() => setFilters(EMPTY_FILTERS)} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">Effacer</button></div>{view === 'structured' && <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600"><input type="checkbox" checked={showEmpty} onChange={(event) => setShowEmpty(event.target.checked)} /> Afficher les opérations sans observation</label>}</div>
 
-      <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm mb-8 print:hidden">
-        <div className="flex flex-wrap gap-4 items-end mb-4">
-          <div className="flex-1 min-w-[200px] w-full">
-            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Recherche globale</label>
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
-              <input 
-                type="text"
-                placeholder="Nom, Type, Promoteur, Réalisateur, CTX, Desc..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-lg pl-9 pr-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none"
-              />
-            </div>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-4 items-end">
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Opération</label>
-            <select value={filterOp} onChange={(e) => setFilterOp(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none">
-              <option value="">Toutes</option>
-              {uniqueOps.map(op => <option key={op} value={op}>{op}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Conducteur (CTX)</label>
-            <select value={filterCtx} onChange={(e) => setFilterCtx(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none">
-              <option value="">Tous</option>
-              {uniqueCtx.map(c => <option key={c} value={c}>{c}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[180px]">
-            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Réalisateur</label>
-            <select value={filterRealisateur} onChange={(e) => setFilterRealisateur(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none">
-              <option value="">Tous</option>
-              {uniqueResponsables.map(r => <option key={r as string} value={r as string}>{r}</option>)}
-            </select>
-          </div>
-          <div className="flex-1 min-w-[160px]">
-            <label className="block text-[11px] uppercase font-bold text-slate-400 mb-1.5 ml-1">Statut</label>
-            <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-primary outline-none">
-              <option value="">Tous</option>
-              <option value="En retard">En retard</option>
-              <option value="En cours">En cours</option>
-              <option value="Terminé">Terminé</option>
-              <option value="Réussi">Réussi</option>
-              <option value="Échec">Échec</option>
-              <option value="Bloqué">Bloqué</option>
-            </select>
-          </div>
-          
-          <div className="flex items-center gap-2 mb-0.5">
-            <button 
-              onClick={() => setShowEmptyOps(!showEmptyOps)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-bold transition border ${showEmptyOps ? 'bg-primary/10 border-primary text-primary' : 'bg-slate-50 border-slate-200 text-slate-500 hover:border-slate-300'}`}
-              title={showEmptyOps ? "Masquer les opérations vides" : "Afficher toutes les opérations"}
-            >
-              {showEmptyOps ? <Eye size={16} /> : <EyeOff size={16} />}
-              <span className="hidden sm:inline">{showEmptyOps ? "Opérations Vides Visibles" : "Afficher Opérations Vides"}</span>
-            </button>
-            <button 
-              onClick={() => {setFilterOp(''); setFilterCtx(''); setFilterRealisateur(''); setFilterStatus(''); setShowEmptyOps(false); setSearchQuery('');}}
-              className="px-4 py-2 border border-slate-200 rounded-lg text-slate-500 hover:text-slate-800 text-sm font-semibold transition bg-white shadow-sm"
-            >
-              Effacer
-            </button>
-          </div>
-        </div>
+      {view === 'structured' ? <div className="space-y-4">{grouped.map(({ operation, items }) => <section key={operation.id} className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"><button type="button" onClick={() => navigate(`/operations/${operation.id}`)} className="flex w-full flex-col justify-between gap-3 bg-slate-950 px-5 py-4 text-left text-white md:flex-row md:items-center"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">{operation.operation_type ?? 'Type non renseigné'} · {operation.stage ? `Stade ${operation.stage}` : 'Stade —'}</p><h2 className="mt-1 text-lg font-black">{operation.name}</h2></div><p className="text-xs font-bold text-slate-300">CTX {operation.project_manager ?? '—'} · COP {operation.operations_manager ?? '—'} · {items.length} point{items.length > 1 ? 's' : ''}</p></button>{items.length === 0 ? <div className="p-7 text-center text-sm text-slate-400">Aucune observation.{can(profile?.role, 'contribute') && <button type="button" onClick={() => openCreate(operation.id)} className="ml-2 font-bold text-teal-700">Ajouter un point</button>}</div> : <div className="divide-y divide-slate-100">{items.map((observation) => <div key={observation.id} className="grid grid-cols-1 items-center gap-3 px-5 py-4 md:grid-cols-[100px_minmax(240px,1fr)_110px_110px_110px_130px]"><div><p className="text-[10px] font-black uppercase text-slate-400">Info</p><p className="mt-1 text-xs font-bold">{new Date(`${observation.info_date}T12:00:00`).toLocaleDateString('fr-FR')}</p></div><div><div className="flex flex-wrap items-center gap-2">{statusBadge(observation)}{observation.is_dg && <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900"><EyeOff size={11} /> DG</span>}<span className="text-[10px] font-bold text-slate-400">par {observation.author_initials ?? '—'}</span></div><p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{observation.description}</p></div><div><p className="text-[10px] font-black uppercase text-slate-400">Réalisateur</p><p className="mt-1 text-xs font-bold">{observation.responsible_person}</p></div><div><p className="text-[10px] font-black uppercase text-slate-400">Butoir</p><p className="mt-1 text-xs font-bold">{observation.deadline_date}</p></div><div><p className="text-[10px] font-black uppercase text-slate-400">Résolution</p><p className="mt-1 text-xs font-bold">{observation.resolution_date ?? '—'}</p></div><div className="flex items-center justify-end gap-1">{can(profile?.role, 'contribute') && (!observation.resolution_validated_at || can(profile?.role, 'validateResolution')) && <button type="button" onClick={() => openEdit(observation)} className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700"><Edit3 size={16} /></button>}<ResolutionActions observation={observation} role={profile?.role} onValidate={() => void validateResolution(observation)} onDelete={() => void deleteObservation(observation)} /></div></div>)}</div>}</section>)}</div> : <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white"><table className="min-w-[1200px] w-full text-left text-xs"><thead className="bg-slate-950 text-slate-200"><tr>{['Opération', 'Description', 'CTX', 'COP', 'Réalisateur', 'Butoir', 'Résolution', 'Statut', 'DG', 'Actions'].map((label) => <th key={label} className="px-3 py-3 font-black uppercase tracking-wider">{label}</th>)}</tr></thead><tbody>{filtered.map((observation) => <tr key={observation.id} className="border-b border-slate-100"><td className="px-3 py-3 font-black">{observation.operations?.name}</td><td className="max-w-xl px-3 py-3">{observation.description}</td><td className="px-3 py-3">{observation.operations?.project_manager}</td><td className="px-3 py-3">{observation.operations?.operations_manager}</td><td className="px-3 py-3">{observation.responsible_person}</td><td className="px-3 py-3">{observation.deadline_date}</td><td className="px-3 py-3">{observation.resolution_date ?? '—'}</td><td className="px-3 py-3">{statusBadge(observation)}</td><td className="px-3 py-3">{observation.is_dg ? 'DG' : ''}</td><td className="px-3 py-3"><div className="flex"><button type="button" onClick={() => openEdit(observation)} className="p-2 text-slate-400"><Edit3 size={15} /></button><ResolutionActions observation={observation} role={profile?.role} onValidate={() => void validateResolution(observation)} onDelete={() => void deleteObservation(observation)} /></div></td></tr>)}</tbody></table></div>}
 
-        {viewMode === 'tabulaire' && (
-          <div className="flex gap-2 mt-5 pt-4 border-t border-slate-100">
-            <button onClick={() => setTabularFilter('all')} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${tabularFilter === 'all' ? 'bg-primary border-primary text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>GLOBALISÉ</button>
-            <button onClick={() => setTabularFilter('vefa')} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${tabularFilter === 'vefa' ? 'bg-warning border-warning text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>FILTRE PAR VEFA</button>
-            <button onClick={() => setTabularFilter('mod')} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${tabularFilter === 'mod' ? 'bg-indigo-600 border-indigo-600 text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>FILTRE PAR MOD</button>
-            <button onClick={() => setTabularFilter('statut')} className={`px-4 py-1.5 rounded-full text-xs font-bold border transition ${tabularFilter === 'statut' ? 'bg-danger border-danger text-white' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-300'}`}>FILTRE PAR STATUT</button>
-          </div>
-        )}
-      </div>
-
-      <div id="print-area">
-        {viewMode === 'structuree' ? (
-          <div className="space-y-12">
-            {(Object.entries(groupedData) as [string, {op: any, items: any[]}][]).map(([opId, { op, items }]) => (
-              <div key={opId} className="print:break-inside-avoid">
-                <div className="bg-slate-900 text-white rounded-t-xl overflow-hidden print:bg-slate-900 print:text-white">
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 p-4 gap-y-6 gap-x-4 text-[10px] uppercase font-bold tracking-wider">
-                    <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
-                      <span className="text-slate-500 block mb-1">Nom de l'OP</span>
-                      <div className="flex items-center gap-2">
-                        <span className="text-sm md:text-base text-white block truncate" title={op.name}>{op.name}</span>
-                        <button 
-                          onClick={() => navigate(`/operations/${opId}/edit`)} 
-                          className="p-1 hover:bg-slate-800 rounded text-slate-400 hover:text-primary transition-colors print:hidden shrink-0" 
-                          title="Modifier l'opération"
-                        >
-                          <Edit size={14} />
-                        </button>
-                      </div>
-                    </div>
-                    <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
-                      <span className="text-slate-500 block mb-1">Nbre logt</span>
-                      <span className="text-sm md:text-base text-white block">{op.total_housing_units}</span>
-                    </div>
-                    <div className="lg:border-r lg:border-slate-700 pr-2 min-w-0">
-                      <span className="text-slate-500 block mb-1">CTX</span>
-                      <span className="text-sm md:text-base text-white block truncate" title={op.project_manager}>{op.project_manager}</span>
-                    </div>
-                    <div className="sm:col-span-2 lg:col-span-2 lg:border-r lg:border-slate-700 pr-2 min-w-0">
-                      <span className="text-slate-500 block mb-1">Dates livraison (Cont / Previ / Réelle)</span>
-                      <div className="text-xs flex flex-wrap gap-x-2 gap-y-1 items-center">
-                        <span className="text-white">{op.contractual_delivery_date ? new Date(op.contractual_delivery_date).toLocaleDateString() : '-'}</span>
-                        <span className="text-slate-700 hidden sm:inline">|</span>
-                        <span className="text-white">{op.expected_delivery_date ? new Date(op.expected_delivery_date).toLocaleDateString() : '-'}</span>
-                        <span className="text-slate-700 hidden sm:inline">|</span>
-                        <span className={op.actual_delivery_date ? 'text-emerald-400 font-bold' : 'text-slate-400 italic'}>
-                          {op.actual_delivery_date ? new Date(op.actual_delivery_date).toLocaleDateString() : 'Non livré'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="min-w-0">
-                      <span className="text-slate-500 block mb-1">Type / PROMOTEUR</span>
-                      <div className="flex flex-wrap items-center gap-2">
-                        <span className="bg-slate-800 text-[9px] px-1.5 py-0.5 rounded text-slate-300 border border-slate-700 shrink-0">{op.operation_type}</span>
-                        <span className="text-white text-[10px] truncate" title={op.promoter_name || 'N/A'}>{op.promoter_name || 'N/A'}</span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                
-                <div className="bg-white border-x border-b border-slate-200 rounded-b-xl overflow-hidden shadow-sm">
-                  <table className="w-full text-left border-collapse">
-                    <thead className="bg-slate-50 border-b border-slate-200">
-                      <tr>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-6">Date Info</th>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/2">Description des observations</th>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Réalisateur</th>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Butoire</th>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest">Réalisation</th>
-                        <th className="p-3 text-[10px] font-black text-slate-400 uppercase tracking-widest text-right pr-6 print:hidden">Actions</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100">
-                      {items.length > 0 ? (
-                        items.map((obs) => (
-                          <tr key={obs.id} className="group hover:bg-slate-50 transition-colors">
-                            <td className="p-3 pl-6 text-xs text-slate-600 font-medium">{new Date(obs.info_date).toLocaleDateString()}</td>
-                            <td className="p-3 text-sm text-slate-900 font-semibold">{obs.description}</td>
-                            <td className="p-3 text-xs text-slate-700 uppercase font-bold">{obs.responsible_person}</td>
-                            <td className="p-3 text-xs text-slate-600">{new Date(obs.deadline_date).toLocaleDateString()}</td>
-                            <td className="p-3 text-xs font-bold">
-                              {obs.completion_date ? (
-                                <span className="text-emerald-600">{new Date(obs.completion_date).toLocaleDateString()}</span>
-                              ) : (
-                                <span className={new Date(obs.deadline_date) < new Date() ? 'text-red-500' : 'text-slate-300 italic'}>En cours</span>
-                              )}
-                            </td>
-                            <td className="p-3 pr-6 text-right print:hidden">
-                              <div className="flex justify-end gap-1 opacity-20 group-hover:opacity-100 transition">
-                                <button onClick={() => setEditingObs(obs)} className="p-1 text-slate-400 hover:text-primary"><Edit size={14}/></button>
-                                <button onClick={() => deleteObservation(obs.id)} className="p-1 text-slate-400 hover:text-danger"><Trash2 size={14}/></button>
-                              </div>
-                            </td>
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={6} className="p-8 text-center text-slate-400 italic text-sm">
-                            Aucune observation pour cette opération.
-                          </td>
-                        </tr>
-                      )}
-                      <tr 
-                        onClick={() => {
-                          setNewObsForm(prev => ({...prev, operation_id: opId}));
-                          setIsAddingObs(true);
-                        }}
-                        className="cursor-pointer group hover:bg-slate-50 transition-colors print:hidden"
-                      >
-                        <td colSpan={6} className="p-3 border-t-2 border-dashed border-slate-200">
-                          <div className="flex items-center justify-center gap-2 text-slate-400 group-hover:text-primary font-medium text-sm transition-colors py-1">
-                            <PlusCircle size={16} />
-                            <span>Ajouter une nouvelle observation</span>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
-                  </table>
-                </div>
-              </div>
-            ))}
-          </div>
-        ) : (
-          <div className="bg-white rounded-xl border border-slate-200 shadow-xl overflow-hidden">
-            <div className="p-4 bg-slate-900 text-white flex justify-between items-center">
-              <span className="text-xs font-bold uppercase tracking-widest">Vue Tabulaire : {tabularFilter.toUpperCase()}</span>
-              <span className="text-[10px] text-slate-400">{filteredData.length} observations trouvées</span>
-            </div>
-            <div className="overflow-x-auto">
-              <table className="w-full text-left border-collapse">
-                <thead className="bg-slate-50 border-b border-slate-200">
-                  <tr>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest pl-6">Nom OP</th>
-                    {tabularFilter === 'vefa' && <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Promoteur</th>}
-                    {(tabularFilter === 'vefa' || tabularFilter === 'mod') && <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Nbre lot</th>}
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">CTx</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest w-1/4">Description</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Statut</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Réalisateur</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Info</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Butoire</th>
-                    <th className="p-4 text-[10px] font-black text-slate-400 uppercase tracking-widest">Réalisation</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredData.length > 0 ? (
-                    filteredData.map((obs) => {
-                      const status = getStatus(obs);
-                      return (
-                        <tr key={obs.id} className="hover:bg-slate-50 transition-colors">
-                          <td className="p-4 pl-6 text-sm font-bold text-slate-900 border-r border-slate-100 group/op">
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="truncate">{obs.operations?.name}</span>
-                              <button 
-                                onClick={() => navigate(`/operations/${obs.operation_id}/edit`)} 
-                                className="p-1 opacity-0 group-hover/op:opacity-100 hover:bg-slate-200 rounded text-slate-400 hover:text-primary transition-colors print:hidden shrink-0" 
-                                title="Modifier l'opération"
-                              >
-                                <Edit size={14} />
-                              </button>
-                            </div>
-                          </td>
-                          {tabularFilter === 'vefa' && <td className="p-4 text-xs text-slate-600 font-medium uppercase">{obs.operations.promoter_name || '-'}</td>}
-                          {(tabularFilter === 'vefa' || tabularFilter === 'mod') && <td className="p-4 text-xs text-slate-700">{obs.operations.total_housing_units}</td>}
-                          <td className="p-4 text-xs text-slate-700 font-semibold">{obs.operations.project_manager}</td>
-                          <td className="p-4 text-sm font-medium text-slate-800">{obs.description}</td>
-                          <td className="p-4">
-                            <div className={`px-2 py-1 rounded inline-flex items-center gap-2 border ${status.color}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${status.dot}`}></span>
-                              <span className="text-[10px] font-black uppercase tracking-tighter">{status.label}</span>
-                            </div>
-                          </td>
-                          <td className="p-4 text-xs font-black text-slate-900 uppercase tracking-tighter">{obs.responsible_person}</td>
-                          <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.info_date).toLocaleDateString()}</td>
-                          <td className="p-4 text-[11px] text-slate-500 font-bold">{new Date(obs.deadline_date).toLocaleDateString()}</td>
-                          <td className="p-4 text-[11px] text-emerald-600 font-black">{obs.completion_date ? new Date(obs.completion_date).toLocaleDateString() : '-'}</td>
-                        </tr>
-                      );
-                    })
-                  ) : (
-                    <tr>
-                      <td colSpan={10} className="p-12 text-center text-slate-400 italic">Aucune observation ne correspond à vos filtres.</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {editingObs && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 print:hidden">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">Modifier l'observation</h2>
-              <button onClick={() => setEditingObs(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleEditSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description *</label>
-                <textarea 
-                  required 
-                  value={editingObs.description} 
-                  onChange={(e) => setEditingObs({...editingObs, description: e.target.value})} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-24"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Réalisateur *</label>
-                  <input required value={editingObs.responsible_person} onChange={(e) => setEditingObs({...editingObs, responsible_person: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date Butoire *</label>
-                  <input type="date" value={editingObs.deadline_date} onChange={(e) => setEditingObs({...editingObs, deadline_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Statut</label>
-                  <select 
-                    value={editingObs._custom_status || 'En cours'} 
-                    onChange={(e) => setEditingObs({...editingObs, _custom_status: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="En cours">En cours</option>
-                    <option value="Réussi">Réussi</option>
-                    <option value="Échec">Échec</option>
-                    <option value="Bloqué">Bloqué</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
-                <button type="button" onClick={() => setEditingObs(null)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
-                <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Enregistrer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {isAddingObs && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 print:hidden">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">Ajouter une observation</h2>
-              <button onClick={() => setIsAddingObs(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleAddSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Opération *</label>
-                <select 
-                  required 
-                  value={newObsForm.operation_id} 
-                  onChange={(e) => setNewObsForm({...newObsForm, operation_id: e.target.value})}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                >
-                  <option value="" disabled>Sélectionner une opération</option>
-                  {uniqueOps.map(opName => {
-                    const op = allOperations.find(o => o.name === opName);
-                    return op ? <option key={op.id} value={op.id}>{op.name}</option> : null;
-                  })}
-                </select>
-              </div>
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description *</label>
-                <textarea 
-                  required 
-                  value={newObsForm.description} 
-                  onChange={(e) => setNewObsForm({...newObsForm, description: e.target.value})} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-24"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Réalisateur *</label>
-                  <input required value={newObsForm.responsible_person} onChange={(e) => setNewObsForm({...newObsForm, responsible_person: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date Butoire *</label>
-                  <input required type="date" value={newObsForm.deadline_date} onChange={(e) => setNewObsForm({...newObsForm, deadline_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Statut</label>
-                  <select 
-                    value={newObsForm._custom_status} 
-                    onChange={(e) => setNewObsForm({...newObsForm, _custom_status: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="En cours">En cours</option>
-                    <option value="Réussi">Réussi</option>
-                    <option value="Échec">Échec</option>
-                    <option value="Bloqué">Bloqué</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
-                <button type="button" onClick={() => setIsAddingObs(false)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
-                <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Créer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
+      {form && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl"><div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">Observation</p><h2 className="text-xl font-black text-slate-950">{editing ? 'Modifier le point' : 'Ajouter un point'}</h2></div><button type="button" onClick={() => setForm(null)} className="rounded-full p-2 text-slate-400 hover:bg-slate-100"><X /></button></div><div className="p-6"><ObservationForm value={form} operations={operations} responsibles={options.responsibles} saving={saving} onChange={setForm} onSubmit={saveObservation} onCancel={() => setForm(null)} /></div></div></div>}
     </div>
   );
 }

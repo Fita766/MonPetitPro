@@ -1,54 +1,58 @@
-# MonPetitPro - Suivi Action Immo
+# MonPetitPro — suivi des opérations immobilières
 
-![MonPetitPro - Application de suivi immobilier](https://images.unsplash.com/photo-1560518883-ce09059eeffa?ixlib=rb-4.0.3&auto=format&fit=crop&w=1200&q=80)
+MonPetitPro centralise le pilotage DMO des opérations : programme, équipe, budget, jalons, livraisons, mise en gestion, observations, objectifs annuels et documents.
 
-**MonPetitPro** est une application SaaS moderne, claire et efficace destinée aux professionnels de l'immobilier. Elle permet de gérer de multiples opérations et d'assurer le suivi détaillé des observations (réserves, tâches, problèmes).
+## Fonctions principales
 
-## 🚀 Fonctionnalités Clés
+- fiche opération structurée selon le tableau de bord métier, avec calculs de dates sécurisés ;
+- tableau global filtrable sur plusieurs critères et exportable en PDF ou Excel ;
+- observations avec auteur, responsable, échéance, résolution, validation et indicateur DG ;
+- calendriers des conditions suspensives, livraisons, mises en gestion, dates clés et agenda libre ;
+- objectifs DMO annuels figés, suivi mensuel et calcul des gains/pertes ;
+- statistiques promoteurs, CTX, livraisons, budget et observations ;
+- revue documentaire calculée depuis l’OS travaux, la livraison et la DAACT ;
+- fiche de synthèse PDF avec plans et photos stockés dans un espace privé ;
+- rôles `administrateur`, `responsable`, `contributeur` et `lecteur`, avec historique des modifications.
 
-*   **Gestion des Opérations** : Créez et pilotez vos projets de A à Z (MOD, VEFA, Réhabilitation, etc.).
-*   **Suivi Budgétaire & Dates** : Visualisez les budgets et suivez le planning des livraisons à la trace.
-*   **Détails des Logements** : Renseignez la typologie complète (LLI, LLS, PLAI, Étudiant, Spécifique, etc.).
-*   **Observations & Réserves** : Centralisez les points de vigilance, avec gestion des délais et réalisateurs.
-*   **Vues Professionnelles** : Basculez entre une vue Tabulaire globale et une vue Structurée par opération.
-*   **Exports** : Générez des rapports PDF professionnels et des exports Excel (XLSX) en un clic.
+L’import du classeur de référence n’est volontairement **pas proposé** : il sert à définir les écrans et les règles, mais n’est jamais injecté dans la base. Cela évite les doublons avec les opérations déjà saisies.
 
-## 🛠️ Stack Technique
+## Installation
 
-*   **Frontend** : [React 19](https://react.dev) + [Vite](https://vitejs.dev)
-*   **Style** : [Tailwind CSS v4](https://tailwindcss.com/)
-*   **Icônes** : [Lucide React](https://lucide.dev/)
-*   **Backend** : [Supabase](https://supabase.com/) (PostgreSQL & Auth)
-*   **State** : [Zustand](https://github.com/pmndrs/zustand)
+```bash
+npm install
+```
 
-## 📦 Installation & Déploiement
+Créer `.env.local` :
 
-1.  **Cloner le dépôt**
-    ```bash
-    git clone https://github.com/Fita766/MonPetitPro.git
-    cd MonPetitPro
-    ```
+```env
+VITE_SUPABASE_URL=https://votre-projet.supabase.co
+VITE_SUPABASE_ANON_KEY=votre-cle-anonyme
+```
 
-2.  **Installer les dépendances**
-    ```bash
-    npm install
-    ```
+Appliquer la migration [`supabase/migrations/202607200001_dmo_extension.sql`](supabase/migrations/202607200001_dmo_extension.sql) dans Supabase, puis promouvoir une première fois le compte administrateur :
 
-3.  **Configurer les variables d'environnement**
-    Utilisez `.env.local` :
-    ```env
-    VITE_SUPABASE_URL=votre_url
-    VITE_SUPABASE_ANON_KEY=votre_cle
-    ```
+```sql
+update public.profiles
+set role = 'admin'
+where email = 'votre-adresse@example.com';
+```
 
-4.  **Lancer le serveur**
-    ```bash
-    npm run dev
-    ```
+La migration est additive et rejouable : elle conserve les opérations et observations existantes, crée les tables manquantes, reprend les comptes Auth existants et active les politiques de sécurité.
 
-## 🗄️ Schéma Base de Données
+## Commandes
 
-L'application utilise deux tables : `operations` et `observations`. Le schéma SQL complet est disponible dans le fichier `supabase_table.sql`.
+```bash
+npm run dev      # serveur de développement
+npm test -- --run
+npm run lint
+npm run build
+```
 
----
-*Développé avec ❤️ pour rendre la gestion de l'immobilier plus simple.*
+## Déploiement et données
+
+- Exécuter la migration avant de déployer cette version du frontend.
+- Le bucket Supabase `operation-documents` est privé ; l’application utilise des liens temporaires.
+- Ne jamais commiter `.env.local` ni le dossier local `dossiers modifs/`.
+- Avant mise en production, suivre la [check-list de recette](docs/acceptance-checklist.md).
+
+Stack : React 19, TypeScript, Vite, Tailwind CSS, Supabase, Zustand, Vitest, jsPDF et ExcelJS.

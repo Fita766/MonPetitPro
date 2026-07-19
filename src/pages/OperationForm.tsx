@@ -1,401 +1,239 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, BriefcaseBusiness, Building2, CalendarClock, CircleDollarSign, FileText, Flag, ListChecks, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { Save, X, Building2 } from 'lucide-react';
+import { can, isSchemaMigrationError, SCHEMA_MIGRATION_MESSAGE } from '../lib/permissions';
+import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
+import type { OperationSubsidy, OperationTypology, SuspensiveCondition } from '../types/domain';
+import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
+import GeneralSection from '../components/operations/GeneralSection';
+import ProgramSection from '../components/operations/ProgramSection';
+import PlanningSection from '../components/operations/PlanningSection';
+import BudgetSection from '../components/operations/BudgetSection';
+import ConditionsSection from '../components/operations/ConditionsSection';
+import ObjectivesSection from '../components/operations/ObjectivesSection';
+import SynthesisSection from '../components/operations/SynthesisSection';
+
+const tabs: OperationTab[] = [
+  { id: 'general', label: 'Général', shortLabel: 'Général', icon: Building2 },
+  { id: 'program', label: 'Programme', shortLabel: 'Programme', icon: BriefcaseBusiness },
+  { id: 'planning', label: 'Planning', shortLabel: 'Planning', icon: CalendarClock },
+  { id: 'budget', label: 'Budget & subventions', shortLabel: 'Budget', icon: CircleDollarSign },
+  { id: 'conditions', label: 'Conditions suspensives', shortLabel: 'Conditions', icon: ListChecks },
+  { id: 'objectives', label: 'Objectifs DMO', shortLabel: 'Objectifs', icon: Flag },
+  { id: 'synthesis', label: 'Synthèse', shortLabel: 'Synthèse', icon: FileText },
+];
+
+interface Suggestions {
+  ctx: string[];
+  cop: string[];
+  promoters: string[];
+}
+
+function unique(values: (string | null | undefined)[]): string[] {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort((a, b) => a.localeCompare(b, 'fr'));
+}
 
 export default function OperationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  
-  const [managers, setManagers] = useState<string[]>([]);
-  const [promoters, setPromoters] = useState<string[]>([]);
-  const [opTypes, setOpTypes] = useState<string[]>(['MOD', 'Inter G', 'Etudiant', 'Béguinage', 'VEFA', 'Réhabilitation', 'Autre']);
-  const [showCustomManager, setShowCustomManager] = useState(false);
-  const [showCustomPromoter, setShowCustomPromoter] = useState(false);
-  const [showCustomOpType, setShowCustomOpType] = useState(false);
+  const profile = useStore((state) => state.profile);
+  const user = useStore((state) => state.user);
+  const [activeTab, setActiveTab] = useState('general');
+  const [form, setForm] = useState<OperationFormData>({ ...EMPTY_OPERATION_FORM });
+  const [typologies, setTypologies] = useState<OperationTypology[]>([]);
+  const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
+  const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
+  const [loadedIds, setLoadedIds] = useState({ typologies: [] as string[], subsidies: [] as string[], conditions: [] as string[] });
+  const [suggestions, setSuggestions] = useState<Suggestions>({ ctx: [], cop: [], promoters: [] });
+  const [loading, setLoading] = useState(Boolean(id));
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
-  const [formData, setFormData] = useState({
-    name: '',
-    project_manager: '',
-    manager_name: '', // Nouveau champ Gestionnaire
-    operation_type: 'MOD',
-    promoter_name: '',
-    contractual_delivery_date: '',
-    expected_delivery_date: '',
-    actual_delivery_date: '',
-    daact_date: '',
-    initial_budget: '',
-    final_budget: '',
-    total_housing_units: '0',
-    lli_units: '0',
-    lls_units: '0',
-    plai_units: '0',
-    pls_units: '0',
-    brs_units: '0',
-    psla_units: '0',
-    student_units: '0', // Nouveau
-    specific_units: '0', // Nouveau
-    individual_housing_units: '0',
-    collective_housing_units: '0',
-  });
+  const editable = can(profile?.role, 'contribute');
 
-  useEffect(() => {
-    fetchSuggestions();
-    if (id) {
-      fetchOperation();
+  const loadData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    const suggestionRequest = supabase.from('operations').select('project_manager, operations_manager, promoter_name');
+    const requests = id ? [
+      supabase.from('operations').select('*').eq('id', id).single(),
+      supabase.from('operation_typologies').select('*').eq('operation_id', id).order('typology'),
+      supabase.from('operation_subsidies').select('*').eq('operation_id', id).order('created_at'),
+      supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
+    ] : [];
+
+    const [suggestionResult, results] = await Promise.all([suggestionRequest, Promise.all(requests)]);
+    if (suggestionResult.data) {
+      setSuggestions({
+        ctx: unique(suggestionResult.data.map((row) => row.project_manager)),
+        cop: unique(suggestionResult.data.map((row) => row.operations_manager)),
+        promoters: unique(suggestionResult.data.map((row) => row.promoter_name)),
+      });
     }
+
+    if (id) {
+      const firstError = results.find((result) => result.error)?.error;
+      if (firstError) {
+        setError(isSchemaMigrationError(firstError) ? SCHEMA_MIGRATION_MESSAGE : firstError.message);
+      } else {
+        const operation = results[0].data as Record<string, unknown>;
+        const loadedTypologies = (results[1].data ?? []) as OperationTypology[];
+        const loadedSubsidies = (results[2].data ?? []) as OperationSubsidy[];
+        const loadedConditions = (results[3].data ?? []) as SuspensiveCondition[];
+        setForm(fromOperationRow(operation));
+        setTypologies(loadedTypologies);
+        setSubsidies(loadedSubsidies);
+        setConditions(loadedConditions);
+        setLoadedIds({
+          typologies: loadedTypologies.flatMap((row) => row.id ? [row.id] : []),
+          subsidies: loadedSubsidies.flatMap((row) => row.id ? [row.id] : []),
+          conditions: loadedConditions.flatMap((row) => row.id ? [row.id] : []),
+        });
+      }
+    }
+    setLoading(false);
   }, [id]);
 
-  const fetchSuggestions = async () => {
-    try {
-      const { data } = await supabase.from('operations').select('project_manager, promoter_name, operation_type');
-      if (data) {
-        setManagers(Array.from(new Set(data.map(d => d.project_manager).filter(Boolean))));
-        setPromoters(Array.from(new Set(data.map(d => d.promoter_name).filter(Boolean))));
-        
-        const existingTypes = Array.from(new Set(data.map(d => d.operation_type).filter(Boolean)));
-        const defaultTypes = ['MOD', 'Inter G', 'Etudiant', 'Béguinage', 'VEFA', 'Réhabilitation', 'Autre'];
-        setOpTypes(Array.from(new Set([...defaultTypes, ...existingTypes])));
-      }
-    } catch (err) {
-      console.error(err);
+  useEffect(() => {
+    void loadData();
+  }, [loadData]);
+
+  const changeField = <K extends keyof OperationFormData>(key: K, value: OperationFormData[K]) => {
+    setForm((current) => ({ ...current, [key]: value }));
+  };
+
+  const syncTypologies = async (operationId: string) => {
+    const meaningful = typologies.filter((row) => row.units != null || row.average_surface != null);
+    const rows = meaningful.map((row) => ({
+      ...(row.id ? { id: row.id } : {}),
+      operation_id: operationId,
+      typology: row.typology,
+      product: row.product,
+      units: row.units,
+      average_surface: row.average_surface,
+    }));
+    const savedIds: string[] = [];
+    if (rows.length) {
+      const { data, error: saveError } = await supabase.from('operation_typologies').upsert(rows, { onConflict: 'operation_id,typology,product' }).select('id');
+      if (saveError) throw saveError;
+      savedIds.push(...(data ?? []).map((row) => row.id));
     }
-  };
-
-  const fetchOperation = async () => {
-    try {
-      const { data, error } = await supabase.from('operations').select('*').eq('id', id).single();
-      if (error) throw error;
-      if (data) {
-        // Convert nulls to empty strings for form inputs
-        const safeData = Object.keys(data).reduce((acc: any, key) => {
-          acc[key] = data[key] === null ? '' : String(data[key]);
-          return acc;
-        }, {});
-        
-        // Setup initial custom views if existing values are not in DB lists yet
-        // (will be resolved when fetchSuggestions finishes, but this ensures safety)
-        if (safeData.project_manager) setShowCustomManager(true);
-        if (safeData.promoter_name) setShowCustomPromoter(true);
-
-        setFormData(prev => ({ ...prev, ...safeData }));
-      }
-    } catch (err) {
-      console.error(err);
-      setError('Erreur lors du chargement de l\'opération.');
+    const removed = loadedIds.typologies.filter((rowId) => !savedIds.includes(rowId));
+    if (removed.length) {
+      const { error: deleteError } = await supabase.from('operation_typologies').delete().in('id', removed);
+      if (deleteError) throw deleteError;
     }
+    setLoadedIds((current) => ({ ...current, typologies: savedIds }));
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const syncSubsidies = async (operationId: string) => {
+    const rows = subsidies.filter((row) => row.provider.trim()).map((row) => ({
+      ...(row.id ? { id: row.id } : {}), operation_id: operationId, provider: row.provider.trim(), purpose: row.purpose.trim(), amount: row.amount,
+    }));
+    const savedIds: string[] = [];
+    if (rows.length) {
+      const { data, error: saveError } = await supabase.from('operation_subsidies').upsert(rows).select('id');
+      if (saveError) throw saveError;
+      savedIds.push(...(data ?? []).map((row) => row.id));
+    }
+    const removed = loadedIds.subsidies.filter((rowId) => !savedIds.includes(rowId));
+    if (removed.length) {
+      const { error: deleteError } = await supabase.from('operation_subsidies').delete().in('id', removed);
+      if (deleteError) throw deleteError;
+    }
+    setLoadedIds((current) => ({ ...current, subsidies: savedIds }));
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-    setError('');
+  const syncConditions = async (operationId: string) => {
+    const rows = conditions.filter((row) => row.subject.trim()).map((row) => ({
+      ...(row.id ? { id: row.id } : {}), operation_id: operationId, subject: row.subject.trim(), deadline_date: row.deadline_date, completion_date: row.completion_date,
+    }));
+    const savedIds: string[] = [];
+    if (rows.length) {
+      const { data, error: saveError } = await supabase.from('suspensive_conditions').upsert(rows).select('id');
+      if (saveError) throw saveError;
+      savedIds.push(...(data ?? []).map((row) => row.id));
+    }
+    const removed = loadedIds.conditions.filter((rowId) => !savedIds.includes(rowId));
+    if (removed.length) {
+      const { error: deleteError } = await supabase.from('suspensive_conditions').delete().in('id', removed);
+      if (deleteError) throw deleteError;
+    }
+    setLoadedIds((current) => ({ ...current, conditions: savedIds }));
+  };
+
+  const handleSubmit = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!editable) return;
+    if (form.is_objective && !form.objective_year) {
+      setError('Indiquez l’année de l’objectif DMO.');
+      setActiveTab('objectives');
+      return;
+    }
+    setSaving(true);
+    setError(null);
 
     try {
-      const { data: userData } = await supabase.auth.getUser();
-      
-      const payload = {
-        ...formData,
-        initial_budget: formData.initial_budget ? parseFloat(formData.initial_budget) : null,
-        final_budget: formData.final_budget ? parseFloat(formData.final_budget) : null,
-        total_housing_units: parseInt(formData.total_housing_units) || 0,
-        lli_units: parseInt(formData.lli_units) || 0,
-        lls_units: parseInt(formData.lls_units) || 0,
-        plai_units: parseInt(formData.plai_units) || 0,
-        pls_units: parseInt(formData.pls_units) || 0,
-        brs_units: parseInt(formData.brs_units) || 0,
-        psla_units: parseInt(formData.psla_units) || 0,
-        student_units: parseInt(formData.student_units) || 0,
-        specific_units: parseInt(formData.specific_units) || 0,
-        individual_housing_units: parseInt(formData.individual_housing_units) || 0,
-        collective_housing_units: parseInt(formData.collective_housing_units) || 0,
-        user_id: userData.user?.id,
-        // Convert empty strings to null for dates
-        contractual_delivery_date: formData.contractual_delivery_date || null,
-        expected_delivery_date: formData.expected_delivery_date || null,
-        actual_delivery_date: formData.actual_delivery_date || null,
-        daact_date: formData.daact_date || null,
-      };
-
-      let insertError;
-      
-      if (id) {
-        const { error } = await supabase.from('operations').update(payload).eq('id', id);
-        insertError = error;
-      } else {
-        const { error } = await supabase.from('operations').insert([payload]);
-        insertError = error;
-      }
-
-      if (insertError) throw insertError;
-      
-      triggerSuccessToast(useStore.getState().user?.email, 'Opération sauvegardée avec succès.');
-      navigate(id ? `/operations/${id}` : '/');
-    } catch (err: any) {
-      console.error(err);
-      setError(err.message || 'Une erreur est survenue lors de la création.');
+      const payload = toOperationPayload(form, user?.id);
+      const query = id
+        ? supabase.from('operations').update(payload).eq('id', id).select('id').single()
+        : supabase.from('operations').insert(payload).select('id').single();
+      const { data, error: operationError } = await query;
+      if (operationError) throw operationError;
+      const operationId = data.id as string;
+      await syncTypologies(operationId);
+      await syncSubsidies(operationId);
+      await syncConditions(operationId);
+      triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
+      navigate(`/operations/${operationId}`);
+    } catch (caught) {
+      const message = caught instanceof Error ? caught.message : 'Une partie de la fiche n’a pas pu être enregistrée.';
+      setError(isSchemaMigrationError(caught) ? SCHEMA_MIGRATION_MESSAGE : `Enregistrement interrompu : ${message}`);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
+
+  const activeContent = useMemo(() => {
+    const common = { form, onChange: changeField };
+    switch (activeTab) {
+      case 'program': return <ProgramSection {...common} typologies={typologies} onTypologiesChange={setTypologies} />;
+      case 'planning': return <PlanningSection {...common} />;
+      case 'budget': return <BudgetSection {...common} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
+      case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
+      case 'objectives': return <ObjectivesSection {...common} />;
+      case 'synthesis': return <SynthesisSection {...common} />;
+      default: return <GeneralSection {...common} suggestions={suggestions} />;
+    }
+  }, [activeTab, conditions, form, subsidies, suggestions, typologies]);
+
+  if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 
   return (
-    <div className="max-w-4xl mx-auto pb-12">
-
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-slate-900 flex items-center gap-2">
-          <Building2 size={24} className="text-primary" />
-          {id ? 'Modifier l\'Opération' : 'Nouvelle Opération'}
-        </h1>
-        <button 
-          onClick={() => navigate(id ? `/operations/${id}` : '/')}
-          className="text-slate-500 hover:text-slate-700 p-2 rounded-full hover:bg-slate-100 transition"
-        >
-          <X size={24} />
-        </button>
-      </div>
-
-      {error && (
-        <div className="bg-danger/10 text-danger p-4 rounded-lg mb-6 border border-danger/20">
-          {error}
+    <div className="mx-auto max-w-[1500px] pb-28">
+      <header className="mb-7 flex flex-col justify-between gap-5 md:flex-row md:items-end">
+        <div>
+          <button type="button" onClick={() => navigate(id ? `/operations/${id}` : '/')} className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-teal-800"><ArrowLeft size={17} /> Retour</button>
+          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-teal-700">Fiche opération DMO</p>
+          <h1 className="mt-1 max-w-4xl text-3xl font-black tracking-tight text-slate-950 md:text-4xl">{id ? form.name || 'Modifier l’opération' : 'Créer une opération complète'}</h1>
         </div>
-      )}
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Avancement</p><p className="mt-1 text-sm font-bold text-slate-700">Section {tabs.findIndex((tab) => tab.id === activeTab) + 1} sur {tabs.length}</p></div>
+      </header>
 
-      <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 rounded-xl shadow-sm border border-slate-200">
-        
-        {/* Informations Générales */}
-        <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Informations Générales</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Nom de l'opération *</label>
-              <input required type="text" name="name" value={formData.name} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            
-            <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Gestionnaire *</label>
-              <input required type="text" name="manager_name" value={formData.manager_name} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" placeholder="Nom du gestionnaire" />
-            </div>
-            
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Conducteur de travaux *</label>
-              {managers.length > 0 && !showCustomManager && (!formData.project_manager || managers.includes(formData.project_manager)) ? (
-                <select 
-                  required
-                  value={formData.project_manager}
-                  onChange={(e) => {
-                    if (e.target.value === 'NEW') {
-                      setShowCustomManager(true);
-                      setFormData({...formData, project_manager: ''});
-                    } else {
-                      setFormData({...formData, project_manager: e.target.value});
-                    }
-                  }}
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-                >
-                  <option value="" disabled>Sélectionner...</option>
-                  {managers.map(m => <option key={m} value={m}>{m}</option>)}
-                  <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
-                </select>
-              ) : (
-                <div className="relative">
-                  <input required type="text" placeholder="Nom du conducteur..." value={formData.project_manager} onChange={(e) => setFormData({...formData, project_manager: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none pr-16" />
-                  {managers.length > 0 && (
-                    <button type="button" onClick={() => { setShowCustomManager(false); setFormData({...formData, project_manager: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
-                      Retour liste
-                    </button>
-                  )}
-                </div>
-              )}
-            </div>
+      {error && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-900">{error}</div>}
+      {!editable && <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900">Votre rôle permet la consultation, mais pas la modification.</div>}
 
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Type d'opération *</label>
-              {!showCustomOpType && opTypes.includes(formData.operation_type) ? (
-                <select 
-                  required
-                  name="operation_type" 
-                  value={formData.operation_type} 
-                  onChange={(e) => {
-                    if (e.target.value === 'NEW') {
-                      setShowCustomOpType(true);
-                      setFormData({...formData, operation_type: ''});
-                    } else handleChange(e);
-                  }} 
-                  className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none"
-                >
-                  {opTypes.map(t => <option key={t} value={t}>{t}</option>)}
-                  <option value="NEW" className="font-bold text-primary">+ Autre type...</option>
-                </select>
-              ) : (
-                <div className="relative">
-                  <input required type="text" placeholder="Type (ex: MOD, VEFA...)" value={formData.operation_type} onChange={(e) => setFormData({...formData, operation_type: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none pr-16" />
-                  <button type="button" onClick={() => { setShowCustomOpType(false); setFormData({...formData, operation_type: 'MOD'}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
-                    Liste
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {formData.operation_type === 'VEFA' && (
-              <div className="col-span-1 md:col-span-2 border-l-4 border-warning pl-4 py-2 bg-warning/5 rounded-r">
-                <label className="block text-sm font-medium text-slate-800 mb-1">Nom du promoteur (Obligatoire pour VEFA) *</label>
-                {promoters.length > 0 && !showCustomPromoter && (!formData.promoter_name || promoters.includes(formData.promoter_name)) ? (
-                  <select 
-                    required
-                    value={formData.promoter_name}
-                    onChange={(e) => {
-                      if (e.target.value === 'NEW') {
-                        setShowCustomPromoter(true);
-                        setFormData({...formData, promoter_name: ''});
-                      } else setFormData({...formData, promoter_name: e.target.value});
-                    }}
-                    className="w-full px-4 py-2 border border-warning/30 rounded-lg focus:ring-2 focus:ring-warning outline-none bg-white"
-                  >
-                    <option value="" disabled>Sélectionner...</option>
-                    {promoters.map(m => <option key={m} value={m}>{m}</option>)}
-                    <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
-                  </select>
-                ) : (
-                  <div className="relative">
-                    <input required type="text" placeholder="Nom du promoteur..." value={formData.promoter_name} onChange={(e) => setFormData({...formData, promoter_name: e.target.value})} className="w-full px-4 py-2 border border-warning/30 rounded-lg focus:ring-2 focus:ring-warning outline-none bg-white pr-16" />
-                    {promoters.length > 0 && (
-                      <button type="button" onClick={() => { setShowCustomPromoter(false); setFormData({...formData, promoter_name: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
-                        Retour liste
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
-            
-            {formData.operation_type !== 'VEFA' && (
-              <div className="col-span-1 md:col-span-2">
-                <label className="block text-sm font-medium text-slate-700 mb-1">Nom du promoteur</label>
-                {promoters.length > 0 && !showCustomPromoter && (!formData.promoter_name || promoters.includes(formData.promoter_name)) ? (
-                  <select 
-                    value={formData.promoter_name}
-                    onChange={(e) => {
-                      if (e.target.value === 'NEW') {
-                        setShowCustomPromoter(true);
-                        setFormData({...formData, promoter_name: ''});
-                      } else setFormData({...formData, promoter_name: e.target.value});
-                    }}
-                    className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none"
-                  >
-                    <option value="">(Aucun)</option>
-                    {promoters.map(m => <option key={m} value={m}>{m}</option>)}
-                    <option value="NEW" className="font-bold text-primary">+ Saisir un nouveau...</option>
-                  </select>
-                ) : (
-                  <div className="relative">
-                    <input type="text" placeholder="Nom du promoteur..." value={formData.promoter_name} onChange={(e) => setFormData({...formData, promoter_name: e.target.value})} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary outline-none pr-16" />
-                    {promoters.length > 0 && (
-                      <button type="button" onClick={() => { setShowCustomPromoter(false); setFormData({...formData, promoter_name: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
-                        Retour liste
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            )}
+      <OperationTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
+      <form onSubmit={handleSubmit}>
+        <fieldset disabled={!editable || saving} className="rounded-3xl border border-slate-200 bg-[#fbfcfa] p-5 shadow-sm md:p-8">{activeContent}</fieldset>
+        <div className="fixed bottom-0 left-64 right-0 z-30 border-t border-slate-200 bg-white/95 px-8 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur">
+          <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
+            <p className="hidden text-xs font-semibold text-slate-500 md:block">Les champs calculés seront mis à jour à l’enregistrement.</p>
+            <button disabled={!editable || saving} type="submit" className="ml-auto inline-flex items-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-900/15 transition hover:-translate-y-0.5 hover:bg-teal-900 disabled:translate-y-0 disabled:opacity-50"><Save size={18} /> {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
           </div>
-        </section>
-
-        {/* Planning */}
-        <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Planning & Dates</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date contractuelle de livraison</label>
-              <input type="date" name="contractual_delivery_date" value={formData.contractual_delivery_date} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date prévisionnelle de livraison</label>
-              <input type="date" name="expected_delivery_date" value={formData.expected_delivery_date} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date réelle de livraison</label>
-              <input type="date" name="actual_delivery_date" value={formData.actual_delivery_date} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date DAACT</label>
-              <input type="date" name="daact_date" value={formData.daact_date} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-          </div>
-        </section>
-
-        {/* Logements */}
-        <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Détails des logements</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4 mb-4">
-            <div className="col-span-2 md:col-span-4 bg-slate-50 p-4 rounded-lg border border-slate-200 mb-2">
-              <label className="block text-sm font-medium text-slate-800 mb-1">Nombre total de logements</label>
-              <input type="number" min="0" name="total_housing_units" value={formData.total_housing_units} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none max-w-xs" />
-            </div>
-            
-            {/* Répartition */}
-            <div><label className="block text-xs text-slate-500 mb-1">LLI</label><input type="number" min="0" name="lli_units" value={formData.lli_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">LLS</label><input type="number" min="0" name="lls_units" value={formData.lls_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">PLAI</label><input type="number" min="0" name="plai_units" value={formData.plai_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">PLS</label><input type="number" min="0" name="pls_units" value={formData.pls_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">BRS</label><input type="number" min="0" name="brs_units" value={formData.brs_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">PSLA</label><input type="number" min="0" name="psla_units" value={formData.psla_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">Etudiant</label><input type="number" min="0" name="student_units" value={formData.student_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-            <div><label className="block text-xs text-slate-500 mb-1">Spécifique</label><input type="number" min="0" name="specific_units" value={formData.specific_units} onChange={handleChange} className="w-full px-3 py-1.5 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" /></div>
-          </div>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Logements Individuels</label>
-              <input type="number" min="0" name="individual_housing_units" value={formData.individual_housing_units} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Logements Collectifs</label>
-              <input type="number" min="0" name="collective_housing_units" value={formData.collective_housing_units} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-          </div>
-        </section>
-
-        {/* Budget */}
-        <section>
-          <h2 className="text-lg font-semibold text-slate-800 mb-4 pb-2 border-b border-slate-100">Budget (€)</h2>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Budget Initial</label>
-              <input type="number" step="0.01" name="initial_budget" value={formData.initial_budget} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Budget Final</label>
-              <input type="number" step="0.01" name="final_budget" value={formData.final_budget} onChange={handleChange} className="w-full px-4 py-2 border border-slate-300 rounded-lg focus:ring-2 focus:ring-primary focus:border-primary outline-none" />
-            </div>
-          </div>
-        </section>
-
-        <div className="pt-6 border-t border-slate-200 flex justify-end gap-4">
-          <button
-            type="button"
-            onClick={() => navigate('/')}
-            className="px-6 py-2 border border-slate-300 text-slate-700 font-medium rounded-lg hover:bg-slate-50 transition"
-          >
-            Annuler
-          </button>
-          <button
-            type="submit"
-            disabled={loading}
-            className="px-6 py-2 bg-primary text-white font-medium rounded-lg hover:bg-primary/90 flex items-center gap-2 transition disabled:opacity-50"
-          >
-            <Save size={20} />
-            {loading ? 'Enregistrement...' : 'Enregistrer l\'opération'}
-          </button>
         </div>
       </form>
     </div>
