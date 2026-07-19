@@ -1,9 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Building2, LayoutDashboard, ListTodo, LogOut, CalendarDays, BarChart3 } from 'lucide-react';
+import { Building2, LayoutDashboard, ListTodo, LogOut, CalendarDays, BarChart3, UserCog } from 'lucide-react';
+import { useStore } from '../../store/useStore';
+import { can } from '../../lib/permissions';
 
 export default function Sidebar() {
   const navigate = useNavigate();
+  const profile = useStore((state) => state.profile);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -48,6 +51,12 @@ export default function Sidebar() {
           <BarChart3 size={20} />
           <span className="font-medium">Statistiques</span>
         </NavLink>
+        {can(profile?.role, 'administerUsers') && (
+          <NavLink to="/admin/users" className={navItemClass}>
+            <UserCog size={20} />
+            <span className="font-medium">Utilisateurs</span>
+          </NavLink>
+        )}
       </nav>
 
       <div className="p-4 border-t border-slate-200">

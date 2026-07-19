@@ -10,12 +10,15 @@ import OperationDetail from './pages/OperationDetail';
 import Observations from './pages/Observations';
 import CalendarView from './pages/CalendarView';
 import Statistics from './pages/Statistics';
+import AdminUsers from './pages/AdminUsers';
+import { useProfile } from './hooks/useProfile';
+import { can } from './lib/permissions';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoadingAuth } = useStore();
+  const { user, isLoadingAuth, isLoadingProfile } = useStore();
   
-  if (isLoadingAuth) {
+  if (isLoadingAuth || (user && isLoadingProfile)) {
     return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
   }
   
@@ -26,8 +29,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <AppLayout>{children}</AppLayout>;
 }
 
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const { profile, isLoadingProfile } = useStore();
+  return (
+    <ProtectedRoute>
+      {isLoadingProfile
+        ? <div className="p-8 text-center text-slate-500">Chargement du profil…</div>
+        : can(profile?.role, 'administerUsers') ? children : <Navigate to="/" replace />}
+    </ProtectedRoute>
+  );
+}
+
 function App() {
   const { setUser, setIsLoadingAuth } = useStore();
+  useProfile();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -54,6 +69,10 @@ function App() {
               <Dashboard />
             </ProtectedRoute>
           } 
+        />
+        <Route
+          path="/admin/users"
+          element={<AdminRoute><AdminUsers /></AdminRoute>}
         />
         <Route 
           path="/operations/new" 

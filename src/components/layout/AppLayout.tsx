@@ -3,7 +3,7 @@ import Sidebar from './Sidebar';
 import { useStore } from '../../store/useStore';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
-  const { toastMessage, setToastMessage } = useStore();
+  const { toastMessage, setToastMessage, schemaMessage } = useStore();
 
   useEffect(() => {
     if (toastMessage) {
@@ -18,6 +18,11 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
     <div className="min-h-screen bg-slate-50 flex">
       <Sidebar />
       <main className="flex-1 ml-64 p-8 overflow-y-auto h-screen relative">
+        {schemaMessage && (
+          <div role="alert" className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950">
+            {schemaMessage}
+          </div>
+        )}
         {toastMessage && (
           <div className="fixed bottom-6 right-6 z-50 animate-in fade-in slide-in-from-bottom-4 duration-300">
             <div className="bg-white border-l-4 border-primary shadow-lg rounded-r-lg p-4 pr-10 max-w-sm flex items-start gap-3">
