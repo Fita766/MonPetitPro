@@ -13,6 +13,7 @@ import Statistics from './pages/Statistics';
 import AdminUsers from './pages/AdminUsers';
 import { useProfile } from './hooks/useProfile';
 import { can } from './lib/permissions';
+import Objectives from './pages/Objectives';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -122,6 +123,7 @@ function App() {
             </ProtectedRoute>
           } 
         />
+        <Route path="/objectives" element={<ProtectedRoute><Objectives /></ProtectedRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

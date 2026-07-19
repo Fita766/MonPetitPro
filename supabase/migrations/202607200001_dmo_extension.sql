@@ -101,6 +101,8 @@ alter table public.operations
   add column if not exists h2_actual_date date,
   add column if not exists objective_year integer,
   add column if not exists is_objective boolean not null default false,
+  add column if not exists objective_management_date date,
+  add column if not exists objective_housing_units integer,
   add column if not exists synthesis_description text,
   add column if not exists significant_works text,
   add column if not exists updated_at timestamptz not null default now();
@@ -202,6 +204,33 @@ begin
   return new;
 end;
 $$;
+
+create or replace function public.freeze_operation_objective()
+returns trigger language plpgsql set search_path = public as $$
+begin
+  if not new.is_objective then
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    new.objective_management_date := coalesce(new.objective_management_date, new.management_expected_date);
+    new.objective_housing_units := coalesce(new.objective_housing_units, new.total_housing_units, 0);
+  elsif old.is_objective is distinct from true
+    or old.objective_year is distinct from new.objective_year
+    or old.objective_management_date is null then
+    new.objective_management_date := coalesce(new.objective_management_date, new.management_expected_date);
+    new.objective_housing_units := coalesce(new.objective_housing_units, new.total_housing_units, 0);
+  else
+    new.objective_management_date := old.objective_management_date;
+    new.objective_housing_units := old.objective_housing_units;
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists freeze_operation_objective on public.operations;
+create trigger freeze_operation_objective before insert or update on public.operations
+for each row execute function public.freeze_operation_objective();
 
 create or replace function public.current_user_role()
 returns public.user_role language sql stable security definer set search_path = public as $$

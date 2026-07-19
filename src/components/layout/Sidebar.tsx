@@ -1,6 +1,6 @@
 import { NavLink, useNavigate } from 'react-router-dom';
 import { supabase } from '../../lib/supabase';
-import { Building2, LayoutDashboard, ListTodo, LogOut, CalendarDays, BarChart3, UserCog } from 'lucide-react';
+import { Building2, LayoutDashboard, ListTodo, LogOut, CalendarDays, BarChart3, UserCog, Target } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import { can } from '../../lib/permissions';
 
@@ -50,6 +50,10 @@ export default function Sidebar() {
         <NavLink to="/statistics" className={navItemClass}>
           <BarChart3 size={20} />
           <span className="font-medium">Statistiques</span>
+        </NavLink>
+        <NavLink to="/objectives" className={navItemClass}>
+          <Target size={20} />
+          <span className="font-medium">Objectifs DMO</span>
         </NavLink>
         {can(profile?.role, 'administerUsers') && (
           <NavLink to="/admin/users" className={navItemClass}>
