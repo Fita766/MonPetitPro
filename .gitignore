@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Documents métier locaux et références de modification
+dossiers modifs/
