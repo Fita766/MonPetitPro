@@ -1,5 +1,7 @@
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
+-- Le schéma DMO complet et exécutable se trouve dans :
+-- supabase/migrations/202607200001_dmo_extension.sql
 
 CREATE TABLE public.observations (
   id uuid NOT NULL DEFAULT uuid_generate_v4(),
@@ -41,3 +43,9 @@ CREATE TABLE public.operations (
   CONSTRAINT operations_pkey PRIMARY KEY (id),
   CONSTRAINT operations_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
+
+-- Tables ajoutées par la migration DMO :
+-- profiles, operation_typologies, operation_subsidies, suspensive_conditions,
+-- operation_documents, document_review_items et audit_log.
+-- Colonnes d'observation ajoutées : author_initials, resolution_date,
+-- resolution_validated_at, resolution_validated_by, is_dg et status.
