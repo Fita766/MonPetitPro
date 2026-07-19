@@ -1,273 +1,92 @@
-import { useState, useEffect } from 'react';
+import { useEffect, useMemo, useState } from 'react';
+import { BarChart3, Building2, CheckCircle2, Download, FileSpreadsheet, TriangleAlert } from 'lucide-react';
+import ExcelJS from 'exceljs';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
 import { supabase } from '../lib/supabase';
-import { LayoutDashboard, CheckCircle2, AlertTriangle, Clock, BarChart3, Users } from 'lucide-react';
+import { aggregateBudget, aggregateCtxStats, aggregatePromoters, buildDeliveryStats, type StatisticsOperation } from '../lib/statistics';
+import { getObservationStatus, normalizeObservation, type ObservationRow } from '../lib/observationStatus';
+import MultiSelectFilter from '../components/filters/MultiSelectFilter';
+import PromoterStats from '../components/statistics/PromoterStats';
+import CtxStats from '../components/statistics/CtxStats';
+import DeliveryStats from '../components/statistics/DeliveryStats';
+import BudgetStats from '../components/statistics/BudgetStats';
 
-const STATUS_COLORS: Record<string, string> = {
-  'Réussi': 'bg-emerald-500',
-  'En cours': 'bg-blue-500',
-  'En retard': 'bg-amber-500',
-  'Échec': 'bg-red-500',
-  'Bloqué': 'bg-purple-500',
-  'Terminé': 'bg-emerald-500'
-};
+type StatisticsTab = 'overview' | 'promoters' | 'ctx' | 'deliveries' | 'budget';
+type StatsObservation = ObservationRow & { status: string };
 
+const TABS: { id: StatisticsTab; label: string }[] = [
+  { id: 'overview', label: 'Vue d’ensemble' }, { id: 'promoters', label: 'Promoteurs' }, { id: 'ctx', label: 'CTX' },
+  { id: 'deliveries', label: 'Livraisons' }, { id: 'budget', label: 'Budget' },
+];
 
 export default function Statistics() {
-  const [operations, setOperations] = useState<any[]>([]);
-  const [observations, setObservations] = useState<any[]>([]);
+  const currentYear = new Date().getFullYear();
+  const [operations, setOperations] = useState<StatisticsOperation[]>([]);
+  const [observations, setObservations] = useState<StatsObservation[]>([]);
+  const [selectedYears, setSelectedYears] = useState<string[]>([String(currentYear)]);
+  const [tab, setTab] = useState<StatisticsTab>('overview');
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    fetchData();
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('operations').select('*'),
+      supabase.from('observations').select('*'),
+    ]).then(([operationResult, observationResult]) => {
+      if (cancelled) return;
+      const firstError = operationResult.error || observationResult.error;
+      if (firstError) setError(firstError.message); else {
+        setOperations((operationResult.data as StatisticsOperation[] | null) ?? []);
+        setObservations(((observationResult.data ?? []) as StatsObservation[]).map(normalizeObservation));
+      }
+      setLoading(false);
+    });
+    return () => { cancelled = true; };
   }, []);
 
-  const fetchData = async () => {
-    setLoading(true);
-    try {
-      const { data: ops } = await supabase.from('operations').select('*');
-      if (ops) setOperations(ops);
+  const years = useMemo(() => {
+    const values = new Set<string>([String(currentYear)]);
+    operations.forEach((operation) => { const date = operation.actual_delivery_date || operation.expected_delivery_date; if (date) values.add(date.slice(0, 4)); });
+    return [...values].sort((left, right) => Number(right) - Number(left));
+  }, [currentYear, operations]);
+  const numericYears = useMemo(() => selectedYears.length ? selectedYears.map(Number) : [currentYear], [currentYear, selectedYears]);
+  const focusYear = Math.max(...numericYears);
+  const promoters = useMemo(() => aggregatePromoters(operations, numericYears), [numericYears, operations]);
+  const ctxRows = useMemo(() => aggregateCtxStats(operations, focusYear), [focusYear, operations]);
+  const deliveryRows = useMemo(() => buildDeliveryStats(operations, focusYear), [focusYear, operations]);
+  const budget = useMemo(() => aggregateBudget(operations, numericYears), [numericYears, operations]);
+  const completedObservations = observations.filter((observation) => ['Terminé', 'Réussi'].includes(getObservationStatus(observation))).length;
+  const lateObservations = observations.filter((observation) => getObservationStatus(observation) === 'En retard').length;
+  const totalHousing = operations.reduce((sum, operation) => sum + (operation.total_housing_units ?? 0), 0);
 
-      const { data: obs } = await supabase.from('observations').select('*, operations(name)');
-      if (obs) {
-        const processedObs = obs.map(o => {
-          let status = 'En cours';
-          const match = o.description?.match(/\n\n\[STATUT: (.*?)\]/);
-          if (match) {
-            status = match[1];
-          } else if (o.completion_date) {
-            status = 'Réussi';
-          } else if (new Date(o.deadline_date) < new Date()) {
-            status = 'En retard';
-          }
-          return { ...o, calculated_status: status };
-        });
-        setObservations(processedObs);
-      }
-    } catch (error) {
-      console.error('Error fetching data for stats', error);
-    } finally {
-      setLoading(false);
-    }
+  const exportData = () => {
+    if (tab === 'promoters') return { headers: ['Promoteur', 'Opérations', 'Logements', 'Réserves', 'Réserves/logt', 'Levée moyenne'], rows: promoters.map((row) => [row.name, row.operations, row.housing, row.reservations, row.reservationsPerHousing ?? '', row.averageClearanceDays ?? '']) };
+    if (tab === 'ctx') return { headers: ['CTX', 'Opérations', 'Logements', 'Réserves', 'Réserves/logt', 'Levée moyenne', `GPA ${focusYear - 1}`], rows: ctxRows.map((row) => [row.name, row.deliveredOperations, row.deliveredHousing, row.reservations, row.reservationsPerHousing ?? '', row.averageClearanceDays ?? '', row.previousYearAverageGpa ?? '']) };
+    if (tab === 'deliveries') return { headers: ['Mois', 'Prévisionnel', 'Réel', 'Prévisionnel cumulé', 'Réel cumulé'], rows: deliveryRows.map((row) => [row.label, row.expected, row.actual, row.expectedCumulative, row.actualCumulative]) };
+    if (tab === 'budget') return { headers: ['Opérations', 'Budget initial', 'Atterrissage', 'Écart'], rows: [[budget.operations, budget.initialBudget, budget.finalBudget, budget.variance]] };
+    return { headers: ['Indicateur', 'Valeur'], rows: [['Opérations', operations.length], ['Logements', totalHousing], ['Observations', observations.length], ['Observations terminées', completedObservations], ['Observations en retard', lateObservations]] };
   };
 
-  if (loading) {
-    return <div className="flex justify-center items-center h-[60vh]"><div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div></div>;
-  }
+  const exportExcel = async () => {
+    const data = exportData(); const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet('Statistiques'); sheet.addRow(data.headers); data.rows.forEach((row) => sheet.addRow(row)); sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } }; sheet.columns.forEach((column) => { column.width = 22; }); const buffer = await workbook.xlsx.writeBuffer(); const url = URL.createObjectURL(new Blob([buffer])); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `statistiques-${tab}-${numericYears.join('-')}.xlsx`; anchor.click(); URL.revokeObjectURL(url);
+  };
+  const exportPdf = () => { const data = exportData(); const document = new jsPDF({ orientation: 'landscape' }); document.setFontSize(16); document.text(`Statistiques MonPetitPro — ${numericYears.join(', ')}`, 14, 15); autoTable(document, { startY: 21, head: [data.headers], body: data.rows, styles: { fontSize: 8 }, headStyles: { fillColor: [15, 118, 110] } }); document.save(`statistiques-${tab}-${numericYears.join('-')}.pdf`); };
 
-  // --- KPIs ---
-  const totalOps = operations.length;
-  const totalObs = observations.length;
-  const completedObs = observations.filter(o => o.completion_date || o.calculated_status === 'Réussi').length;
-  const successRate = totalObs > 0 ? Math.round((completedObs / totalObs) * 100) : 0;
-  const delayedObs = observations.filter(o => o.calculated_status === 'En retard').length;
-
-  // --- Status Data for Progress Bars ---
-  const statusCounts = observations.reduce((acc, obs) => {
-    acc[obs.calculated_status] = (acc[obs.calculated_status] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-
-  const statusData = Object.entries(statusCounts)
-    .map(([name, value]: [string, any]) => ({ name, value, percentage: Math.round((value / totalObs) * 100) || 0 }))
-    .sort((a: any, b: any) => b.value - a.value);
-
-  // --- Operations Type Data ---
-  const typeCounts = operations.reduce((acc, op) => {
-    const type = op.operation_type || 'Non défini';
-    acc[type] = (acc[type] || 0) + 1;
-    return acc;
-  }, {} as Record<string, number>);
-  const typeData = Object.entries(typeCounts)
-    .map(([name, value]: [string, any]) => ({ name, value, percentage: Math.round((value / totalOps) * 100) || 0 }))
-    .sort((a: any, b: any) => b.value - a.value);
-
-  // --- Realisateur Data ---
-  const realisateursCounts = observations.reduce((acc, obs) => {
-    const r = obs.responsible_person || 'Non assigné';
-    if (!acc[r]) acc[r] = { name: r, assignees: 0, reussies: 0 };
-    acc[r].assignees += 1;
-    if (obs.completion_date || obs.calculated_status === 'Réussi') {
-      acc[r].reussies += 1;
-    }
-    return acc;
-  }, {} as Record<string, any>);
-  const realisateurData = Object.values(realisateursCounts)
-    .sort((a: any, b: any) => b.assignees - a.assignees)
-    .slice(0, 10);
-
-  const KpiCard = ({ title, value, subtext, icon: Icon, color }: any) => (
-    <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 flex items-start gap-4 hover:shadow-md transition-shadow">
-      <div className={`p-3 rounded-xl ${color}`}>
-        <Icon size={24} />
-      </div>
-      <div>
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">{title}</p>
-        <h3 className="text-3xl font-black text-slate-800 mt-1">{value}</h3>
-        {subtext && <p className="text-[11px] font-bold text-slate-400 mt-1 uppercase">{subtext}</p>}
-      </div>
-    </div>
-  );
+  if (loading) return <div className="flex min-h-[55vh] items-center justify-center text-slate-500">Calcul des statistiques…</div>;
 
   return (
-    <div className="pb-12 max-w-[1600px] mx-auto animate-fade-in">
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Tableau de Bord & Statistiques</h1>
-          <p className="text-slate-500 mt-1">Vue globale de l'activité et des performances.</p>
-        </div>
-        <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg font-semibold flex items-center gap-2">
-          <BarChart3 size={20} />
-          <span>Mise à jour en direct</span>
-        </div>
-      </div>
+    <div className="mx-auto max-w-[1700px] pb-12">
+      <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">Indicateurs DMO</p><h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">Statistiques</h1><p className="mt-2 text-sm text-slate-500">Livraisons, promoteurs, réserves, GPA et trajectoire budgétaire.</p></div><div className="flex flex-wrap gap-2"><MultiSelectFilter label="Années" options={years} values={selectedYears} onChange={setSelectedYears} /><button type="button" onClick={() => void exportExcel()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><FileSpreadsheet size={15} /> Excel</button><button type="button" onClick={exportPdf} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><Download size={15} /> PDF</button></div></header>
+      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{error}</div>}
+      <div className="mb-6 overflow-x-auto rounded-2xl border border-slate-200 bg-white p-1.5"><div className="flex min-w-max gap-1">{TABS.map((item) => <button key={item.id} type="button" onClick={() => setTab(item.id)} className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item.id ? 'bg-slate-950 text-white shadow-md' : 'text-slate-500 hover:bg-slate-100'}`}>{item.label}</button>)}</div></div>
 
-      {/* KPI Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-        <KpiCard 
-          title="Opérations Actives" 
-          value={totalOps} 
-          icon={LayoutDashboard} 
-          color="bg-indigo-50 text-indigo-600" 
-        />
-        <KpiCard 
-          title="Total Observations" 
-          value={totalObs} 
-          subtext="Total des points relevés"
-          icon={AlertTriangle} 
-          color="bg-amber-50 text-amber-600" 
-        />
-        <KpiCard 
-          title="Taux de Réussite" 
-          value={`${successRate}%`} 
-          subtext={`${completedObs} clôturées`}
-          icon={CheckCircle2} 
-          color="bg-emerald-50 text-emerald-600" 
-        />
-        <KpiCard 
-          title="Points en Retard" 
-          value={delayedObs} 
-          subtext="Dates butoires dépassées"
-          icon={Clock} 
-          color="bg-red-50 text-red-600" 
-        />
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
-        {/* Status Distribution */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
-            <BarChart3 size={18} className="text-primary"/> Répartition des Statuts
-          </h2>
-          <div className="space-y-5">
-            {statusData.map((status, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-bold text-slate-700 flex items-center gap-2">
-                    <span className={`w-3 h-3 rounded-full ${STATUS_COLORS[status.name] || 'bg-slate-400'}`}></span>
-                    {status.name}
-                  </span>
-                  <span className="font-bold text-slate-500">{status.value} ({status.percentage}%)</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                  <div 
-                    className={`h-2.5 rounded-full ${STATUS_COLORS[status.name] || 'bg-slate-400'}`} 
-                    style={{ width: `${status.percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Types d'Operations */}
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-          <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
-            <Building2 size={18} className="text-primary"/> Types d'Opérations
-          </h2>
-          <div className="space-y-5">
-            {typeData.map((type, i) => (
-              <div key={i}>
-                <div className="flex justify-between text-sm mb-1">
-                  <span className="font-bold text-slate-700">{type.name}</span>
-                  <span className="font-bold text-slate-500">{type.value} ({type.percentage}%)</span>
-                </div>
-                <div className="w-full bg-slate-100 rounded-full h-2.5 overflow-hidden">
-                  <div 
-                    className="h-2.5 rounded-full bg-indigo-500" 
-                    style={{ width: `${type.percentage}%` }}
-                  ></div>
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
-      
-      {/* Classement Réalisateurs */}
-      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6">
-        <h2 className="text-sm font-black text-slate-700 uppercase tracking-widest mb-6 flex items-center gap-2">
-          <Users size={18} className="text-primary"/> Classement par Réalisateur (Top 10)
-        </h2>
-        
-        <div className="overflow-x-auto">
-          <table className="w-full text-left">
-            <thead>
-              <tr className="border-b border-slate-100 text-xs uppercase tracking-wider text-slate-400">
-                <th className="pb-3 font-bold">Réalisateur</th>
-                <th className="pb-3 font-bold text-center">Total Assigné</th>
-                <th className="pb-3 font-bold text-center">Total Réussi</th>
-                <th className="pb-3 font-bold">Taux de succès</th>
-              </tr>
-            </thead>
-            <tbody>
-              {realisateurData.map((user: any, i) => {
-                const percentage = user.assignees > 0 ? Math.round((user.reussies / user.assignees) * 100) : 0;
-                return (
-                  <tr key={i} className="border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors">
-                    <td className="py-4 font-bold text-slate-700">{user.name}</td>
-                    <td className="py-4 text-center font-bold text-slate-600">
-                      <span className="bg-slate-100 px-3 py-1 rounded-full">{user.assignees}</span>
-                    </td>
-                    <td className="py-4 text-center font-bold text-emerald-600">
-                      <span className="bg-emerald-50 px-3 py-1 rounded-full">{user.reussies}</span>
-                    </td>
-                    <td className="py-4">
-                      <div className="flex items-center gap-3">
-                        <div className="w-32 bg-slate-100 rounded-full h-2 overflow-hidden">
-                          <div 
-                            className={`h-2 rounded-full ${percentage >= 80 ? 'bg-emerald-500' : percentage >= 50 ? 'bg-amber-500' : 'bg-red-500'}`} 
-                            style={{ width: `${percentage}%` }}
-                          ></div>
-                        </div>
-                        <span className="text-xs font-bold text-slate-500">{percentage}%</span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      </div>
+      {tab === 'overview' && <div><div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5"><div className="rounded-2xl bg-slate-950 p-5 text-white"><Building2 className="text-teal-300" /><p className="mt-4 text-3xl font-black">{operations.length}</p><p className="text-xs text-slate-400">opérations</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><BarChart3 className="text-teal-700" /><p className="mt-4 text-3xl font-black">{totalHousing.toLocaleString('fr-FR')}</p><p className="text-xs text-slate-500">logements suivis</p></div><div className="rounded-2xl border border-slate-200 bg-white p-5"><FileSpreadsheet className="text-sky-600" /><p className="mt-4 text-3xl font-black">{observations.length}</p><p className="text-xs text-slate-500">observations</p></div><div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5"><CheckCircle2 className="text-emerald-700" /><p className="mt-4 text-3xl font-black text-emerald-950">{completedObservations}</p><p className="text-xs text-emerald-700">terminées</p></div><div className="rounded-2xl border border-rose-200 bg-rose-50 p-5"><TriangleAlert className="text-rose-700" /><p className="mt-4 text-3xl font-black text-rose-950">{lateObservations}</p><p className="text-xs text-rose-700">en retard</p></div></div><div className="mt-6"><DeliveryStats rows={deliveryRows} /></div></div>}
+      {tab === 'promoters' && <PromoterStats rows={promoters} />}
+      {tab === 'ctx' && <CtxStats rows={ctxRows} year={focusYear} />}
+      {tab === 'deliveries' && <DeliveryStats rows={deliveryRows} />}
+      {tab === 'budget' && <BudgetStats stats={budget} />}
     </div>
   );
-}
-
-// Icon for Type
-function Building2({ size, className }: any) {
-  return (
-    <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
-      <rect x="4" y="2" width="16" height="20" rx="2" ry="2"></rect>
-      <path d="M9 22v-4h6v4"></path>
-      <path d="M8 6h.01"></path>
-      <path d="M16 6h.01"></path>
-      <path d="M12 6h.01"></path>
-      <path d="M12 10h.01"></path>
-      <path d="M12 14h.01"></path>
-      <path d="M16 10h.01"></path>
-      <path d="M16 14h.01"></path>
-      <path d="M8 10h.01"></path>
-      <path d="M8 14h.01"></path>
-    </svg>
-  )
 }
