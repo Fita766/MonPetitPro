@@ -25,3 +25,6 @@ dist-ssr
 
 # Documents métier locaux et références de modification
 dossiers modifs/
+
+# Worktrees de développement isolés
+.worktrees/
