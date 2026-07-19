@@ -1,493 +1,138 @@
-import { useEffect, useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, BadgeEuro, Building2, CalendarDays, Edit3, FileText, Flag, Plus, Trash2, UsersRound, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
+import { can } from '../lib/permissions';
+import { getStageConfig } from '../lib/stage';
+import { buildObservationPayload, buildResolutionValidationPayload, EMPTY_OBSERVATION_FORM, getObservationStatus, normalizeObservation, type ObservationFormData, type ObservationRow } from '../lib/observationStatus';
+import type { Operation, OperationSubsidy, OperationTypology, SuspensiveCondition } from '../types/domain';
+import ObservationForm from '../components/observations/ObservationForm';
+import ResolutionActions from '../components/observations/ResolutionActions';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { ArrowLeft, Calendar, FileText, CheckCircle2, AlertCircle, Clock, Trash2, Edit } from 'lucide-react';
 
-interface Operation {
-  id: string;
-  name: string;
-  project_manager: string;
-  manager_name: string;
-  operation_type: string;
-  promoter_name?: string;
-  expected_delivery_date?: string;
-  actual_delivery_date?: string;
-  total_housing_units: number;
-  lli_units: number;
-  lls_units: number;
-  plai_units: number;
-  pls_units: number;
-  brs_units: number;
-  psla_units: number;
-  student_units: number;
-  specific_units: number;
-  initial_budget: number;
+type DetailOperation = Partial<Operation> & Pick<Operation, 'id' | 'name'>;
+type DetailObservation = ObservationRow & { status: string; is_dg: boolean };
+
+function displayDate(value: unknown): string {
+  return typeof value === 'string' && value ? new Date(`${value}T12:00:00`).toLocaleDateString('fr-FR') : '—';
 }
 
-interface Observation {
-  id: string;
-  info_date: string;
-  description: string;
-  responsible_person: string;
-  deadline_date: string;
-  completion_date: string | null;
-  _custom_status?: string;
+function displayText(value: unknown): string {
+  return value == null || value === '' ? '—' : String(value);
+}
+
+function Info({ label, value }: { label: string; value: unknown }) {
+  return <div className="rounded-xl bg-slate-50 p-3"><p className="text-[10px] font-black uppercase tracking-wider text-slate-400">{label}</p><p className="mt-1 break-words text-sm font-bold text-slate-800">{displayText(value)}</p></div>;
 }
 
 export default function OperationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const [operation, setOperation] = useState<Operation | null>(null);
-  const [observations, setObservations] = useState<Observation[]>([]);
+  const profile = useStore((state) => state.profile);
+  const user = useStore((state) => state.user);
+  const [operation, setOperation] = useState<DetailOperation | null>(null);
+  const [observations, setObservations] = useState<DetailObservation[]>([]);
+  const [typologies, setTypologies] = useState<OperationTypology[]>([]);
+  const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
+  const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
   const [loading, setLoading] = useState(true);
-  
-  const [responsibles, setResponsibles] = useState<string[]>([]);
-  const [editingObsId, setEditingObsId] = useState<string | null>(null);
-
-  // Observation form
-  const [showObsForm, setShowObsForm] = useState(false);
-  const [showCustomResponsible, setShowCustomResponsible] = useState(false);
-  const [obsForm, setObsForm] = useState({
-    info_date: new Date().toISOString().split('T')[0],
-    description: '',
-    responsible_person: '',
-    deadline_date: '',
-    completion_date: '',
-    _custom_status: 'En cours'
-  });
-
-  const resetObsForm = () => {
-    setEditingObsId(null);
-    setObsForm({
-      info_date: new Date().toISOString().split('T')[0],
-      description: '',
-      responsible_person: '',
-      deadline_date: '',
-      completion_date: '',
-      _custom_status: 'En cours'
-    });
-    setShowCustomResponsible(false);
-    setShowObsForm(false);
-  };
+  const [error, setError] = useState<string | null>(null);
+  const [form, setForm] = useState<ObservationFormData | null>(null);
+  const [editing, setEditing] = useState<DetailObservation | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
-    if (id) {
-      fetchOperationData();
-    }
-  }, [id]);
-
-  const fetchOperationData = async () => {
-    try {
-      // Fetch operation
-      const { data: opData, error: opError } = await supabase
-        .from('operations')
-        .select('*')
-        .eq('id', id)
-        .single();
-        
-      if (opError) throw opError;
-      setOperation(opData);
-
-      // Fetch observations
-      const { data: obsData, error: obsError } = await supabase
-        .from('observations')
-        .select('*')
-        .eq('operation_id', id)
-        .order('deadline_date', { ascending: true });
-
-      if (obsError) throw obsError;
-      const obsList = (obsData || []).map(obs => {
-        const match = obs.description?.match(/\n\n\[STATUT: (.*?)\]/);
-        if (match) {
-            obs._custom_status = match[1];
-            obs.description = obs.description.replace(/\n\n\[STATUT: .*?\]/, '');
-        }
-        return obs;
-      });
-      setObservations(obsList);
-      
-      // Extraire les responsables uniques pour l'autocomplétion
-      const uniqueResp = Array.from(new Set(obsList.map(o => o.responsible_person).filter(Boolean)));
-      setResponsibles(uniqueResp as string[]);
-    } catch (error) {
-      console.error('Error fetching data:', error);
-    } finally {
+    if (!id) return;
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('operations').select('*').eq('id', id).single(),
+      supabase.from('observations').select('*').eq('operation_id', id).order('deadline_date'),
+      supabase.from('operation_typologies').select('*').eq('operation_id', id),
+      supabase.from('operation_subsidies').select('*').eq('operation_id', id),
+      supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
+    ]).then(([operationResult, observationResult, typologyResult, subsidyResult, conditionResult]) => {
+      if (cancelled) return;
+      const firstError = [operationResult, observationResult, typologyResult, subsidyResult, conditionResult].find((result) => result.error)?.error;
+      if (firstError) setError(firstError.message);
+      else {
+        setOperation(operationResult.data as DetailOperation);
+        setObservations(((observationResult.data ?? []) as DetailObservation[]).map(normalizeObservation));
+        setTypologies((typologyResult.data as OperationTypology[] | null) ?? []);
+        setSubsidies((subsidyResult.data as OperationSubsidy[] | null) ?? []);
+        setConditions((conditionResult.data as SuspensiveCondition[] | null) ?? []);
+      }
       setLoading(false);
-    }
-  };
-
-  const handleObsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      
-      let finalDescription = obsForm.description;
-      if (obsForm._custom_status && obsForm._custom_status !== 'En cours') {
-          finalDescription = `${obsForm.description}\n\n[STATUT: ${obsForm._custom_status}]`;
-      }
-
-      const isCompletedStatus = obsForm._custom_status === 'Réussi' || obsForm._custom_status === 'Échec';
-
-      const payload = {
-        operation_id: id,
-        user_id: userData.user?.id,
-        info_date: obsForm.info_date,
-        description: finalDescription,
-        responsible_person: obsForm.responsible_person,
-        deadline_date: obsForm.deadline_date,
-        completion_date: isCompletedStatus 
-            ? (obsForm.completion_date || new Date().toISOString().split('T')[0])
-            : (obsForm.completion_date || null)
-      };
-
-      if (editingObsId) {
-        const { error } = await supabase.from('observations').update(payload).eq('id', editingObsId);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from('observations').insert([payload]);
-        if (error) throw error;
-      }
-      
-      resetObsForm();
-      triggerSuccessToast(useStore.getState().user?.email, editingObsId ? 'Observation modifiée avec succès.' : 'Observation ajoutée avec succès.');
-      fetchOperationData();
-    } catch (error) {
-      console.error('Error adding/updating observation:', error);
-    }
-  };
-
-  const deleteObservation = async (obsId: string) => {
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette observation ?')) return;
-    try {
-      const { error } = await supabase.from('observations').delete().eq('id', obsId);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation supprimée avec succès.');
-      fetchOperationData();
-    } catch (e) {
-      console.error('Error deleting observation:', e);
-    }
-  };
-
-  const editObservation = (obs: Observation) => {
-    setEditingObsId(obs.id);
-    setObsForm({
-      info_date: obs.info_date,
-      description: obs.description,
-      responsible_person: obs.responsible_person,
-      deadline_date: obs.deadline_date,
-      completion_date: obs.completion_date || '',
-      _custom_status: obs._custom_status || 'En cours'
     });
-    setShowObsForm(true);
+    return () => { cancelled = true; };
+  }, [id, refreshKey]);
+
+  const responsibles = useMemo(() => [...new Set(observations.map((observation) => observation.responsible_person))].sort(), [observations]);
+  const stage = getStageConfig(operation?.stage);
+
+  const openEdit = (observation: DetailObservation) => {
+    setEditing(observation);
+    setForm({ operation_id: observation.operation_id, info_date: observation.info_date, description: observation.description, responsible_person: observation.responsible_person, deadline_date: observation.deadline_date, completion_date: observation.completion_date ?? '', resolution_date: observation.resolution_date ?? '', status: observation.status as ObservationFormData['status'], is_dg: observation.is_dg });
+  };
+
+  const saveObservation = async (event: React.FormEvent) => {
+    event.preventDefault();
+    if (!form || !user || !id) return;
+    setSaving(true);
+    const payload = buildObservationPayload(form, { userId: editing?.user_id ?? user.id, initials: editing?.author_initials ?? profile?.initials ?? user.email?.slice(0, 2).toUpperCase() ?? '??' });
+    const result = editing ? await supabase.from('observations').update(payload).eq('id', editing.id) : await supabase.from('observations').insert(payload);
+    if (result.error) setError(result.error.message); else { triggerSuccessToast(user.email, editing ? 'Observation modifiée.' : 'Observation ajoutée.'); setForm(null); setEditing(null); setRefreshKey((key) => key + 1); }
+    setSaving(false);
+  };
+
+  const validateResolution = async (observation: DetailObservation) => {
+    if (!user) return;
+    const { error: updateError } = await supabase.from('observations').update(buildResolutionValidationPayload(user.id)).eq('id', observation.id);
+    if (updateError) setError(updateError.message); else setRefreshKey((key) => key + 1);
+  };
+
+  const deleteObservation = async (observation: DetailObservation) => {
+    if (!window.confirm('Supprimer cette observation ?')) return;
+    const { error: deleteError } = await supabase.from('observations').delete().eq('id', observation.id);
+    if (deleteError) setError(deleteError.message); else setRefreshKey((key) => key + 1);
   };
 
   const deleteOperation = async () => {
-    if (!operation) return;
-    if (!window.confirm('Êtes-vous sûr de vouloir supprimer cette opération ET toutes ses observations ? Cette action est irréversible.')) return;
-    try {
-      const { error } = await supabase.from('operations').delete().eq('id', operation.id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Opération supprimée avec succès.');
-      navigate('/');
-    } catch (e) {
-      console.error('Error deleting operation:', e);
-    }
+    if (!operation || !window.confirm(`Supprimer « ${operation.name} » et ses observations ?`)) return;
+    const observationDelete = await supabase.from('observations').delete().eq('operation_id', operation.id);
+    if (observationDelete.error) { setError(observationDelete.error.message); return; }
+    const operationDelete = await supabase.from('operations').delete().eq('id', operation.id);
+    if (operationDelete.error) setError(operationDelete.error.message); else navigate('/');
   };
 
-  const markAsCompleted = async (obsId: string) => {
-    try {
-      const today = new Date().toISOString().split('T')[0];
-      const { error } = await supabase
-        .from('observations')
-        .update({ completion_date: today })
-        .eq('id', obsId);
-        
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation marquée comme terminée.');
-      fetchOperationData();
-    } catch (error) {
-      console.error('Error marking as completed:', error);
-    }
-  };
+  if (loading) return <div className="flex min-h-[55vh] items-center justify-center text-slate-500">Chargement de l’opération…</div>;
+  if (!operation) return <div className="rounded-2xl border border-red-200 bg-red-50 p-8 text-red-900">{error || 'Opération introuvable.'}</div>;
 
-  const getStatus = (obs: Observation) => {
-    if (obs._custom_status) {
-        if (obs._custom_status === 'Réussi') return { label: 'Réussi', color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle2 };
-        if (obs._custom_status === 'Échec') return { label: 'Échec', color: 'bg-red-100 text-red-800', icon: AlertCircle };
-        if (obs._custom_status === 'Bloqué') return { label: 'Bloqué', color: 'bg-orange-100 text-orange-800', icon: AlertCircle };
-    }
-    if (obs.completion_date) return { label: 'Terminé', color: 'bg-emerald-100 text-emerald-800', icon: CheckCircle2 };
-    
-    // Check if overdue
-    const deadline = new Date(obs.deadline_date);
-    const today = new Date();
-    today.setHours(0,0,0,0);
-    
-    if (deadline < today) {
-      return { label: 'En retard', color: 'bg-red-100 text-red-800', icon: AlertCircle };
-    }
-    
-    return { label: 'En cours', color: 'bg-amber-100 text-amber-800', icon: Clock };
-  };
-
-  if (loading) return <div className="p-8 text-center text-slate-500">Chargement...</div>;
-  if (!operation) return <div className="p-8 text-center text-slate-500">Opération introuvable.</div>;
+  const planning: [string, unknown][] = [
+    ['Contractuelle', operation.contractual_delivery_date], ['Prévisionnelle', operation.expected_delivery_date], ['Réelle', operation.actual_delivery_date],
+    ['MEG prévisionnelle', operation.management_expected_date], ['MEG réelle', operation.management_actual_date], ['Fin GPA', operation.gpa_end_date],
+  ];
 
   return (
-    <div className="pb-12">
-      <button 
-        onClick={() => navigate('/')}
-        className="flex items-center text-slate-500 hover:text-slate-800 mb-6 transition"
-      >
-        <ArrowLeft size={20} className="mr-2" /> Retour
-      </button>
+    <div className="mx-auto max-w-[1500px] pb-16">
+      <button type="button" onClick={() => navigate('/')} className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-teal-800"><ArrowLeft size={17} /> Toutes les opérations</button>
+      <header className="mb-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div style={{ backgroundColor: stage.color, color: stage.textColor }} className="px-7 py-4"><p className="text-xs font-black uppercase tracking-[0.24em]">Stade {operation.stage ?? '—'} · {stage.label}</p></div><div className="flex flex-col justify-between gap-5 px-7 py-6 lg:flex-row lg:items-end"><div><p className="text-[10px] font-black uppercase tracking-[0.24em] text-teal-700">{operation.operation_type ?? 'Type non renseigné'} · {operation.of_number || 'N° OF —'}</p><h1 className="mt-1 max-w-5xl text-4xl font-black tracking-tight text-slate-950">{operation.name}</h1><p className="mt-2 text-sm font-semibold text-slate-500">{[operation.department, operation.commune, operation.address].filter(Boolean).join(' · ') || 'Localisation non renseignée'}</p></div><div className="flex gap-2">{can(profile?.role, 'contribute') && <button type="button" onClick={() => navigate(`/operations/${operation.id}/edit`)} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-black text-white"><Edit3 size={16} /> Modifier</button>}{can(profile?.role, 'deleteOperation') && <button type="button" onClick={() => void deleteOperation()} className="rounded-xl border border-red-200 p-2.5 text-red-600 hover:bg-red-50"><Trash2 size={17} /></button>}</div></div></header>
+      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{error}</div>}
 
-      <div className="bg-white p-6 rounded-xl border border-slate-200 mb-8 shadow-sm">
-        <div className="flex flex-col sm:flex-row justify-between items-start mb-6 gap-4">
-          <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-2xl font-bold text-slate-900">{operation.name}</h1>
-              <span className="bg-slate-100 text-slate-700 text-xs px-2 py-1 rounded-md font-medium border border-slate-200">
-                {operation.operation_type}
-              </span>
-            </div>
-            <p className="text-slate-600 flex flex-col gap-1">
-              <span className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                  {operation.manager_name?.charAt(0).toUpperCase() || 'G'}
-                </span>
-                Gestionnaire : <span className="font-medium text-slate-800">{operation.manager_name || '-'}</span>
-              </span>
-              <span className="flex items-center gap-2">
-                <span className="w-6 h-6 rounded-full bg-slate-100 flex items-center justify-center text-xs font-bold text-slate-600">
-                  {operation.project_manager.charAt(0).toUpperCase()}
-                </span>
-                Conducteur (CTX) : <span className="font-medium text-slate-800">{operation.project_manager}</span>
-              </span>
-            </p>
-          </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => navigate(`/operations/${operation.id}/edit`)}
-              className="px-3 py-1.5 bg-white border border-slate-200 text-slate-600 rounded hover:bg-slate-50 flex items-center gap-2 text-sm font-medium transition"
-            >
-              <Edit size={16} /> Modifier
-            </button>
-            <button 
-              onClick={deleteOperation}
-              className="px-3 py-1.5 bg-white border border-danger/20 text-danger rounded hover:bg-danger/5 flex items-center gap-2 text-sm font-medium transition"
-            >
-              <Trash2 size={16} /> Supprimer
-            </button>
-          </div>
-        </div>
-
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 pt-4 border-t border-slate-100">
-          <div>
-            <p className="text-sm text-slate-500 mb-1">Livraison Prev</p>
-            <p className="font-medium text-slate-800 flex items-center gap-2">
-              <Calendar size={16} className="text-slate-400" />
-              {operation.expected_delivery_date ? new Date(operation.expected_delivery_date).toLocaleDateString() : '-'}
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500 mb-1">Livraison réelle</p>
-            <p className="font-medium flex items-center gap-2">
-              <Calendar size={16} className="text-slate-400" />
-              <span className={operation.actual_delivery_date ? 'text-emerald-600 font-bold' : 'text-slate-400 italic'}>
-                {operation.actual_delivery_date ? new Date(operation.actual_delivery_date).toLocaleDateString() : 'Non livré/Saisi'}
-              </span>
-            </p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500 mb-1">Type Logements</p>
-            <div className="flex flex-wrap gap-1 mt-1">
-              <span className="bg-slate-50 text-slate-600 px-1.5 py-0.5 rounded border border-slate-200 text-[10px] font-bold">TOTAL: {operation.total_housing_units}</span>
-              {operation.student_units > 0 && <span className="bg-blue-50 text-blue-700 px-1.5 py-0.5 rounded border border-blue-100 text-[10px] font-bold">ETUDIANT: {operation.student_units}</span>}
-              {operation.specific_units > 0 && <span className="bg-purple-50 text-purple-700 px-1.5 py-0.5 rounded border border-purple-100 text-[10px] font-bold">SPECIFIQUE: {operation.specific_units}</span>}
-            </div>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500 mb-1">Budget Initial</p>
-            <p className="font-medium text-slate-800">{operation.initial_budget ? `${operation.initial_budget.toLocaleString()} €` : '-'}</p>
-          </div>
-          <div>
-            <p className="text-sm text-slate-500 mb-1">Promoteur</p>
-            <p className="font-medium text-slate-800">{operation.promoter_name || '-'}</p>
-          </div>
-        </div>
+      <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800"><UsersRound size={17} className="text-teal-700" /> Équipe</h2><div className="mt-4 grid grid-cols-2 gap-3"><Info label="CTX" value={operation.project_manager} /><Info label="COP" value={operation.operations_manager} /><Info label="Assistante" value={operation.assistant_name} /><Info label="Gestionnaire" value={operation.manager_name} /><Info label="Promoteur" value={operation.promoter_name} /><Info label="Gesprojet" value={operation.gesprojet_number} /></div></section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800"><Building2 size={17} className="text-teal-700" /> Programme</h2><div className="mt-4 grid grid-cols-3 gap-3"><Info label="Total" value={operation.total_housing_units} /><Info label="Collectifs" value={operation.collective_housing_units} /><Info label="Individuels" value={operation.individual_housing_units} /><Info label="PLUS" value={operation.plus_units} /><Info label="PLAI" value={operation.plai_units} /><Info label="PLS" value={operation.pls_units} /></div><p className="mt-4 text-xs text-slate-500">{operation.certification || 'Certification non renseignée'} · {operation.thermal_regulation || 'Thermique non renseigné'} · {typologies.length} ligne(s) typologie</p></section>
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800"><BadgeEuro size={17} className="text-teal-700" /> Finances</h2><div className="mt-4 grid grid-cols-2 gap-3"><Info label="Budget initial" value={operation.initial_budget == null ? null : Number(operation.initial_budget).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} /><Info label="Atterrissage" value={operation.final_budget == null ? null : Number(operation.final_budget).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' })} /></div><div className="mt-4 space-y-2">{subsidies.slice(0, 3).map((subsidy) => <div key={subsidy.id} className="flex justify-between gap-4 text-xs"><span className="font-bold text-slate-600">{subsidy.provider}</span><span className="font-black text-slate-900">{subsidy.amount?.toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' }) ?? '—'}</span></div>)}{subsidies.length === 0 && <p className="text-xs text-slate-400">Aucune subvention.</p>}</div></section>
       </div>
 
-      <div className="flex justify-between items-center mb-6">
-        <h2 className="text-xl font-bold text-slate-800 flex items-center gap-2">
-          <FileText size={24} className="text-primary" />
-          Observations ({observations.length})
-        </h2>
-        <button 
-          onClick={() => showObsForm ? resetObsForm() : setShowObsForm(true)}
-          className="bg-slate-900 hover:bg-slate-800 text-white px-4 py-2 rounded-lg text-sm font-medium transition"
-        >
-          {showObsForm ? 'Annuler' : 'Ajouter une observation'}
-        </button>
-      </div>
+      <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm"><h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800"><CalendarDays size={17} className="text-teal-700" /> Planning synthétique</h2><div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">{planning.map(([label, value]) => <div key={String(label)} className="rounded-xl bg-slate-950 p-4 text-white"><p className="text-[10px] font-black uppercase tracking-wider text-teal-300">{label}</p><p className="mt-2 text-sm font-black">{displayDate(value)}</p></div>)}</div></section>
 
-      <datalist id="responsibles-list">
-        {responsibles.map(r => <option key={r} value={r} />)}
-      </datalist>
+      {(operation.is_objective || conditions.length > 0 || operation.synthesis_description) && <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">{operation.is_objective && <section className="rounded-2xl border border-teal-200 bg-teal-50 p-5"><h2 className="flex items-center gap-2 font-black text-teal-950"><Flag size={17} /> Objectif DMO {operation.objective_year}</h2><p className="mt-2 text-sm text-teal-800">{operation.total_housing_units ?? 0} logements rattachés à l’objectif.</p></section>}{conditions.length > 0 && <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5"><h2 className="font-black text-amber-950">Conditions suspensives</h2><div className="mt-3 space-y-2">{conditions.map((condition) => <p key={condition.id} className="text-xs text-amber-900"><strong>{condition.subject}</strong> · {condition.deadline_date ? displayDate(condition.deadline_date) : 'sans butoir'} {condition.completion_date ? '✓' : ''}</p>)}</div></section>}{operation.synthesis_description && <section className="rounded-2xl border border-slate-200 bg-white p-5"><h2 className="flex items-center gap-2 font-black text-slate-900"><FileText size={17} /> Synthèse</h2><p className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">{operation.synthesis_description}</p></section>}</div>}
 
-      {showObsForm && (
-        <form onSubmit={handleObsSubmit} className="bg-slate-50 p-6 rounded-xl border border-slate-200 mb-8">
-          <h3 className="font-medium text-slate-800 mb-4">{editingObsId ? 'Modifier l\'observation' : 'Nouvelle observation'}</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date de l'info *</label>
-              <input required type="date" value={obsForm.info_date} onChange={(e) => setObsForm({...obsForm, info_date: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" />
-            </div>
-            <div>
-                  <label className="block text-sm font-medium text-slate-700 mb-2">Réalisateur *</label>
-                  {responsibles.length > 0 && !showCustomResponsible && (!obsForm.responsible_person || responsibles.includes(obsForm.responsible_person)) ? (
-                    <select
-                      required
-                      value={obsForm.responsible_person}
-                      onChange={(e) => {
-                        if (e.target.value === 'NEW') {
-                          setShowCustomResponsible(true);
-                          setObsForm({...obsForm, responsible_person: ''});
-                        } else setObsForm({...obsForm, responsible_person: e.target.value});
-                      }}
-                      className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none"
-                    >
-                      <option value="" disabled>Sélectionner...</option>
-                      {responsibles.map((r, i) => <option key={i} value={r}>{r}</option>)}
-                      <option value="NEW" className="font-bold text-primary">+ Nouveau réalisateur...</option>
-                    </select>
-                  ) : (
-                    <div className="relative">
-                      <input
-                        required
-                        type="text"
-                        placeholder="Saisissez un nom"
-                        value={obsForm.responsible_person}
-                        onChange={(e) => setObsForm({...obsForm, responsible_person: e.target.value})}
-                        className="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-primary focus:bg-white transition-all outline-none pr-16"
-                      />
-                      {responsibles.length > 0 && (
-                        <button type="button" onClick={() => { setShowCustomResponsible(false); setObsForm({...obsForm, responsible_person: ''}); }} className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-semibold text-primary hover:underline">
-                          Retour liste
-                        </button>
-                      )}
-                    </div>
-                  )}
-            </div>
-            <div className="col-span-1 md:col-span-2">
-              <label className="block text-sm font-medium text-slate-700 mb-1">Description *</label>
-              <textarea required value={obsForm.description} onChange={(e) => setObsForm({...obsForm, description: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none min-h-[80px]" placeholder="Détail du problème ou de la remarque..." />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date butoir *</label>
-              <input required type="date" value={obsForm.deadline_date} onChange={(e) => setObsForm({...obsForm, deadline_date: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Date de réalisation</label>
-              <input type="date" value={obsForm.completion_date} onChange={(e) => setObsForm({...obsForm, completion_date: e.target.value})} className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none" />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-slate-700 mb-1">Statut</label>
-              <select 
-                value={obsForm._custom_status} 
-                onChange={(e) => setObsForm({...obsForm, _custom_status: e.target.value})}
-                className="w-full px-3 py-2 border border-slate-300 rounded focus:ring-2 focus:ring-primary outline-none bg-white"
-              >
-                <option value="En cours">En cours</option>
-                <option value="Réussi">Réussi</option>
-                <option value="Échec">Échec</option>
-                <option value="Bloqué">Bloqué</option>
-              </select>
-            </div>
-          </div>
-          <div className="flex justify-end">
-            <button type="submit" className="bg-primary hover:bg-primary/90 text-white px-6 py-2 rounded-lg font-medium transition">
-              Enregistrer
-            </button>
-          </div>
-        </form>
-      )}
+      <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex items-center justify-between bg-slate-950 px-6 py-5 text-white"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">Suivi partagé</p><h2 className="text-xl font-black">Observations · {observations.length}</h2></div>{can(profile?.role, 'contribute') && <button type="button" onClick={() => { setEditing(null); setForm(EMPTY_OBSERVATION_FORM(operation.id)); }} className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 text-sm font-black text-slate-950"><Plus size={16} /> Ajouter</button>}</div>{observations.length === 0 ? <p className="p-10 text-center text-sm text-slate-400">Aucune observation pour cette opération.</p> : <div className="divide-y divide-slate-100">{observations.map((observation) => <div key={observation.id} className="grid grid-cols-1 items-center gap-4 px-6 py-5 md:grid-cols-[110px_minmax(250px,1fr)_130px_130px_150px]"><div><span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-700">{getObservationStatus(observation)}</span><p className="mt-2 text-[10px] font-bold text-slate-400">Auteur {observation.author_initials ?? '—'}</p></div><div><p className="whitespace-pre-wrap text-sm leading-relaxed text-slate-700">{observation.description}</p>{observation.is_dg && <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">DG</span>}</div><Info label="Réalisateur" value={observation.responsible_person} /><div><p className="text-[10px] font-black uppercase text-slate-400">Butoir</p><p className="mt-1 text-xs font-bold">{displayDate(observation.deadline_date)}</p><p className="mt-2 text-[10px] font-black uppercase text-slate-400">Résolution</p><p className="mt-1 text-xs font-bold">{displayDate(observation.resolution_date)}</p></div><div className="flex justify-end gap-1">{can(profile?.role, 'contribute') && (!observation.resolution_validated_at || can(profile?.role, 'validateResolution')) && <button type="button" onClick={() => openEdit(observation)} className="rounded-lg p-2 text-slate-400 hover:bg-teal-50 hover:text-teal-700"><Edit3 size={16} /></button>}<ResolutionActions observation={observation} role={profile?.role} onValidate={() => void validateResolution(observation)} onDelete={() => void deleteObservation(observation)} /></div></div>)}</div>}</section>
 
-      {observations.length === 0 ? (
-        <div className="bg-white p-8 rounded-xl border border-slate-200 text-center shadow-sm">
-          <p className="text-slate-500">Aucune observation pour cette opération.</p>
-        </div>
-      ) : (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden flex flex-col">
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-50 border-b border-slate-200">
-                  <th className="p-4 font-medium text-slate-600 text-sm">Date d'info</th>
-                  <th className="p-4 font-medium text-slate-600 text-sm w-1/3">Description</th>
-                  <th className="p-4 font-medium text-slate-600 text-sm">Réalisateur</th>
-                  <th className="p-4 font-medium text-slate-600 text-sm">Date butoir</th>
-                  <th className="p-4 font-medium text-slate-600 text-sm">Statut</th>
-                  <th className="p-4 font-medium text-slate-600 text-sm text-right">Action</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {observations.map((obs) => {
-                  const status = getStatus(obs);
-                  const StatusIcon = status.icon;
-                  return (
-                    <tr key={obs.id} className="hover:bg-slate-50/50 transition-colors">
-                      <td className="p-4 text-sm text-slate-600">
-                        {new Date(obs.info_date).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-sm text-slate-800">
-                        {obs.description}
-                      </td>
-                      <td className="p-4 text-sm text-slate-700 font-medium">
-                        {obs.responsible_person}
-                      </td>
-                      <td className="p-4 text-sm text-slate-600">
-                        {new Date(obs.deadline_date).toLocaleDateString()}
-                      </td>
-                      <td className="p-4 text-sm">
-                        <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold ${status.color}`}>
-                          <StatusIcon size={14} />
-                          {status.label}
-                        </span>
-                      </td>
-                      <td className="p-4 text-sm text-right">
-                        {!obs.completion_date && (
-                          <button 
-                            onClick={() => markAsCompleted(obs.id)}
-                            className="text-primary hover:text-primary/80 font-medium text-xs border border-primary/20 bg-primary/5 hover:bg-primary/10 px-3 py-1.5 rounded transition inline-block mb-1"
-                          >
-                            Marquer terminé
-                          </button>
-                        )}
-                        {obs.completion_date && (
-                          <span className="text-xs text-slate-500 block text-right mt-1 mb-2">
-                            le {new Date(obs.completion_date).toLocaleDateString()}
-                          </span>
-                        )}
-                        <div className="flex justify-end gap-2 mt-2">
-                          <button onClick={() => editObservation(obs)} className="text-slate-400 hover:text-slate-600 transition" title="Modifier">
-                            <Edit size={16} />
-                          </button>
-                          <button onClick={() => deleteObservation(obs.id)} className="text-slate-400 hover:text-danger transition" title="Supprimer">
-                            <Trash2 size={16} />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+      {form && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white"><div className="flex items-center justify-between border-b border-slate-200 px-6 py-5"><h2 className="text-xl font-black">{editing ? 'Modifier l’observation' : 'Nouvelle observation'}</h2><button type="button" onClick={() => setForm(null)} className="rounded-full p-2 text-slate-400"><X /></button></div><div className="p-6"><ObservationForm fixedOperation value={form} operations={[{ id: operation.id, name: operation.name }]} responsibles={responsibles} saving={saving} onChange={setForm} onSubmit={saveObservation} onCancel={() => setForm(null)} /></div></div></div>}
     </div>
   );
 }
