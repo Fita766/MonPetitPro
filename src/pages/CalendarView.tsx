@@ -1,886 +1,173 @@
-import { useState, useEffect } from 'react';
-import { supabase } from '../lib/supabase';
-import { useStore } from '../store/useStore';
-import { triggerSuccessToast, triggerErrorToast } from '../lib/toastUtils';
-import { 
-  format, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, addYears, subYears,
-  startOfMonth, endOfMonth, startOfWeek, endOfWeek, startOfYear, endOfYear,
-  isSameMonth, isSameDay, eachDayOfInterval, eachMonthOfInterval,
-  parseISO
-} from 'date-fns';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { addMonths, eachDayOfInterval, endOfMonth, endOfWeek, format, isSameMonth, parseISO, startOfMonth, startOfWeek, subMonths } from 'date-fns';
 import { fr } from 'date-fns/locale';
+import { ChevronLeft, ChevronRight, Download, FileSpreadsheet, Plus, X } from 'lucide-react';
+import ExcelJS from 'exceljs';
 import { jsPDF } from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import ExcelJS from 'exceljs';
-import { 
-  ChevronLeft, ChevronRight, PlusCircle, X, MapPin, Video, 
-  AlignLeft, AlertTriangle, Calendar as CalendarIcon, Building, Download
-} from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useStore } from '../store/useStore';
+import { can } from '../lib/permissions';
+import { buildCalendarEvents, type BusinessCalendarEvent, type BusinessCalendarView, type CalendarCondition, type CalendarOperation } from '../lib/calendarEvents';
+import CalendarFilters, { type CalendarFilterState } from '../components/calendar/CalendarFilters';
+import CalendarLegend from '../components/calendar/CalendarLegend';
+import { FieldLabel, SelectInput, TextArea, TextInput } from '../components/operations/FormControls';
+import { triggerSuccessToast } from '../lib/toastUtils';
 
-type ViewMode = 'day' | 'week' | 'month' | 'year';
+type CalendarViewType = BusinessCalendarView | 'agenda';
+type CalendarDisplay = 'month' | 'year';
 
-interface EventItem {
+interface ManualEventRow {
   id: string;
   title: string;
   event_date: string;
-  event_time?: string | null;
-  address?: string | null;
+  event_time: string | null;
+  description: string | null;
+  operation_id: string | null;
+}
+
+interface CalendarObservationRow {
+  id: string;
+  operation_id: string;
+  description: string;
+  deadline_date: string;
+  completion_date: string | null;
+}
+
+interface DisplayEvent extends BusinessCalendarEvent {
+  manualId?: string;
   description?: string | null;
-  visio_link?: string | null;
-  operation_id?: string | null;
-  observation_id?: string | null;
+  time?: string | null;
+}
+
+const EMPTY_FILTERS: CalendarFilterState = { operations: [], ctxs: [], cops: [], departments: [], promoters: [] };
+const VIEW_LABELS: { id: CalendarViewType; label: string; description: string }[] = [
+  { id: 'conditions', label: 'Conditions suspensives', description: 'Butoirs et réalisations' },
+  { id: 'deliveries', label: 'Livraisons', description: 'Réelle, révisée ou contractuelle' },
+  { id: 'management', label: 'Mises en gestion', description: 'MEG réelle ou prévisionnelle' },
+  { id: 'key-dates', label: 'Dates clés', description: 'Jalons BA à CG' },
+  { id: 'agenda', label: 'Agenda libre', description: 'Événements et observations existants' },
+];
+
+function unique(values: (string | null | undefined)[]) {
+  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort((a, b) => a.localeCompare(b, 'fr'));
+}
+
+function eventMatches(event: BusinessCalendarEvent, filters: CalendarFilterState) {
+  return (!filters.operations.length || filters.operations.includes(event.operationName))
+    && (!filters.ctxs.length || (event.ctx != null && filters.ctxs.includes(event.ctx)))
+    && (!filters.cops.length || (event.cop != null && filters.cops.includes(event.cop)))
+    && (!filters.departments.length || (event.department != null && filters.departments.includes(event.department)))
+    && (!filters.promoters.length || (event.promoter != null && filters.promoters.includes(event.promoter)));
 }
 
 export default function CalendarView() {
+  const navigate = useNavigate();
+  const profile = useStore((state) => state.profile);
+  const user = useStore((state) => state.user);
+  const [view, setView] = useState<CalendarViewType>('deliveries');
+  const [display, setDisplay] = useState<CalendarDisplay>('month');
   const [currentDate, setCurrentDate] = useState(new Date());
-  const [viewMode, setViewMode] = useState<ViewMode>('month');
-  
-  const [events, setEvents] = useState<EventItem[]>([]);
-  const [observations, setObservations] = useState<any[]>([]);
-  const [operations, setOperations] = useState<any[]>([]);
-
-
-  // Modals
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<Date>(new Date());
-  const [editingEvent, setEditingEvent] = useState<EventItem | null>(null);
-  const [editingObs, setEditingObs] = useState<any | null>(null);
-  const [isExportModalOpen, setIsExportModalOpen] = useState(false);
-  const [exportConfig, setExportConfig] = useState<{format: 'pdf' | 'xls', includeEmpty: boolean}>({ format: 'pdf', includeEmpty: false });
-
-  const [form, setForm] = useState<Partial<EventItem>>({
-    title: '',
-    event_time: '',
-    address: '',
-    description: '',
-    visio_link: '',
-    operation_id: ''
-  });
-
-  // Observation Edit Modal
+  const [operations, setOperations] = useState<CalendarOperation[]>([]);
+  const [conditions, setConditions] = useState<CalendarCondition[]>([]);
+  const [manualEvents, setManualEvents] = useState<ManualEventRow[]>([]);
+  const [observations, setObservations] = useState<CalendarObservationRow[]>([]);
+  const [filters, setFilters] = useState<CalendarFilterState>(EMPTY_FILTERS);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [eventForm, setEventForm] = useState<ManualEventRow | null>(null);
 
   useEffect(() => {
-    fetchData();
-  }, [currentDate]);
-
-  const fetchData = async () => {
-    try {
-      const { data: ops } = await supabase.from('operations').select('id, name, expected_delivery_date, contractual_delivery_date, actual_delivery_date, operation_type, project_manager');
-      if (ops) setOperations(ops);
-
-      const { data: obsData } = await supabase
-        .from('observations')
-        .select(`*, operations (name)`);
-      
-      if (obsData) {
-        const processedObs = obsData.map(obs => {
-          const match = obs.description?.match(/\n\n\[STATUT: (.*?)\]/);
-          if (match) {
-              obs._custom_status = match[1];
-              obs.description = obs.description.replace(/\n\n\[STATUT: .*?\]/, '');
-          }
-          return obs;
-        });
-        setObservations(processedObs);
+    let cancelled = false;
+    void Promise.all([
+      supabase.from('operations').select('*').order('name'),
+      supabase.from('suspensive_conditions').select('*'),
+      supabase.from('observations').select('id, operation_id, description, deadline_date, completion_date'),
+      supabase.from('events').select('*'),
+    ]).then(([operationResult, conditionResult, observationResult, eventResult]) => {
+      if (cancelled) return;
+      const firstError = operationResult.error || conditionResult.error || observationResult.error;
+      if (firstError) setError(firstError.message);
+      else {
+        setOperations((operationResult.data as CalendarOperation[] | null) ?? []);
+        setConditions((conditionResult.data as CalendarCondition[] | null) ?? []);
+        setObservations((observationResult.data as CalendarObservationRow[] | null) ?? []);
+        setManualEvents(eventResult.error?.code === '42P01' ? [] : (eventResult.data as ManualEventRow[] | null) ?? []);
       }
-
-      const { data: eventsData, error: eventsError } = await supabase
-        .from('events')
-        .select('*');
-      
-      if (eventsError) {
-        if (eventsError.code === '42P01') {
-           setEvents([]);
-        } else {
-           throw eventsError;
-        }
-      } else {
-        setEvents(eventsData || []);
-      }
-    } catch (error) {
-      console.error('Error fetching calendar data:', error);
-    }
-  };
-
-  const handlePrevious = () => {
-    if (viewMode === 'month') setCurrentDate(subMonths(currentDate, 1));
-    else if (viewMode === 'week') setCurrentDate(subWeeks(currentDate, 1));
-    else if (viewMode === 'day') setCurrentDate(subDays(currentDate, 1));
-    else if (viewMode === 'year') setCurrentDate(subYears(currentDate, 1));
-  };
-
-  const handleNext = () => {
-    if (viewMode === 'month') setCurrentDate(addMonths(currentDate, 1));
-    else if (viewMode === 'week') setCurrentDate(addWeeks(currentDate, 1));
-    else if (viewMode === 'day') setCurrentDate(addDays(currentDate, 1));
-    else if (viewMode === 'year') setCurrentDate(addYears(currentDate, 1));
-  };
-
-  const handleToday = () => setCurrentDate(new Date());
-
-  const getHeaderLabel = () => {
-    if (viewMode === 'month') return format(currentDate, 'MMMM yyyy', { locale: fr });
-    if (viewMode === 'year') return format(currentDate, 'yyyy', { locale: fr });
-    if (viewMode === 'day') return format(currentDate, 'EEEE d MMMM yyyy', { locale: fr });
-    if (viewMode === 'week') {
-      const start = startOfWeek(currentDate, { weekStartsOn: 1 });
-      const end = endOfWeek(currentDate, { weekStartsOn: 1 });
-      if (isSameMonth(start, end)) return `${format(start, 'd')} - ${format(end, 'd MMMM yyyy', { locale: fr })}`;
-      return `${format(start, 'd MMM')} - ${format(end, 'd MMM yyyy', { locale: fr })}`;
-    }
-  };
-
-  // Clicks
-  const handleDayClick = (day: Date) => {
-    setSelectedDate(day);
-    setEditingEvent(null);
-    setForm({
-      title: '', event_time: '', address: '', description: '', visio_link: '', operation_id: ''
+      setLoading(false);
     });
-    setIsModalOpen(true);
-  };
+    return () => { cancelled = true; };
+  }, [refreshKey]);
 
-  const handleEventClick = (e: React.MouseEvent, evt: EventItem) => {
-    e.stopPropagation();
-    setEditingEvent(evt);
-    setForm(evt);
-    setSelectedDate(parseISO(evt.event_date));
-    setIsModalOpen(true);
-  };
-
-  const handleObservationClick = (e: React.MouseEvent, obs: any) => {
-    e.stopPropagation();
-    setEditingObs(obs);
-  };
-
-  // Submits
-  const handleEventSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!form.title) return;
-
-    try {
-      const { data: userData } = await supabase.auth.getUser();
-      const payload = {
-        title: form.title,
-        event_date: format(selectedDate, 'yyyy-MM-dd'),
-        event_time: form.event_time || null,
-        address: form.address || null,
-        description: form.description || null,
-        visio_link: form.visio_link || null,
-        operation_id: form.operation_id || null,
-        user_id: userData.user?.id
-      };
-
-      if (editingEvent) {
-        const { error } = await supabase.from('events').update(payload).eq('id', editingEvent.id);
-        if (error) throw error;
-        triggerSuccessToast(useStore.getState().user?.email, 'Évènement modifié avec succès.');
-      } else {
-        const { error } = await supabase.from('events').insert([payload]);
-        if (error) throw error;
-        triggerSuccessToast(useStore.getState().user?.email, 'Évènement ajouté avec succès.');
-      }
-      setIsModalOpen(false);
-      fetchData();
-    } catch (error: any) {
-      if (error.code === '42P01') {
-        triggerErrorToast('La table "events" n\'existe pas. Veuillez exécuter le script SQL.');
-      } else {
-        triggerErrorToast('Erreur lors de la sauvegarde.');
-      }
-    }
-  };
-
-  const handleDeleteEvent = async () => {
-    if (!editingEvent || !window.confirm('Supprimer cet évènement ?')) return;
-    try {
-      const { error } = await supabase.from('events').delete().eq('id', editingEvent.id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Évènement supprimé.');
-      setIsModalOpen(false);
-      fetchData();
-    } catch (err) {
-      console.error('Delete event error:', err);
-    }
-  };
-
-  const handleEditObsSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingObs) return;
-    try {
-      let finalDescription = editingObs.description;
-      if (editingObs._custom_status && editingObs._custom_status !== 'En cours') {
-          finalDescription = `${editingObs.description}\n\n[STATUT: ${editingObs._custom_status}]`;
-      }
-      const isCompletedStatus = editingObs._custom_status === 'Réussi' || editingObs._custom_status === 'Échec';
-      const payload = {
-        description: finalDescription,
-        responsible_person: editingObs.responsible_person,
-        deadline_date: editingObs.deadline_date,
-        completion_date: isCompletedStatus 
-            ? (editingObs.completion_date || new Date().toISOString().split('T')[0])
-            : (editingObs.completion_date || null)
-      };
-      const { error } = await supabase.from('observations').update(payload).eq('id', editingObs.id);
-      if (error) throw error;
-      triggerSuccessToast(useStore.getState().user?.email, 'Observation modifiée avec succès.');
-      setEditingObs(null);
-      fetchData();
-    } catch (err) {
-      console.error('Error updating observation:', err);
-      triggerErrorToast('Erreur lors de la modification.');
-    }
-  };
-
-  const handleExportData = async () => {
-    const { format: exportFormat, includeEmpty } = exportConfig;
-    const year = format(currentDate, 'yyyy');
-    
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const processedOps = operations.map(op => {
-      let dDate = op.expected_delivery_date;
-      if (dDate && dDate < todayStr && op.contractual_delivery_date) {
-        dDate = op.contractual_delivery_date;
-      }
-      return { ...op, effective_date: dDate };
-    }).filter(op => op.effective_date && op.effective_date.startsWith(year) && !op.actual_delivery_date);
-    
-    const processedEvts = events.filter(e => e.event_date.startsWith(year));
-    
-    // Include observations that have either completion_date or deadline_date in the target year
-    const processedObs = observations.filter(o => {
-      const dateToCheck = o.completion_date || o.deadline_date;
-      return dateToCheck?.startsWith(year);
+  const operationById = useMemo(() => new Map(operations.map((operation) => [operation.id, operation])), [operations]);
+  const agendaEvents = useMemo<DisplayEvent[]>(() => {
+    const fromManual = manualEvents.flatMap((event): DisplayEvent[] => {
+      const operation = event.operation_id ? operationById.get(event.operation_id) : null;
+      return [{ id: `manual-${event.id}`, manualId: event.id, date: event.event_date, title: event.title, code: 'EVT', kind: 'key-dates', actual: true, operationId: operation?.id ?? '', operationName: operation?.name ?? 'Sans opération', ctx: operation?.project_manager ?? null, cop: operation?.operations_manager ?? null, department: operation?.department ?? null, promoter: operation?.promoter_name ?? null, description: event.description, time: event.event_time }];
     });
-
-    const days = eachDayOfInterval({ start: startOfYear(currentDate), end: endOfYear(currentDate) });
-    const rows: any[] = [];
-    
-    const getObsStatusLabel = (obs: any) => {
-      if (obs._custom_status) {
-        if (obs._custom_status === 'Réussi') return 'Réussi';
-        if (obs._custom_status === 'Échec') return 'Échec';
-        if (obs._custom_status === 'Bloqué') return 'Bloqué';
-      }
-      if (obs.completion_date) return 'Terminé';
-      if (obs.deadline_date) {
-        const deadline = new Date(obs.deadline_date);
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        if (deadline < today) return 'En retard';
-      }
-      return 'En cours';
-    };
-
-    days.forEach(day => {
-      const dayStr = format(day, 'yyyy-MM-dd');
-      const dayOps = processedOps.filter(o => o.effective_date === dayStr);
-      const dayEvts = processedEvts.filter(e => e.event_date === dayStr);
-      
-      // An observation appears on its completion_date if completed, or deadline_date if not completed
-      const dayObs = processedObs.filter(o => {
-        const dateToCheck = o.completion_date || o.deadline_date;
-        return dateToCheck === dayStr;
-      });
-      
-      const hasEvents = dayOps.length > 0 || dayEvts.length > 0 || dayObs.length > 0;
-      if (!hasEvents && !includeEmpty) return;
-      
-      const dateDisplay = format(day, 'dd/MM/yyyy');
-      
-      if (!hasEvents) {
-         rows.push([dateDisplay, '-', 'Aucun évènement', '-', '-']);
-         return;
-      }
-      
-      dayOps.forEach(op => {
-        rows.push([dateDisplay, 'Livraison OP', op.name, op.project_manager || '-', op.effective_date < todayStr ? 'En retard' : 'À venir']);
-      });
-      dayObs.forEach(obs => {
-        const statusLabel = getObsStatusLabel(obs);
-        rows.push([dateDisplay, 'Observation', obs.description?.split('\n')[0] || '-', obs.operations?.name || '-', statusLabel]);
-      });
-      dayEvts.forEach(evt => {
-        rows.push([dateDisplay, 'Évènement', evt.title, evt.event_time || '-', '-']);
-      });
+    const fromObservations = observations.flatMap((observation): DisplayEvent[] => {
+      const operation = operationById.get(observation.operation_id); if (!operation) return [];
+      return [{ id: `observation-${observation.id}`, date: observation.completion_date || observation.deadline_date, title: observation.description, code: 'OBS', kind: 'key-dates', actual: Boolean(observation.completion_date), operationId: operation.id, operationName: operation.name, ctx: operation.project_manager ?? null, cop: operation.operations_manager ?? null, department: operation.department ?? null, promoter: operation.promoter_name ?? null }];
     });
+    return [...fromManual, ...fromObservations].sort((left, right) => left.date.localeCompare(right.date));
+  }, [manualEvents, observations, operationById]);
 
-    if (exportFormat === 'pdf') {
-      const doc = new jsPDF('l', 'mm', 'a4');
-      doc.setFontSize(22);
-      doc.setTextColor(15, 23, 42); 
-      doc.text("Suivi Action Immo", 14, 20);
-      doc.setFontSize(14);
-      doc.setTextColor(100, 116, 139); 
-      doc.text(`Calendrier Annuel des Évènements - ${year}`, 14, 30);
-      
-      autoTable(doc, {
-        startY: 40,
-        head: [['Date', 'Type', 'Description / Nom', 'Détails / CTX', 'Statut']],
-        body: rows,
-        theme: 'striped',
-        styles: { fontSize: 9 },
-        headStyles: { fillColor: [51, 65, 85] },
-        didParseCell: (data) => {
-          if (data.section === 'body' && data.column.index === 4) {
-            const val = data.cell.raw;
-            if (val === 'Réussi' || val === 'Terminé') {
-              data.cell.styles.textColor = [6, 95, 70];
-              data.cell.styles.fontStyle = 'bold';
-            } else if (val === 'Échec' || val === 'En retard') {
-              data.cell.styles.textColor = [153, 27, 27];
-              data.cell.styles.fontStyle = 'bold';
-            } else if (val === 'En cours') {
-              data.cell.styles.textColor = [146, 64, 14];
-              data.cell.styles.fontStyle = 'bold';
-            } else if (val === 'Bloqué') {
-              data.cell.styles.textColor = [194, 65, 12];
-              data.cell.styles.fontStyle = 'bold';
-            } else if (val === 'À venir') {
-              data.cell.styles.textColor = [107, 33, 168];
-              data.cell.styles.fontStyle = 'bold';
-            }
-          }
-        }
-      });
-      doc.save(`Calendrier_Annuel_${year}.pdf`);
-      triggerSuccessToast(useStore.getState().user?.email, "PDF annuel généré avec succès !");
-    } else {
-      const workbook = new ExcelJS.Workbook();
-      const sheet = workbook.addWorksheet(`Calendrier ${year}`);
-      
-      sheet.columns = [
-        { header: 'Date', width: 15 },
-        { header: 'Type', width: 20 },
-        { header: 'Description / Nom', width: 45 },
-        { header: 'Détails / CTX', width: 25 },
-        { header: 'Statut', width: 15 }
-      ];
-      
-      const headerRow = sheet.getRow(1);
-      headerRow.font = { bold: true };
-      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'F2F2F2' } };
-      headerRow.eachCell(cell => {
-         cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-      });
+  const allEvents = useMemo<DisplayEvent[]>(() => view === 'agenda' ? agendaEvents : buildCalendarEvents(operations, conditions, view), [agendaEvents, conditions, operations, view]);
+  const filteredEvents = useMemo(() => allEvents.filter((event) => eventMatches(event, filters)), [allEvents, filters]);
+  const options = useMemo(() => ({ operations: operations.map((operation) => operation.name), ctxs: unique(operations.map((operation) => operation.project_manager)), cops: unique(operations.map((operation) => operation.operations_manager)), departments: unique(operations.map((operation) => operation.department)), promoters: unique(operations.map((operation) => operation.promoter_name)) }), [operations]);
 
-      rows.forEach((r) => {
-         const row = sheet.addRow(r);
-         if (r[2] === 'Aucun évènement') {
-            row.font = { italic: true, color: { argb: '94A3B8' } };
-         }
-         
-         const val = r[4];
-         if (val) {
-           let bgColor = 'FFFFFF';
-           let fgColor = '000000';
-           if (val === 'Réussi' || val === 'Terminé') {
-             bgColor = 'D1FAE5';
-             fgColor = '065F46';
-           } else if (val === 'Échec' || val === 'En retard') {
-             bgColor = 'FEE2E2';
-             fgColor = '991B1B';
-           } else if (val === 'En cours') {
-             bgColor = 'FEF3C7';
-             fgColor = '92400E';
-           } else if (val === 'Bloqué') {
-             bgColor = 'FFEDD5';
-             fgColor = 'C2410C';
-           } else if (val === 'À venir') {
-             bgColor = 'F3E8FF';
-             fgColor = '6B21A8';
-           }
-           
-           if (bgColor !== 'FFFFFF') {
-             const statusCell = row.getCell(5);
-             statusCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: bgColor } };
-             statusCell.font = { bold: true, color: { argb: fgColor } };
-           }
-         }
+  const monthStart = startOfMonth(currentDate); const monthEnd = endOfMonth(currentDate);
+  const monthDays = eachDayOfInterval({ start: startOfWeek(monthStart, { weekStartsOn: 1 }), end: endOfWeek(monthEnd, { weekStartsOn: 1 }) });
+  const year = currentDate.getFullYear();
+  const eventsForDay = (date: Date) => filteredEvents.filter((event) => event.date === format(date, 'yyyy-MM-dd'));
 
-         row.eachCell(cell => {
-             cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, right: { style: 'thin' }, bottom: { style: 'thin' } };
-         });
-      });
-      
-      const buffer = await workbook.xlsx.writeBuffer();
-      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = window.URL.createObjectURL(blob);
-      const anchor = document.createElement('a');
-      anchor.href = url;
-      anchor.download = `Calendrier_Annuel_${year}.xlsx`;
-      document.body.appendChild(anchor);
-      anchor.click();
-      document.body.removeChild(anchor);
-      window.URL.revokeObjectURL(url);
-      triggerSuccessToast(useStore.getState().user?.email, "Excel annuel généré avec succès !");
-    }
-    
-    setIsExportModalOpen(false);
+  const changeView = (next: CalendarViewType) => { setView(next); setFilters(EMPTY_FILTERS); };
+  const openNewEvent = () => setEventForm({ id: '', title: '', event_date: format(currentDate, 'yyyy-MM-dd'), event_time: null, description: null, operation_id: null });
+  const openEvent = (event: DisplayEvent) => {
+    if (event.manualId) {
+      const source = manualEvents.find((manual) => manual.id === event.manualId); if (source) setEventForm(source);
+    } else if (event.operationId) navigate(`/operations/${event.operationId}`);
   };
 
-  // Rendering Helpers
-  const renderEventsList = (dayStr: string, isSmall: boolean = false) => {
-    const todayStr = format(new Date(), 'yyyy-MM-dd');
-    const dayEvents = events.filter(e => e.event_date === dayStr);
-    const obsDeadlines = observations.filter(o => !o.completion_date && o.deadline_date === dayStr);
-    const obsCompletions = observations.filter(o => o.completion_date === dayStr);
-    
-    const opDeliveries = operations.filter(op => {
-      if (op.actual_delivery_date) return false;
-      let effectiveDate = op.expected_delivery_date;
-      if (effectiveDate && effectiveDate < todayStr && op.contractual_delivery_date) {
-        effectiveDate = op.contractual_delivery_date;
-      }
-      return effectiveDate === dayStr;
-    });
-
-    if (dayEvents.length === 0 && obsDeadlines.length === 0 && obsCompletions.length === 0 && opDeliveries.length === 0) return null;
-
-    return (
-      <div className={`space-y-1.5 flex-1 overflow-y-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden ${isSmall ? 'mt-1' : 'mt-2'}`}>
-        {dayEvents.map(evt => (
-          <div 
-            key={evt.id} 
-            onClick={(e) => handleEventClick(e, evt)}
-            className={`px-2 py-1 rounded bg-indigo-50 border border-indigo-100 text-indigo-700 font-medium truncate hover:bg-indigo-100 transition cursor-pointer ${isSmall ? 'text-[9px]' : 'text-xs'}`}
-          >
-            {!isSmall && evt.event_time && <span className="mr-1 opacity-70">{evt.event_time.substring(0,5)}</span>}
-            {evt.title}
-          </div>
-        ))}
-        {obsDeadlines.map(obs => (
-          <div 
-            key={`dl-${obs.id}`} 
-            onClick={(e) => handleObservationClick(e, obs)}
-            className={`px-2 py-1 rounded bg-amber-50 border border-amber-100 text-amber-700 font-medium truncate flex items-center gap-1 hover:bg-amber-100 transition cursor-pointer ${isSmall ? 'text-[9px]' : 'text-xs'}`}
-            title={obs.description}
-          >
-            <AlertTriangle size={isSmall ? 8 : 10} className="shrink-0" />
-            <span className="truncate">{obs.operations?.name}</span>
-          </div>
-        ))}
-        {obsCompletions.map(obs => (
-          <div 
-            key={`cp-${obs.id}`} 
-            onClick={(e) => handleObservationClick(e, obs)}
-            className={`px-2 py-1 rounded bg-emerald-50 border border-emerald-100 text-emerald-700 font-medium truncate flex items-center gap-1 hover:bg-emerald-100 transition cursor-pointer ${isSmall ? 'text-[9px]' : 'text-xs'}`}
-            title={obs.description}
-          >
-            <span className={`rounded-full bg-emerald-500 shrink-0 ${isSmall ? 'w-1 h-1' : 'w-1.5 h-1.5'}`}></span>
-            <span className="truncate">{obs.description?.split('\n')[0] || 'Observation'}</span>
-          </div>
-        ))}
-        {opDeliveries.map(op => (
-          <div 
-            key={`op-${op.id}`} 
-            className={`px-2 py-1 rounded border font-medium truncate flex items-center gap-1 cursor-default
-              ${dayStr < todayStr ? 'bg-red-50 border-red-100 text-red-700' : 'bg-purple-50 border-purple-100 text-purple-700'} 
-              ${isSmall ? 'text-[9px]' : 'text-xs'}`}
-            title={`Livraison OP : ${op.name}`}
-          >
-            <Building size={isSmall ? 8 : 10} className="shrink-0" />
-            <span className="truncate">{op.name}</span>
-          </div>
-        ))}
-      </div>
-    );
+  const saveManualEvent = async (event: React.FormEvent) => {
+    event.preventDefault(); if (!eventForm || !user) return;
+    const payload = { title: eventForm.title, event_date: eventForm.event_date, event_time: eventForm.event_time || null, description: eventForm.description || null, operation_id: eventForm.operation_id || null, user_id: user.id };
+    const result = eventForm.id ? await supabase.from('events').update(payload).eq('id', eventForm.id) : await supabase.from('events').insert(payload);
+    if (result.error) setError(result.error.message); else { triggerSuccessToast(user.email, 'Événement enregistré.'); setEventForm(null); setRefreshKey((key) => key + 1); }
   };
 
-  const renderMonthGrid = (startDate: Date, endDate: Date, monthStart: Date, small: boolean = false) => {
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
-    return (
-      <div className={`grid grid-cols-7 ${small ? '' : 'border-l border-slate-200 flex-1'}`}>
-        {days.map((day, i) => {
-          const isCurrentMonth = isSameMonth(day, monthStart);
-          const isToday = isSameDay(day, new Date());
-          const dayStr = format(day, 'yyyy-MM-dd');
-
-          return (
-            <div 
-              key={i}
-              onClick={() => handleDayClick(day)}
-              className={`p-2 border-r border-b border-slate-200 transition-colors cursor-pointer flex flex-col group relative overflow-hidden
-                ${!isCurrentMonth ? 'bg-slate-50/50 text-slate-400' : 'bg-white text-slate-700'}
-                ${isToday ? 'bg-primary/5' : 'hover:bg-slate-50'}
-                ${small ? 'h-[75px]' : 'h-[140px]'}
-              `}
-            >
-              <div className="flex justify-between items-start shrink-0">
-                <span className={`font-semibold flex items-center justify-center rounded-full
-                  ${isToday ? 'bg-primary text-white' : ''}
-                  ${small ? 'text-xs w-5 h-5' : 'text-sm w-7 h-7'}
-                `}>
-                  {format(day, "d")}
-                </span>
-                {!small && (
-                  <div className="opacity-0 group-hover:opacity-100 transition-opacity">
-                    <PlusCircle size={14} className="text-slate-400 hover:text-primary" />
-                  </div>
-                )}
-              </div>
-              {renderEventsList(dayStr, small)}
-            </div>
-          );
-        })}
-      </div>
-    );
+  const deleteManualEvent = async () => {
+    if (!eventForm?.id || !window.confirm('Supprimer cet événement ?')) return;
+    const { error: deleteError } = await supabase.from('events').delete().eq('id', eventForm.id);
+    if (deleteError) setError(deleteError.message); else { setEventForm(null); setRefreshKey((key) => key + 1); }
   };
 
-  const renderMonthView = () => {
-    const monthStart = startOfMonth(currentDate);
-    const monthEnd = endOfMonth(monthStart);
-    const startDate = startOfWeek(monthStart, { weekStartsOn: 1 });
-    const endDate = endOfWeek(monthEnd, { weekStartsOn: 1 });
-    const daysOfWeek = ['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'];
-
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 rounded-t-xl overflow-hidden">
-          {daysOfWeek.map((d, i) => (
-            <div key={i} className="py-3 text-center text-xs font-bold text-slate-500 uppercase tracking-wider border-r border-slate-200 last:border-r-0">
-              {d}
-            </div>
-          ))}
-        </div>
-        {renderMonthGrid(startDate, endDate, monthStart)}
-      </div>
-    );
+  const yearEvents = filteredEvents.filter((event) => event.date.startsWith(String(year)));
+  const exportExcel = async () => {
+    const workbook = new ExcelJS.Workbook(); const sheet = workbook.addWorksheet(`Calendrier ${year}`);
+    sheet.columns = [{ header: 'Date', key: 'date', width: 14 }, { header: 'Code', key: 'code', width: 10 }, { header: 'Événement', key: 'title', width: 42 }, { header: 'Opération', key: 'operation', width: 32 }, { header: 'CTX', key: 'ctx', width: 12 }, { header: 'COP', key: 'cop', width: 12 }, { header: 'Département', key: 'department', width: 14 }, { header: 'Promoteur', key: 'promoter', width: 24 }, { header: 'Nature', key: 'nature', width: 16 }];
+    yearEvents.forEach((item) => sheet.addRow({ date: item.date, code: item.code, title: item.title, operation: item.operationName, ctx: item.ctx, cop: item.cop, department: item.department, promoter: item.promoter, nature: item.actual ? 'Réel / réalisé' : 'Prévisionnel' }));
+    sheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } }; sheet.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F766E' } };
+    const buffer = await workbook.xlsx.writeBuffer(); const url = URL.createObjectURL(new Blob([buffer])); const anchor = document.createElement('a'); anchor.href = url; anchor.download = `calendrier-${view}-${year}.xlsx`; anchor.click(); URL.revokeObjectURL(url);
   };
+  const exportPdf = () => { const document = new jsPDF({ orientation: 'landscape' }); document.setFontSize(16); document.text(`Calendrier ${VIEW_LABELS.find((item) => item.id === view)?.label} — ${year}`, 14, 15); autoTable(document, { startY: 21, head: [['Date', 'Code', 'Événement', 'Opération', 'CTX', 'COP', 'Département', 'Nature']], body: yearEvents.map((item) => [item.date, item.code, item.title, item.operationName, item.ctx ?? '', item.cop ?? '', item.department ?? '', item.actual ? 'Réel' : 'Prévisionnel']), styles: { fontSize: 7 }, headStyles: { fillColor: [15, 118, 110] } }); document.save(`calendrier-${view}-${year}.pdf`); };
 
-  const renderWeekView = () => {
-    const startDate = startOfWeek(currentDate, { weekStartsOn: 1 });
-    const endDate = endOfWeek(currentDate, { weekStartsOn: 1 });
-    const days = eachDayOfInterval({ start: startDate, end: endDate });
-
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm flex flex-col min-h-[600px]">
-        <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50 rounded-t-xl overflow-hidden">
-          {days.map((day, i) => (
-            <div key={i} className="py-3 text-center border-r border-slate-200 last:border-r-0">
-              <div className="text-xs font-bold text-slate-500 uppercase tracking-wider">{format(day, 'EEE', { locale: fr })}</div>
-              <div className={`text-lg font-black mt-1 ${isSameDay(day, new Date()) ? 'text-primary' : 'text-slate-800'}`}>
-                {format(day, 'd')}
-              </div>
-            </div>
-          ))}
-        </div>
-        <div className="grid grid-cols-7 border-l border-slate-200 flex-1">
-          {days.map((day, i) => (
-            <div 
-              key={i}
-              onClick={() => handleDayClick(day)}
-              className="p-2 border-r border-slate-200 cursor-pointer hover:bg-slate-50 transition flex flex-col"
-            >
-              {renderEventsList(format(day, 'yyyy-MM-dd'))}
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  };
-
-  const renderDayView = () => {
-    const dayStr = format(currentDate, 'yyyy-MM-dd');
-    return (
-      <div className="bg-white border border-slate-200 rounded-xl shadow-sm min-h-[600px] p-6">
-        <h2 className="text-xl font-bold text-slate-800 mb-6">{format(currentDate, 'EEEE d MMMM yyyy', { locale: fr })}</h2>
-        <div 
-          onClick={() => handleDayClick(currentDate)}
-          className="border-2 border-dashed border-slate-200 rounded-xl p-4 flex-1 min-h-[400px] cursor-pointer hover:bg-slate-50 transition"
-        >
-          {renderEventsList(dayStr)}
-          <div className="text-center mt-12 text-slate-400 font-medium">
-            <PlusCircle size={24} className="mx-auto mb-2 opacity-50" />
-            Cliquez pour ajouter un évènement à cette journée
-          </div>
-        </div>
-      </div>
-    );
-  };
-
-  const renderYearView = () => {
-    const yearStart = startOfYear(currentDate);
-    const yearEnd = endOfYear(currentDate);
-    const months = eachMonthOfInterval({ start: yearStart, end: yearEnd });
-    const daysOfWeek = ['L', 'M', 'M', 'J', 'V', 'S', 'D'];
-
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-        {months.map((month, idx) => {
-          const mStart = startOfMonth(month);
-          const mEnd = endOfMonth(mStart);
-          const sDate = startOfWeek(mStart, { weekStartsOn: 1 });
-          const eDate = endOfWeek(mEnd, { weekStartsOn: 1 });
-
-          return (
-            <div key={idx} className="bg-white border border-slate-200 rounded-xl shadow-sm overflow-hidden">
-              <div className="bg-slate-50 p-3 text-center border-b border-slate-200">
-                <h3 className="font-bold text-slate-800 capitalize cursor-pointer hover:text-primary transition" onClick={() => { setCurrentDate(mStart); setViewMode('month'); }}>
-                  {format(month, 'MMMM', { locale: fr })}
-                </h3>
-              </div>
-              <div className="grid grid-cols-7 border-b border-slate-100 bg-white">
-                {daysOfWeek.map((d, i) => (
-                  <div key={i} className="py-1 text-center text-[9px] font-bold text-slate-400 uppercase">{d}</div>
-                ))}
-              </div>
-              {renderMonthGrid(sDate, eDate, mStart, true)}
-            </div>
-          );
-        })}
-      </div>
-    );
-  };
+  if (loading) return <div className="flex min-h-[55vh] items-center justify-center text-slate-500">Chargement des calendriers…</div>;
 
   return (
-    <div className="pb-12 max-w-[1600px] mx-auto">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
-        <div>
-          <h1 className="text-3xl font-bold text-slate-900 tracking-tight">Calendrier</h1>
-          <p className="text-slate-500 mt-1">Planifiez vos évènements et suivez vos échéances.</p>
-        </div>
+    <div className="mx-auto max-w-[1700px] pb-12">
+      <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end"><div><p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">Pilotage temporel</p><h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">Calendriers</h1><p className="mt-2 text-sm text-slate-500">Une source unique, plusieurs lectures métier et filtres multiples.</p></div><div className="flex flex-wrap gap-2"><button type="button" onClick={() => void exportExcel()} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><FileSpreadsheet size={15} /> Excel {year}</button><button type="button" onClick={exportPdf} className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"><Download size={15} /> PDF {year}</button>{view === 'agenda' && can(profile?.role, 'contribute') && <button type="button" onClick={openNewEvent} className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-black text-white"><Plus size={16} /> Événement</button>}</div></header>
+      {error && <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">{error}</div>}
+      <div className="mb-5 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">{VIEW_LABELS.map((item) => <button key={item.id} type="button" onClick={() => changeView(item.id)} className={`rounded-2xl border p-4 text-left transition ${view === item.id ? 'border-slate-950 bg-slate-950 text-white shadow-lg' : 'border-slate-200 bg-white text-slate-800 hover:border-teal-400'}`}><p className={`text-xs font-black ${view === item.id ? 'text-teal-300' : 'text-teal-700'}`}>{item.label}</p><p className={`mt-1 text-[11px] ${view === item.id ? 'text-slate-300' : 'text-slate-500'}`}>{item.description}</p></button>)}</div>
+      <div className="mb-5 rounded-2xl border border-slate-200 bg-[#f3f5f1] p-4"><CalendarFilters view={view} filters={filters} options={options} onChange={setFilters} /><div className="mt-4"><CalendarLegend /></div></div>
 
-        <div className="flex items-center gap-4 flex-wrap justify-end">
-          <button 
-            onClick={() => setIsExportModalOpen(true)}
-            className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-lg border border-slate-200 text-slate-600 hover:text-primary hover:border-primary transition font-medium text-sm shadow-sm"
-          >
-            <Download size={16} />
-            <span className="hidden sm:inline">Export Annuel</span>
-          </button>
+      <section className="overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm"><div className="flex flex-col justify-between gap-4 border-b border-slate-200 px-5 py-4 md:flex-row md:items-center"><div className="flex items-center gap-2"><button type="button" onClick={() => setCurrentDate(subMonths(currentDate, 1))} className="rounded-xl border border-slate-200 p-2 text-slate-600"><ChevronLeft /></button><button type="button" onClick={() => setCurrentDate(new Date())} className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black">Aujourd’hui</button><button type="button" onClick={() => setCurrentDate(addMonths(currentDate, 1))} className="rounded-xl border border-slate-200 p-2 text-slate-600"><ChevronRight /></button><h2 className="ml-2 text-xl font-black capitalize text-slate-950">{display === 'month' ? format(currentDate, 'MMMM yyyy', { locale: fr }) : year}</h2></div><div className="flex rounded-xl bg-slate-100 p-1"><button type="button" onClick={() => setDisplay('month')} className={`rounded-lg px-3 py-2 text-xs font-black ${display === 'month' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>Mois</button><button type="button" onClick={() => setDisplay('year')} className={`rounded-lg px-3 py-2 text-xs font-black ${display === 'year' ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-500'}`}>Année</button></div></div>
+        {display === 'month' ? <div><div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">{['Lun', 'Mar', 'Mer', 'Jeu', 'Ven', 'Sam', 'Dim'].map((day) => <div key={day} className="px-2 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400">{day}</div>)}</div><div className="grid grid-cols-7">{monthDays.map((day) => { const items = eventsForDay(day); return <div key={day.toISOString()} className={`min-h-32 border-b border-r border-slate-100 p-2 ${isSameMonth(day, currentDate) ? 'bg-white' : 'bg-slate-50/70 text-slate-300'}`}><p className={`mb-2 text-xs font-black ${format(day, 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd') ? 'inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal-700 text-white' : ''}`}>{format(day, 'd')}</p><div className="space-y-1">{items.slice(0, 4).map((item) => <button key={item.id} type="button" onClick={() => openEvent(item)} className={`block w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-bold leading-tight ${item.actual ? 'border-emerald-500 bg-emerald-50 text-emerald-900' : 'border-sky-500 bg-sky-50 text-sky-900'}`}><span className="mr-1 font-black">{item.code}</span>{item.time && <span>{item.time} · </span>}{item.operationName !== 'Sans opération' && <span>{item.operationName} · </span>}{item.title}</button>)}{items.length > 4 && <p className="px-2 text-[10px] font-bold text-slate-400">+ {items.length - 4} autre(s)</p>}</div></div>; })}</div></div> : <div className="grid grid-cols-1 gap-px bg-slate-200 md:grid-cols-2 xl:grid-cols-3">{Array.from({ length: 12 }, (_, monthIndex) => { const monthDate = new Date(year, monthIndex, 1); const items = filteredEvents.filter((event) => parseISO(event.date).getFullYear() === year && parseISO(event.date).getMonth() === monthIndex); return <button key={monthIndex} type="button" onClick={() => { setCurrentDate(monthDate); setDisplay('month'); }} className="min-h-52 bg-white p-5 text-left hover:bg-teal-50/30"><h3 className="text-sm font-black capitalize text-slate-950">{format(monthDate, 'MMMM', { locale: fr })}</h3><p className="mt-1 text-[10px] font-bold text-slate-400">{items.length} événement(s)</p><div className="mt-4 space-y-2">{items.slice(0, 5).map((item) => <div key={item.id} className="flex gap-2 text-[10px]"><span className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.actual ? 'bg-emerald-500' : 'bg-sky-500'}`} /><span className="font-bold text-slate-600">{format(parseISO(item.date), 'dd')} · {item.operationName} · {item.title}</span></div>)}</div></button>; })}</div>}
+      </section>
 
-          <div className="bg-white border border-slate-200 rounded-lg p-1 flex">
-            {['day', 'week', 'month', 'year'].map((mode) => (
-              <button 
-                key={mode}
-                onClick={() => setViewMode(mode as ViewMode)}
-                className={`px-3 py-1.5 rounded-md text-sm font-medium transition capitalize ${viewMode === mode ? 'bg-primary text-white shadow-sm' : 'text-slate-600 hover:bg-slate-50'}`}
-              >
-                {mode === 'day' ? 'Jour' : mode === 'week' ? 'Semaine' : mode === 'month' ? 'Mois' : 'Année'}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2 bg-white px-3 py-1.5 rounded-xl shadow-sm border border-slate-200">
-            <button onClick={handlePrevious} className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition">
-              <ChevronLeft size={20} />
-            </button>
-            <button onClick={handleToday} className="px-2 text-sm font-bold text-slate-500 hover:text-slate-800 transition">
-              Aujourd'hui
-            </button>
-            <button onClick={handleNext} className="p-1 hover:bg-slate-100 rounded-lg text-slate-500 transition">
-              <ChevronRight size={20} />
-            </button>
-          </div>
-          
-          <div className="w-48 text-right text-lg font-bold text-slate-800 capitalize bg-white px-4 py-1.5 rounded-xl border border-slate-200 shadow-sm whitespace-nowrap overflow-hidden text-ellipsis">
-            {getHeaderLabel()}
-          </div>
-        </div>
-      </div>
-
-      {viewMode === 'month' && renderMonthView()}
-      {viewMode === 'week' && renderWeekView()}
-      {viewMode === 'day' && renderDayView()}
-      {viewMode === 'year' && renderYearView()}
-
-      {/* Modal - New/Edit Event */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200 flex flex-col max-h-[90vh]">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">
-                {editingEvent ? 'Modifier l\'évènement' : 'Nouvel Évènement'}
-              </h2>
-              <button onClick={() => setIsModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            
-            <form onSubmit={handleEventSubmit} className="p-5 overflow-y-auto space-y-4 scrollbar-thin">
-              <div className="flex items-center gap-2 text-sm font-bold text-slate-500 bg-slate-50 p-3 rounded-lg">
-                <CalendarIcon size={16} />
-                {format(selectedDate, 'EEEE d MMMM yyyy', { locale: fr })}
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Titre *</label>
-                <input 
-                  required 
-                  value={form.title} 
-                  onChange={(e) => setForm({...form, title: e.target.value})} 
-                  placeholder="Réunion de chantier, Visite..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Heure</label>
-                  <input 
-                    type="time"
-                    value={form.event_time || ''} 
-                    onChange={(e) => setForm({...form, event_time: e.target.value})} 
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none"
-                  />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Opération liée</label>
-                  <select 
-                    value={form.operation_id || ''} 
-                    onChange={(e) => setForm({...form, operation_id: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="">Aucune</option>
-                    {operations.map(op => (
-                      <option key={op.id} value={op.id}>{op.name}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase mb-1">
-                  <MapPin size={12}/> Adresse
-                </label>
-                <input 
-                  value={form.address || ''} 
-                  onChange={(e) => setForm({...form, address: e.target.value})} 
-                  placeholder="Ex: 12 rue de la Paix..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase mb-1">
-                  <Video size={12}/> Lien Visio (Teams, Meet, Zoom...)
-                </label>
-                <input 
-                  type="url"
-                  value={form.visio_link || ''} 
-                  onChange={(e) => setForm({...form, visio_link: e.target.value})} 
-                  placeholder="https://..."
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                />
-              </div>
-
-              <div>
-                <label className="flex items-center gap-1.5 text-xs font-bold text-slate-400 uppercase mb-1">
-                  <AlignLeft size={12}/> Description
-                </label>
-                <textarea 
-                  value={form.description || ''} 
-                  onChange={(e) => setForm({...form, description: e.target.value})} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-20"
-                />
-              </div>
-
-              <div className="flex justify-between mt-6 pt-4 border-t border-slate-100">
-                {editingEvent ? (
-                  <button type="button" onClick={handleDeleteEvent} className="px-4 py-2 text-sm font-bold text-red-500 hover:bg-red-50 rounded-lg transition">Supprimer</button>
-                ) : <div></div>}
-                <div className="flex gap-2">
-                  <button type="button" onClick={() => setIsModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-500 hover:text-slate-700 transition">Annuler</button>
-                  <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">
-                    {editingEvent ? 'Enregistrer' : 'Créer'}
-                  </button>
-                </div>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal - Edit Observation */}
-      {editingObs && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-lg border border-slate-200">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <div>
-                <h2 className="text-lg font-bold text-slate-800">Modifier l'observation</h2>
-                <span className="text-xs text-slate-500">{editingObs.operations?.name}</span>
-              </div>
-              <button onClick={() => setEditingObs(null)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <form onSubmit={handleEditObsSubmit} className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Description *</label>
-                <textarea 
-                  required 
-                  value={editingObs.description} 
-                  onChange={(e) => setEditingObs({...editingObs, description: e.target.value})} 
-                  className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary h-24"
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Réalisateur *</label>
-                  <input required value={editingObs.responsible_person} onChange={(e) => setEditingObs({...editingObs, responsible_person: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Date Butoire *</label>
-                  <input type="date" required value={editingObs.deadline_date} onChange={(e) => setEditingObs({...editingObs, deadline_date: e.target.value})} className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm" />
-                </div>
-                <div>
-                  <label className="block text-xs font-bold text-slate-400 uppercase mb-1">Statut</label>
-                  <select 
-                    value={editingObs._custom_status || 'En cours'} 
-                    onChange={(e) => setEditingObs({...editingObs, _custom_status: e.target.value})}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-primary"
-                  >
-                    <option value="En cours">En cours</option>
-                    <option value="Réussi">Réussi</option>
-                    <option value="Échec">Échec</option>
-                    <option value="Bloqué">Bloqué</option>
-                  </select>
-                </div>
-              </div>
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
-                <button type="button" onClick={() => setEditingObs(null)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
-                <button type="submit" className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Enregistrer</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
-      {/* Modal - Export Options */}
-      {isExportModalOpen && (
-        <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-xl shadow-2xl w-full max-w-sm border border-slate-200">
-            <div className="flex justify-between items-center p-5 border-b border-slate-100">
-              <h2 className="text-lg font-bold text-slate-800">Options d'export annuel</h2>
-              <button onClick={() => setIsExportModalOpen(false)} className="text-slate-400 hover:text-slate-600"><X size={20}/></button>
-            </div>
-            <div className="p-5 space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Format</label>
-                <div className="flex gap-4">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="format" value="pdf" checked={exportConfig.format === 'pdf'} onChange={() => setExportConfig({...exportConfig, format: 'pdf'})} className="text-primary focus:ring-primary" />
-                    <span className="text-sm font-medium">PDF</span>
-                  </label>
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input type="radio" name="format" value="xls" checked={exportConfig.format === 'xls'} onChange={() => setExportConfig({...exportConfig, format: 'xls'})} className="text-primary focus:ring-primary" />
-                    <span className="text-sm font-medium">Excel (XLSX)</span>
-                  </label>
-                </div>
-              </div>
-              <div className="pt-2">
-                <label className="block text-xs font-bold text-slate-400 uppercase mb-2">Contenu</label>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={exportConfig.includeEmpty} onChange={(e) => setExportConfig({...exportConfig, includeEmpty: e.target.checked})} className="text-primary rounded focus:ring-primary" />
-                  <span className="text-sm font-medium text-slate-700">Inclure tous les jours de l'année<br/><span className="text-xs text-slate-400 font-normal">(Même sans évènement)</span></span>
-                </label>
-              </div>
-              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-50">
-                <button type="button" onClick={() => setIsExportModalOpen(false)} className="px-4 py-2 text-sm font-bold text-slate-400 hover:text-slate-600 transition">Annuler</button>
-                <button onClick={handleExportData} className="bg-primary text-white px-5 py-2 rounded-lg text-sm font-bold shadow-md hover:bg-primary/90 transition">Exporter</button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
-
+      {eventForm && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm"><form onSubmit={saveManualEvent} className="w-full max-w-xl rounded-3xl bg-white p-6 shadow-2xl"><div className="mb-5 flex items-center justify-between"><div><p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">Agenda libre</p><h2 className="text-xl font-black">{eventForm.id ? 'Modifier l’événement' : 'Nouvel événement'}</h2></div><button type="button" onClick={() => setEventForm(null)} className="rounded-full p-2 text-slate-400"><X /></button></div><div className="space-y-4"><div><FieldLabel>Titre *</FieldLabel><TextInput required value={eventForm.title} onChange={(event) => setEventForm({ ...eventForm, title: event.target.value })} /></div><div className="grid grid-cols-2 gap-4"><div><FieldLabel>Date *</FieldLabel><TextInput required type="date" value={eventForm.event_date} onChange={(event) => setEventForm({ ...eventForm, event_date: event.target.value })} /></div><div><FieldLabel>Heure</FieldLabel><TextInput type="time" value={eventForm.event_time ?? ''} onChange={(event) => setEventForm({ ...eventForm, event_time: event.target.value || null })} /></div></div><div><FieldLabel>Opération</FieldLabel><SelectInput value={eventForm.operation_id ?? ''} onChange={(event) => setEventForm({ ...eventForm, operation_id: event.target.value || null })}><option value="">Sans opération</option>{operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.name}</option>)}</SelectInput></div><div><FieldLabel>Description</FieldLabel><TextArea rows={4} value={eventForm.description ?? ''} onChange={(event) => setEventForm({ ...eventForm, description: event.target.value || null })} /></div></div><div className="mt-6 flex justify-between border-t border-slate-200 pt-5">{eventForm.id ? <button type="button" onClick={() => void deleteManualEvent()} className="text-sm font-bold text-red-600">Supprimer</button> : <span />}<button type="submit" className="rounded-xl bg-teal-800 px-5 py-2.5 text-sm font-black text-white">Enregistrer</button></div></form></div>}
     </div>
   );
 }
