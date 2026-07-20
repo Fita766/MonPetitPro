@@ -137,15 +137,13 @@ export default function DocumentsSection({
       .upload(storagePath, file, { contentType: file.type });
     if (uploadResult.error) onError(uploadResult.error.message);
     else {
-      const insertResult = await supabase
-        .from("operation_documents")
-        .insert({
-          operation_id: operation.id,
-          kind,
-          storage_path: storagePath,
-          caption: caption || file.name,
-          sort_order: documents.length,
-        });
+      const insertResult = await supabase.from("operation_documents").insert({
+        operation_id: operation.id,
+        kind,
+        storage_path: storagePath,
+        caption: caption || file.name,
+        sort_order: documents.length,
+      });
       if (insertResult.error) onError(insertResult.error.message);
       else {
         setCaption("");
@@ -198,7 +196,7 @@ export default function DocumentsSection({
           type="button"
           disabled={busy}
           onClick={() => void exportSynthesis()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2.5 text-sm font-black text-white disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-black text-white hover:bg-teal-800 disabled:opacity-50"
         >
           {busy ? (
             <LoaderCircle className="animate-spin" size={16} />
@@ -269,9 +267,9 @@ export default function DocumentsSection({
           )}
         </div>
         <aside>
-          <div className="rounded-2xl bg-slate-950 p-5 text-white">
+          <div className="rounded-2xl border border-teal-200 bg-teal-50 p-5 text-teal-950">
             <div className="flex items-center gap-2">
-              <Image size={17} className="text-teal-300" />
+              <Image size={17} className="text-teal-700" />
               <h3 className="font-black">Plans et photos</h3>
             </div>
             {canEdit && (
@@ -281,7 +279,7 @@ export default function DocumentsSection({
                   onChange={(event) =>
                     setKind(event.target.value as "plan" | "photo")
                   }
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
                 >
                   <option value="plan">Plan</option>
                   <option value="photo">Photo</option>
@@ -290,9 +288,9 @@ export default function DocumentsSection({
                   value={caption}
                   onChange={(event) => setCaption(event.target.value)}
                   placeholder="Légende (facultatif)"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3 py-2 text-sm"
+                  className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
                 />
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-400 px-3 py-2.5 text-sm font-black text-slate-950">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-black text-white hover:bg-teal-800">
                   <FilePlus2 size={16} /> Ajouter un fichier
                   <input
                     type="file"

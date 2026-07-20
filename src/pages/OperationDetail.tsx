@@ -439,9 +439,9 @@ export default function OperationDetail() {
           {planning.map(([label, value]) => (
             <div
               key={String(label)}
-              className="rounded-xl bg-slate-950 p-4 text-white"
+              className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-slate-900"
             >
-              <p className="text-[10px] font-black uppercase tracking-wider text-teal-300">
+              <p className="text-[10px] font-black uppercase tracking-wider text-teal-700">
                 {label}
               </p>
               <p className="mt-2 text-sm font-black">{displayDate(value)}</p>
@@ -509,9 +509,9 @@ export default function OperationDetail() {
       />
 
       <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center justify-between bg-slate-950 px-6 py-5 text-white">
+        <div className="flex items-center justify-between border-b border-teal-200 bg-teal-50 px-6 py-5 text-slate-900">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-300">
+            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
               Suivi partagé
             </p>
             <h2 className="text-xl font-black">
@@ -525,7 +525,7 @@ export default function OperationDetail() {
                 setEditing(null);
                 setForm(EMPTY_OBSERVATION_FORM(operation.id));
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-400 px-4 py-2 text-sm font-black text-slate-950"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white hover:bg-teal-800"
             >
               <Plus size={16} /> Ajouter
             </button>
@@ -604,7 +604,7 @@ export default function OperationDetail() {
       </section>
 
       {form && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-950/65 p-4 backdrop-blur-sm">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-800/50 p-4 backdrop-blur-sm">
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
               <h2 className="text-xl font-black">

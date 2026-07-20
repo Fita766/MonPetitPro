@@ -135,7 +135,7 @@ export default function AdminUsers() {
       )}
 
       <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="grid min-w-[720px] grid-cols-[minmax(180px,1fr)_90px_180px_110px] gap-4 border-b border-slate-200 bg-slate-950 px-5 py-3 text-xs font-black uppercase tracking-wider text-slate-200">
+        <div className="grid min-w-[720px] grid-cols-[minmax(180px,1fr)_90px_180px_110px] gap-4 border-b border-teal-200 bg-teal-50 px-5 py-3 text-xs font-black uppercase tracking-wider text-teal-900">
           <span>Utilisateur</span>
           <span>Initiales</span>
           <span>Rôle</span>
@@ -212,11 +212,11 @@ export default function AdminUsers() {
       </div>
 
       <section className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
-        <div className="flex items-center gap-3 bg-slate-950 px-5 py-4 text-white">
-          <History size={18} className="text-teal-300" />
+        <div className="flex items-center gap-3 border-b border-teal-200 bg-teal-50 px-5 py-4 text-teal-950">
+          <History size={18} className="text-teal-700" />
           <div>
             <h2 className="font-black">Historique des modifications</h2>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-teal-700">
               50 dernières actions enregistrées en base
             </p>
           </div>
@@ -231,7 +231,7 @@ export default function AdminUsers() {
                 {row.table_name.replaceAll("_", " ")}
               </span>
               <span
-                className={`w-fit rounded-full px-2 py-1 text-[10px] font-black ${row.action === "DELETE" ? "bg-red-100 text-red-800" : row.action === "INSERT" ? "bg-emerald-100 text-emerald-800" : "bg-sky-100 text-sky-800"}`}
+                className={`w-fit rounded-full px-2 py-1 text-[10px] font-black ${row.action === "DELETE" ? "bg-red-100 text-red-800" : row.action === "INSERT" ? "bg-emerald-100 text-emerald-800" : "bg-teal-100 text-teal-800"}`}
               >
                 {row.action}
               </span>
