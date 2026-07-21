@@ -2,12 +2,46 @@ export type OperationStage = '0' | '0bis' | '1' | '1bis' | '2' | '3' | '4' | '5'
 
 export type UserRole = 'admin' | 'responsable' | 'contributeur' | 'lecteur';
 
+export type ProfileStatus = 'pending' | 'active' | 'suspended';
+
+export type PermissionKey =
+  | 'operations.view' | 'operations.create' | 'operations.edit_identity' | 'operations.edit_team'
+  | 'operations.edit_program' | 'operations.edit_planning' | 'operations.edit_budget'
+  | 'operations.edit_conditions' | 'operations.edit_objectives' | 'operations.edit_synthesis'
+  | 'operations.delete' | 'operations.export'
+  | 'observations.view' | 'observations.view_dg' | 'observations.create' | 'observations.edit_own'
+  | 'observations.edit_all' | 'observations.validate' | 'observations.delete' | 'observations.export'
+  | 'documents.view' | 'documents.upload' | 'documents.review' | 'documents.delete'
+  | 'calendar.view' | 'calendar.manage' | 'calendar.export'
+  | 'objectives.view' | 'objectives.manage' | 'objectives.export'
+  | 'statistics.view' | 'statistics.export'
+  | 'admin.users.view' | 'admin.users.manage' | 'admin.users.invite' | 'admin.users.suspend'
+  | 'admin.roles.view' | 'admin.roles.manage' | 'admin.audit.view' | 'admin.demo_transfer';
+
+export interface CustomRole {
+  id: string;
+  name: string;
+  description: string | null;
+  color_key: string;
+  is_active: boolean;
+  is_system: boolean;
+  permissions?: PermissionKey[];
+  user_count?: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface Profile {
   id: string;
   email: string | null;
   display_name: string | null;
   initials: string | null;
   role: UserRole;
+  custom_role_id?: string | null;
+  status?: ProfileStatus;
+  is_owner?: boolean;
+  last_seen_at?: string | null;
+  custom_role?: CustomRole | null;
   created_at?: string;
   updated_at?: string;
 }
