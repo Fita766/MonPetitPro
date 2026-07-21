@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../store/useStore";
-import { can } from "../lib/permissions";
+import { broadActionGranted, permissionGranted } from "../lib/accessControl";
 import { getStageConfig } from "../lib/stage";
 import {
   buildObservationPayload,
@@ -69,6 +69,7 @@ export default function OperationDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [operation, setOperation] = useState<DetailOperation | null>(null);
   const [observations, setObservations] = useState<DetailObservation[]>([]);
@@ -216,7 +217,7 @@ export default function OperationDetail() {
   };
 
   const validateResolution = async (observation: DetailObservation) => {
-    if (!user) return;
+    if (!user || !permissionGranted(permissions, 'observations.validate')) return;
     const { error: updateError } = await supabase
       .from("observations")
       .update(buildResolutionValidationPayload(user.id))
@@ -226,6 +227,7 @@ export default function OperationDetail() {
   };
 
   const deleteObservation = async (observation: DetailObservation) => {
+    if (!permissionGranted(permissions, 'observations.delete')) return;
     if (!window.confirm("Supprimer cette observation ?")) return;
     const { error: deleteError } = await supabase
       .from("observations")
@@ -238,6 +240,7 @@ export default function OperationDetail() {
   const deleteOperation = async () => {
     if (
       !operation ||
+      !permissionGranted(permissions, 'operations.delete') ||
       !window.confirm(`Supprimer « ${operation.name} » et ses observations ?`)
     )
       return;
@@ -313,7 +316,7 @@ export default function OperationDetail() {
             </p>
           </div>
           <div className="flex gap-2">
-            {can(profile?.role, "contribute") && (
+            {broadActionGranted(permissions, 'contribute') && (
               <button
                 type="button"
                 onClick={() => navigate(`/operations/${operation.id}/edit`)}
@@ -322,7 +325,7 @@ export default function OperationDetail() {
                 <Edit3 size={16} /> Modifier
               </button>
             )}
-            {can(profile?.role, "deleteOperation") && (
+            {permissionGranted(permissions, 'operations.delete') && (
               <button
                 type="button"
                 onClick={() => void deleteOperation()}
@@ -503,7 +506,7 @@ export default function OperationDetail() {
         typologies={typologies}
         subsidies={subsidies}
         conditions={conditions}
-        canEdit={can(profile?.role, "contribute")}
+        canEdit={permissionGranted(permissions, 'documents.upload') || permissionGranted(permissions, 'documents.review')}
         onChanged={() => setRefreshKey((key) => key + 1)}
         onError={setError}
       />
@@ -518,7 +521,7 @@ export default function OperationDetail() {
               Observations · {observations.length}
             </h2>
           </div>
-          {can(profile?.role, "contribute") && (
+          {permissionGranted(permissions, 'observations.create') && (
             <button
               type="button"
               onClick={() => {
@@ -579,9 +582,9 @@ export default function OperationDetail() {
                   </p>
                 </div>
                 <div className="flex justify-end gap-1">
-                  {can(profile?.role, "contribute") &&
+                  {broadActionGranted(permissions, 'contribute') &&
                     (!observation.resolution_validated_at ||
-                      can(profile?.role, "validateResolution")) && (
+                      permissionGranted(permissions, 'observations.validate')) && (
                       <button
                         type="button"
                         onClick={() => openEdit(observation)}
@@ -592,7 +595,8 @@ export default function OperationDetail() {
                     )}
                   <ResolutionActions
                     observation={observation}
-                    role={profile?.role}
+                    canValidate={permissionGranted(permissions, 'observations.validate')}
+                    canDelete={permissionGranted(permissions, 'observations.delete')}
                     onValidate={() => void validateResolution(observation)}
                     onDelete={() => void deleteObservation(observation)}
                   />

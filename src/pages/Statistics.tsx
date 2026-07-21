@@ -11,6 +11,8 @@ import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import { useStore } from "../store/useStore";
+import { permissionGranted } from "../lib/accessControl";
 import {
   aggregateBudget,
   aggregateCtxStats,
@@ -41,6 +43,7 @@ const TABS: { id: StatisticsTab; label: string }[] = [
 ];
 
 export default function Statistics() {
+  const permissions = useStore((state) => state.permissions);
   const currentYear = new Date().getFullYear();
   const [operations, setOperations] = useState<StatisticsOperation[]>([]);
   const [observations, setObservations] = useState<StatsObservation[]>([]);
@@ -270,7 +273,7 @@ export default function Statistics() {
             values={selectedYears}
             onChange={setSelectedYears}
           />
-          <button
+          {permissionGranted(permissions, 'statistics.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
@@ -283,7 +286,7 @@ export default function Statistics() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
           >
             <Download size={15} /> PDF
-          </button>
+          </button></>}
         </div>
       </header>
       {error && (

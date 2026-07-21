@@ -14,6 +14,7 @@ import AdminUsers from './pages/AdminUsers';
 import { useProfile } from './hooks/useProfile';
 import { accountAccessState, permissionGranted } from './lib/accessControl';
 import Objectives from './pages/Objectives';
+import type { PermissionKey } from './types/domain';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -65,6 +66,11 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
   );
 }
 
+function PermissionRoute({ children, anyOf }: { children: React.ReactNode; anyOf: PermissionKey[] }) {
+  const permissions = useStore((state) => state.permissions);
+  return <ProtectedRoute>{anyOf.some((key) => permissionGranted(permissions, key)) ? children : <Navigate to="/" replace />}</ProtectedRoute>;
+}
+
 function App() {
   const { setUser, setIsLoadingAuth } = useStore();
   useProfile();
@@ -90,9 +96,9 @@ function App() {
         <Route 
           path="/" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['operations.view']}>
               <Dashboard />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route
@@ -102,52 +108,52 @@ function App() {
         <Route 
           path="/operations/new" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['operations.create']}>
               <OperationForm />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route 
           path="/operations/:id/edit" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_conditions','operations.edit_objectives','operations.edit_synthesis']}>
               <OperationForm />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route 
           path="/operations/:id" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['operations.view']}>
               <OperationDetail />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route 
           path="/observations" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['observations.view']}>
               <Observations />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route 
           path="/calendar" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['calendar.view']}>
               <CalendarView />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
         <Route 
           path="/statistics" 
           element={
-            <ProtectedRoute>
+            <PermissionRoute anyOf={['statistics.view']}>
               <Statistics />
-            </ProtectedRoute>
+            </PermissionRoute>
           } 
         />
-        <Route path="/objectives" element={<ProtectedRoute><Objectives /></ProtectedRoute>} />
+        <Route path="/objectives" element={<PermissionRoute anyOf={['objectives.view']}><Objectives /></PermissionRoute>} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

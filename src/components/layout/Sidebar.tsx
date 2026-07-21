@@ -11,11 +11,11 @@ import {
   Target,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
-import { can } from "../../lib/permissions";
+import { permissionGranted } from "../../lib/accessControl";
 
 export default function Sidebar() {
   const navigate = useNavigate();
-  const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -46,27 +46,27 @@ export default function Sidebar() {
       </div>
 
       <nav className="flex flex-1 items-center gap-1 overflow-x-auto p-2 [&_span]:hidden lg:flex-col lg:items-stretch lg:space-y-2 lg:overflow-visible lg:p-4 lg:[&_span]:inline">
-        <NavLink to="/" className={navItemClass}>
+        {permissionGranted(permissions, 'operations.view') && <NavLink to="/" className={navItemClass}>
           <LayoutDashboard size={20} />
           <span className="font-medium">Opérations</span>
-        </NavLink>
-        <NavLink to="/observations" className={navItemClass}>
+        </NavLink>}
+        {permissionGranted(permissions, 'observations.view') && <NavLink to="/observations" className={navItemClass}>
           <ListTodo size={20} />
           <span className="font-medium">Toutes les observations</span>
-        </NavLink>
-        <NavLink to="/calendar" className={navItemClass}>
+        </NavLink>}
+        {permissionGranted(permissions, 'calendar.view') && <NavLink to="/calendar" className={navItemClass}>
           <CalendarDays size={20} />
           <span className="font-medium">Calendrier</span>
-        </NavLink>
-        <NavLink to="/statistics" className={navItemClass}>
+        </NavLink>}
+        {permissionGranted(permissions, 'statistics.view') && <NavLink to="/statistics" className={navItemClass}>
           <BarChart3 size={20} />
           <span className="font-medium">Statistiques</span>
-        </NavLink>
-        <NavLink to="/objectives" className={navItemClass}>
+        </NavLink>}
+        {permissionGranted(permissions, 'objectives.view') && <NavLink to="/objectives" className={navItemClass}>
           <Target size={20} />
           <span className="font-medium">Objectifs DMO</span>
-        </NavLink>
-        {can(profile?.role, "administerUsers") && (
+        </NavLink>}
+        {(permissionGranted(permissions, 'admin.users.view') || permissionGranted(permissions, 'admin.roles.view')) && (
           <NavLink to="/admin/users" className={navItemClass}>
             <UserCog size={20} />
             <span className="font-medium">Utilisateurs</span>

@@ -34,6 +34,9 @@ describe('migration du contrôle d’accès personnalisé', () => {
     expect(sql).toContain("has_permission('observations.view')");
     expect(sql).toContain("has_permission('admin.roles.manage')");
     expect(sql).toContain("has_permission('documents.upload')");
+    expect(sql).toContain('enforce_operation_field_permissions');
+    expect(sql).toContain("has_permission('operations.edit_identity')");
+    expect(sql).toContain("has_permission('operations.edit_budget')");
     expect(sql).not.toContain('using (true)');
   });
 });

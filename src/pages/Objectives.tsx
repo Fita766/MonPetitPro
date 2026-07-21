@@ -4,6 +4,8 @@ import ExcelJS from "exceljs";
 import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
+import { useStore } from "../store/useStore";
+import { permissionGranted } from "../lib/accessControl";
 import {
   buildObjectiveRows,
   mergeActualOutsideObjectives,
@@ -17,6 +19,7 @@ function displayDate(value: string | null) {
 }
 
 export default function Objectives() {
+  const permissions = useStore((state) => state.permissions);
   const [operations, setOperations] = useState<ObjectiveOperation[]>([]);
   const [year, setYear] = useState(new Date().getFullYear());
   const [mode, setMode] = useState<"objectives" | "objective-actual">(
@@ -253,7 +256,7 @@ export default function Objectives() {
               <option key={item}>{item}</option>
             ))}
           </select>
-          <button
+          {permissionGranted(permissions, 'objectives.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
@@ -266,7 +269,7 @@ export default function Objectives() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
           >
             <Download size={15} /> PDF
-          </button>
+          </button></>}
         </div>
       </header>
       {error && (

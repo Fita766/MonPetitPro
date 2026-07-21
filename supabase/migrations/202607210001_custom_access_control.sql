@@ -231,6 +231,28 @@ drop trigger if exists protect_profile_security_fields on public.profiles;
 create trigger protect_profile_security_fields before update on public.profiles
 for each row execute function public.protect_profile_security_fields();
 
+create or replace function public.protect_system_roles()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare protected_role_id uuid;
+begin
+  if tg_table_name = 'custom_roles' then
+    if old.is_system then raise exception 'un rôle système ne peut pas être modifié ou supprimé'; end if;
+  else
+    protected_role_id := case when tg_op = 'INSERT' then new.role_id else old.role_id end;
+    if exists (select 1 from public.custom_roles where id = protected_role_id and is_system) then
+      raise exception 'les permissions d’un rôle système sont protégées';
+    end if;
+  end if;
+  return case when tg_op = 'DELETE' then old else new end;
+end;
+$$;
+drop trigger if exists protect_system_roles on public.custom_roles;
+create trigger protect_system_roles before update or delete on public.custom_roles
+for each row execute function public.protect_system_roles();
+drop trigger if exists protect_system_role_permissions on public.custom_role_permissions;
+create trigger protect_system_role_permissions before insert or update or delete on public.custom_role_permissions
+for each row execute function public.protect_system_roles();
+
 create or replace function public.bootstrap_owner(target_email text)
 returns uuid language plpgsql security definer set search_path = '' as $$
 declare target_id uuid;
@@ -314,6 +336,111 @@ $$;
 revoke all on function public.transfer_account_data(text, text, text) from public, anon;
 grant execute on function public.transfer_account_data(text, text, text) to authenticated;
 
+create or replace function public.jsonb_columns_changed(old_row jsonb, new_row jsonb, column_names text[])
+returns boolean language sql immutable set search_path = '' as $$
+  select exists (
+    select 1 from unnest(column_names) column_name
+    where old_row -> column_name is distinct from new_row -> column_name
+  );
+$$;
+
+-- La policy autorise l'accès à la ligne ; ce trigger contrôle en plus chaque
+-- famille de champs afin qu'un appel API manuel ne contourne pas les cases du rôle.
+create or replace function public.enforce_operation_field_permissions()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare old_row jsonb := to_jsonb(old); new_row jsonb := to_jsonb(new);
+begin
+  if coalesce((select auth.role()), '') = 'service_role' then return new; end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'name','stage','of_number','gesprojet_number','department','commune','address',
+    'operation_type','promoter_name','zoning','category'
+  ]) and not public.has_permission('operations.edit_identity') then
+    raise exception 'permission manquante : modifier l’identité de l’opération';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'project_manager','operations_manager','assistant_name','gpa_assistant_name',
+    'manager_name','animation_provider'
+  ]) and not public.has_permission('operations.edit_team') then
+    raise exception 'permission manquante : modifier l’équipe de l’opération';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'total_housing_units','lli_units','lls_units','plai_units','plus_units','pls_units',
+    'brs_units','psla_units','anru_units','acv_units','commercial_units','other_units',
+    'student_units','specific_units','individual_housing_units','collective_housing_units',
+    'thermal_regulation','certification','clesence_bbca','clesence_reversible',
+    'clesence_land_sobriety','clesence_green_space'
+  ]) and not public.has_permission('operations.edit_program') then
+    raise exception 'permission manquante : modifier le programme';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'contractual_delivery_date','expected_delivery_date','actual_delivery_date','daact_date',
+    'co_cpi_date','cei_cef_date','csi_ca_date','development_to_assembly_date',
+    'approvals_submission_date','lls_approval_date','lli_approval_date','anru_approval_date',
+    'permit_number','permit_submission_date','permit_order_date','tender_date',
+    'vefa_cpr_or_sale_agreement_date','vefa_deed_or_land_purchase_date',
+    'works_order_expected_date','works_order_actual_date','m8_expected_date','m8_actual_date',
+    'assembly_to_works_date','m7_expected_date','m7_actual_date','m4_expected_date','m4_actual_date',
+    'show_home_expected_date','show_home_actual_date','opl_actual_date','progress_status',
+    'risk_assessment','delivery_reservations_count','reservations_per_housing','delivery_delay_days',
+    'justified_delay_days','effective_delay_days','authorized_deadline_date','deadline_status',
+    'reservations_clearance_date','dpe','management_expected_date','management_actual_date',
+    'm3_reservations_meeting_date','m10_date','gpa_end_date','gpa_count','h2_deadline_date','h2_actual_date'
+  ]) and not public.has_permission('operations.edit_planning') then
+    raise exception 'permission manquante : modifier le planning';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array['initial_budget','final_budget','penalty_amount'])
+     and not public.has_permission('operations.edit_budget') then
+    raise exception 'permission manquante : modifier le budget';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'objective_year','is_objective','objective_management_date','objective_housing_units'
+  ]) and not public.has_any_permission(array['operations.edit_objectives','objectives.manage']) then
+    raise exception 'permission manquante : modifier les objectifs';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array['synthesis_description','significant_works'])
+     and not public.has_permission('operations.edit_synthesis') then
+    raise exception 'permission manquante : modifier la synthèse';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_operation_field_permissions on public.operations;
+create trigger enforce_operation_field_permissions before update on public.operations
+for each row execute function public.enforce_operation_field_permissions();
+
+create or replace function public.enforce_observation_field_permissions()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare old_row jsonb := to_jsonb(old); new_row jsonb := to_jsonb(new);
+begin
+  if coalesce((select auth.role()), '') = 'service_role' then return new; end if;
+  if public.jsonb_columns_changed(old_row, new_row, array['resolution_validated_at','resolution_validated_by'])
+     and not public.has_permission('observations.validate') then
+    raise exception 'permission manquante : valider une résolution';
+  end if;
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'operation_id','info_date','description','responsible_person','deadline_date',
+    'completion_date','author_initials','resolution_date','is_dg','status'
+  ]) and not (
+    public.has_permission('observations.edit_all')
+    or (old.user_id = (select auth.uid()) and public.has_permission('observations.edit_own'))
+  ) then
+    raise exception 'permission manquante : modifier cette observation';
+  end if;
+  return new;
+end;
+$$;
+drop trigger if exists enforce_observation_field_permissions on public.observations;
+create trigger enforce_observation_field_permissions before update on public.observations
+for each row execute function public.enforce_observation_field_permissions();
+
 -- RLS du catalogue et des rôles.
 alter table public.permission_definitions enable row level security;
 alter table public.custom_roles enable row level security;
@@ -362,8 +489,8 @@ using (public.has_permission('operations.view'));
 create policy operations_permission_insert on public.operations for insert to authenticated
 with check (public.has_permission('operations.create'));
 create policy operations_permission_update on public.operations for update to authenticated
-using (public.has_any_permission(array['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_objectives','operations.edit_synthesis']))
-with check (public.has_any_permission(array['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_objectives','operations.edit_synthesis']));
+using (public.has_any_permission(array['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_conditions','operations.edit_objectives','operations.edit_synthesis']))
+with check (public.has_any_permission(array['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_conditions','operations.edit_objectives','operations.edit_synthesis']));
 create policy operations_permission_delete on public.operations for delete to authenticated
 using (public.has_permission('operations.delete'));
 
@@ -386,7 +513,7 @@ using (public.has_permission('observations.delete'));
 do $$
 declare table_name text;
 begin
-  foreach table_name in array array['operation_typologies','operation_subsidies'] loop
+  foreach table_name in array array['operation_typologies'] loop
     execute format('drop policy if exists authenticated_read on public.%I', table_name);
     execute format('drop policy if exists contributors_insert on public.%I', table_name);
     execute format('drop policy if exists contributors_update on public.%I', table_name);
@@ -397,6 +524,15 @@ begin
     execute format('create policy permission_delete on public.%I for delete to authenticated using (public.has_permission(''operations.edit_program''))', table_name);
   end loop;
 end $$;
+
+drop policy if exists authenticated_read on public.operation_subsidies;
+drop policy if exists contributors_insert on public.operation_subsidies;
+drop policy if exists contributors_update on public.operation_subsidies;
+drop policy if exists responsible_delete on public.operation_subsidies;
+create policy permission_read on public.operation_subsidies for select to authenticated using (public.has_permission('operations.view'));
+create policy permission_insert on public.operation_subsidies for insert to authenticated with check (public.has_permission('operations.edit_budget'));
+create policy permission_update on public.operation_subsidies for update to authenticated using (public.has_permission('operations.edit_budget')) with check (public.has_permission('operations.edit_budget'));
+create policy permission_delete on public.operation_subsidies for delete to authenticated using (public.has_permission('operations.edit_budget'));
 
 drop policy if exists authenticated_read on public.suspensive_conditions;
 drop policy if exists contributors_insert on public.suspensive_conditions;

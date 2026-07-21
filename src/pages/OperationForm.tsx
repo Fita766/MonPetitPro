@@ -4,7 +4,8 @@ import { ArrowLeft, BriefcaseBusiness, Building2, CalendarClock, CircleDollarSig
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
-import { can, isSchemaMigrationError, SCHEMA_MIGRATION_MESSAGE } from '../lib/permissions';
+import { isSchemaMigrationError, SCHEMA_MIGRATION_MESSAGE } from '../lib/permissions';
+import { permissionGranted } from '../lib/accessControl';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
 import type { OperationSubsidy, OperationTypology, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
@@ -39,7 +40,7 @@ function unique(values: (string | null | undefined)[]): string[] {
 export default function OperationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
-  const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [activeTab, setActiveTab] = useState('general');
   const [form, setForm] = useState<OperationFormData>({ ...EMPTY_OPERATION_FORM });
@@ -52,7 +53,16 @@ export default function OperationForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const editable = can(profile?.role, 'contribute');
+  const tabPermission = {
+    general: permissionGranted(permissions, 'operations.edit_identity') || permissionGranted(permissions, 'operations.edit_team'),
+    program: permissionGranted(permissions, 'operations.edit_program'),
+    planning: permissionGranted(permissions, 'operations.edit_planning'),
+    budget: permissionGranted(permissions, 'operations.edit_budget'),
+    conditions: permissionGranted(permissions, 'operations.edit_conditions'),
+    objectives: permissionGranted(permissions, 'operations.edit_objectives') || permissionGranted(permissions, 'objectives.manage'),
+    synthesis: permissionGranted(permissions, 'operations.edit_synthesis'),
+  }[activeTab] ?? false;
+  const editable = id ? tabPermission : permissionGranted(permissions, 'operations.create');
 
   const loadData = useCallback(async () => {
     setLoading(true);

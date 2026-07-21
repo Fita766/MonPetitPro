@@ -16,7 +16,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../store/useStore";
-import { can } from "../lib/permissions";
+import { broadActionGranted, permissionGranted } from "../lib/accessControl";
 import {
   buildObservationPayload,
   buildResolutionValidationPayload,
@@ -100,6 +100,7 @@ function downloadBlob(buffer: ExcelJS.Buffer, filename: string) {
 export default function Observations() {
   const navigate = useNavigate();
   const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [observations, setObservations] = useState<ObservationWithOperation[]>(
     [],
@@ -262,7 +263,7 @@ export default function Observations() {
 
   const saveObservation = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form || !user || !can(profile?.role, "contribute")) return;
+    if (!form || !user || !broadActionGranted(permissions, 'contribute')) return;
     setSaving(true);
     setError(null);
     const payload = buildObservationPayload(form, {
@@ -290,7 +291,7 @@ export default function Observations() {
   };
 
   const validateResolution = async (observation: ObservationWithOperation) => {
-    if (!user || !can(profile?.role, "validateResolution")) return;
+    if (!user || !permissionGranted(permissions, 'observations.validate')) return;
     const { error: validationError } = await supabase
       .from("observations")
       .update(buildResolutionValidationPayload(user.id))
@@ -304,7 +305,7 @@ export default function Observations() {
 
   const deleteObservation = async (observation: ObservationWithOperation) => {
     if (
-      !can(profile?.role, "deleteObservation") ||
+      !permissionGranted(permissions, 'observations.delete') ||
       !window.confirm("Supprimer cette observation ?")
     )
       return;
@@ -455,7 +456,7 @@ export default function Observations() {
               <List size={16} />
             </button>
           </div>
-          <button
+          {permissionGranted(permissions, 'observations.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
@@ -468,8 +469,8 @@ export default function Observations() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
           >
             <Download size={15} /> PDF
-          </button>
-          {can(profile?.role, "contribute") && (
+          </button></>}
+          {permissionGranted(permissions, 'observations.create') && (
             <button
               type="button"
               onClick={() => openCreate()}
@@ -613,7 +614,7 @@ export default function Observations() {
               {items.length === 0 ? (
                 <div className="p-7 text-center text-sm text-slate-400">
                   Aucune observation.
-                  {can(profile?.role, "contribute") && (
+                  {broadActionGranted(permissions, 'contribute') && (
                     <button
                       type="button"
                       onClick={() => openCreate(operation.id)}
@@ -681,9 +682,9 @@ export default function Observations() {
                         </p>
                       </div>
                       <div className="flex items-center justify-end gap-1">
-                        {can(profile?.role, "contribute") &&
+                        {broadActionGranted(permissions, 'contribute') &&
                           (!observation.resolution_validated_at ||
-                            can(profile?.role, "validateResolution")) && (
+                            permissionGranted(permissions, 'observations.validate')) && (
                             <button
                               type="button"
                               onClick={() => openEdit(observation)}
@@ -694,7 +695,8 @@ export default function Observations() {
                           )}
                         <ResolutionActions
                           observation={observation}
-                          role={profile?.role}
+                          canValidate={permissionGranted(permissions, 'observations.validate')}
+                          canDelete={permissionGranted(permissions, 'observations.delete')}
                           onValidate={() =>
                             void validateResolution(observation)
                           }
@@ -769,7 +771,8 @@ export default function Observations() {
                       </button>
                       <ResolutionActions
                         observation={observation}
-                        role={profile?.role}
+                        canValidate={permissionGranted(permissions, 'observations.validate')}
+                        canDelete={permissionGranted(permissions, 'observations.delete')}
                         onValidate={() => void validateResolution(observation)}
                         onDelete={() => void deleteObservation(observation)}
                       />

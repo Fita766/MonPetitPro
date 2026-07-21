@@ -26,7 +26,7 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../store/useStore";
-import { can } from "../lib/permissions";
+import { permissionGranted } from "../lib/accessControl";
 import {
   buildCalendarEvents,
   type BusinessCalendarEvent,
@@ -136,7 +136,7 @@ function eventMatches(
 
 export default function CalendarView() {
   const navigate = useNavigate();
-  const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [view, setView] = useState<CalendarViewType>("deliveries");
   const [display, setDisplay] = useState<CalendarDisplay>("month");
@@ -445,7 +445,7 @@ export default function CalendarView() {
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
-          <button
+          {permissionGranted(permissions, 'calendar.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
@@ -458,8 +458,8 @@ export default function CalendarView() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
           >
             <Download size={15} /> PDF {year}
-          </button>
-          {view === "agenda" && can(profile?.role, "contribute") && (
+          </button></>}
+          {view === "agenda" && permissionGranted(permissions, 'calendar.manage') && (
             <button
               type="button"
               onClick={openNewEvent}

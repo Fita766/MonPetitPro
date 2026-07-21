@@ -14,7 +14,7 @@ import {
 } from "lucide-react";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../store/useStore";
-import { can } from "../lib/permissions";
+import { broadActionGranted, permissionGranted } from "../lib/accessControl";
 import { getStageConfig } from "../lib/stage";
 import {
   filterOperations,
@@ -87,7 +87,7 @@ function shortDate(value: string | null | undefined): string {
 
 export default function Dashboard() {
   const navigate = useNavigate();
-  const profile = useStore((state) => state.profile);
+  const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [operations, setOperations] = useState<DashboardOperation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -171,7 +171,7 @@ export default function Dashboard() {
     operation: DashboardOperation,
   ) => {
     event.stopPropagation();
-    if (!can(profile?.role, "deleteOperation")) return;
+    if (!permissionGranted(permissions, 'operations.delete')) return;
     if (
       !window.confirm(
         `Supprimer « ${operation.name} » et toutes ses observations ?`,
@@ -225,7 +225,7 @@ export default function Dashboard() {
             selected={columns}
             onChange={setColumns}
           />
-          <button
+          {permissionGranted(permissions, 'operations.export') && <><button
             type="button"
             onClick={() => void exportOperationsExcel(filtered, columns)}
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"
@@ -238,8 +238,8 @@ export default function Dashboard() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"
           >
             <FileDown size={15} /> PDF
-          </button>
-          {can(profile?.role, "contribute") && (
+          </button></>}
+          {permissionGranted(permissions, 'operations.create') && (
             <button
               type="button"
               onClick={() => navigate("/operations/new")}
@@ -437,7 +437,7 @@ export default function Dashboard() {
                         ))}
                         <td className="sticky right-0 bg-white px-3 py-2">
                           <div className="flex justify-end gap-1">
-                            {can(profile?.role, "contribute") && (
+                            {broadActionGranted(permissions, 'contribute') && (
                               <button
                                 type="button"
                                 aria-label="Modifier"
@@ -450,7 +450,7 @@ export default function Dashboard() {
                                 <Edit3 size={15} />
                               </button>
                             )}
-                            {can(profile?.role, "deleteOperation") && (
+                            {permissionGranted(permissions, 'operations.delete') && (
                               <button
                                 type="button"
                                 aria-label="Supprimer"
