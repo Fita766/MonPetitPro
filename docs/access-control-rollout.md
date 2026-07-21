@@ -7,14 +7,14 @@ Cette procédure ne supprime aucune donnée métier.
 1. Sauvegarder la base Supabase.
 2. Appliquer `202607200001_dmo_extension.sql`, puis `202607210001_custom_access_control.sql`.
 3. Dans Supabase Auth, désactiver **Allow new users to sign up**.
-4. Déployer la fonction `admin-users` avec les secrets `SUPABASE_URL`, `SUPABASE_ANON_KEY` et `SUPABASE_SECRET_KEY`.
+4. Déployer la fonction `admin-users`. Elle utilise les secrets Supabase fournis automatiquement ; `SUPABASE_SECRET_KEY` reste une surcharge optionnelle.
 
 Commandes Supabase CLI, depuis la racine du projet :
 
 ```bash
 supabase link --project-ref VOTRE_PROJECT_REF
 supabase db push
-supabase secrets set SUPABASE_SECRET_KEY=VOTRE_CLE_SECRETE INVITE_REDIRECT_URL=https://votre-domaine.fr
+supabase secrets set INVITE_REDIRECT_URL=https://votre-domaine.fr
 supabase functions deploy admin-users
 ```
 

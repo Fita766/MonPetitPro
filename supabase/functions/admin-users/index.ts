@@ -31,7 +31,7 @@ Deno.serve(async (request) => {
   try {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    const secretKey = Deno.env.get("SUPABASE_SECRET_KEY");
+    const secretKey = Deno.env.get("SUPABASE_SECRET_KEY") ?? Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseUrl || !anonKey || !secretKey) throw new Error("Configuration serveur incomplète");
 
     const authorization = request.headers.get("Authorization");
