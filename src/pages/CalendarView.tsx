@@ -434,10 +434,10 @@ export default function CalendarView() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
             Pilotage temporel
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
             Calendriers
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -448,14 +448,14 @@ export default function CalendarView() {
           {permissionGranted(permissions, 'calendar.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <FileSpreadsheet size={15} /> Excel {year}
           </button>
           <button
             type="button"
             onClick={exportPdf}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <Download size={15} /> PDF {year}
           </button></>}
@@ -463,7 +463,7 @@ export default function CalendarView() {
             <button
               type="button"
               onClick={openNewEvent}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-black text-white"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-medium text-white"
             >
               <Plus size={16} /> Événement
             </button>
@@ -471,7 +471,7 @@ export default function CalendarView() {
         </div>
       </header>
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
           {error}
         </div>
       )}
@@ -484,7 +484,7 @@ export default function CalendarView() {
             className={`rounded-2xl border p-4 text-left transition ${view === item.id ? "border-teal-300 bg-teal-50 text-teal-950 shadow-sm" : "border-slate-200 bg-white text-slate-800 hover:border-teal-400"}`}
           >
             <p
-              className={`text-xs font-black ${view === item.id ? "text-teal-800" : "text-teal-700"}`}
+              className={`text-xs font-medium ${view === item.id ? "text-teal-800" : "text-teal-700"}`}
             >
               {item.label}
             </p>
@@ -521,7 +521,7 @@ export default function CalendarView() {
             <button
               type="button"
               onClick={() => setCurrentDate(new Date())}
-              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-black"
+              className="rounded-xl border border-slate-200 px-3 py-2 text-xs font-medium"
             >
               Aujourd’hui
             </button>
@@ -532,7 +532,7 @@ export default function CalendarView() {
             >
               <ChevronRight />
             </button>
-            <h2 className="ml-2 text-xl font-black capitalize text-slate-950">
+            <h2 className="ml-2 text-xl font-medium capitalize text-slate-950">
               {display === "month"
                 ? format(currentDate, "MMMM yyyy", { locale: fr })
                 : year}
@@ -542,14 +542,14 @@ export default function CalendarView() {
             <button
               type="button"
               onClick={() => setDisplay("month")}
-              className={`rounded-lg px-3 py-2 text-xs font-black ${display === "month" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${display === "month" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
             >
               Mois
             </button>
             <button
               type="button"
               onClick={() => setDisplay("year")}
-              className={`rounded-lg px-3 py-2 text-xs font-black ${display === "year" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
+              className={`rounded-lg px-3 py-2 text-xs font-medium ${display === "year" ? "bg-white text-slate-950 shadow-sm" : "text-slate-500"}`}
             >
               Année
             </button>
@@ -561,7 +561,7 @@ export default function CalendarView() {
               {["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"].map((day) => (
                 <div
                   key={day}
-                  className="px-2 py-3 text-center text-[10px] font-black uppercase tracking-widest text-slate-400"
+                  className="px-2 py-3 text-center text-[10px] font-medium uppercase tracking-widest text-slate-400"
                 >
                   {day}
                 </div>
@@ -576,7 +576,7 @@ export default function CalendarView() {
                     className={`min-h-32 border-b border-r border-slate-100 p-2 ${isSameMonth(day, currentDate) ? "bg-white" : "bg-slate-50/70 text-slate-300"}`}
                   >
                     <p
-                      className={`mb-2 text-xs font-black ${format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal-700 text-white" : ""}`}
+                      className={`mb-2 text-xs font-medium ${format(day, "yyyy-MM-dd") === format(new Date(), "yyyy-MM-dd") ? "inline-flex h-6 w-6 items-center justify-center rounded-full bg-teal-700 text-white" : ""}`}
                     >
                       {format(day, "d")}
                     </p>
@@ -586,9 +586,9 @@ export default function CalendarView() {
                           key={item.id}
                           type="button"
                           onClick={() => openEvent(item)}
-                          className={`block w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-bold leading-tight ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}
+                          className={`block w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-medium leading-tight ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}
                         >
-                          <span className="mr-1 font-black">{item.code}</span>
+                          <span className="mr-1 font-medium">{item.code}</span>
                           {item.time && <span>{item.time} · </span>}
                           {item.operationName !== "Sans opération" && (
                             <span>{item.operationName} · </span>
@@ -597,7 +597,7 @@ export default function CalendarView() {
                         </button>
                       ))}
                       {items.length > 4 && (
-                        <p className="px-2 text-[10px] font-bold text-slate-400">
+                        <p className="px-2 text-[10px] font-medium text-slate-400">
                           + {items.length - 4} autre(s)
                         </p>
                       )}
@@ -626,10 +626,10 @@ export default function CalendarView() {
                   }}
                   className="min-h-52 bg-white p-5 text-left hover:bg-teal-50/30"
                 >
-                  <h3 className="text-sm font-black capitalize text-slate-950">
+                  <h3 className="text-sm font-medium capitalize text-slate-950">
                     {format(monthDate, "MMMM", { locale: fr })}
                   </h3>
-                  <p className="mt-1 text-[10px] font-bold text-slate-400">
+                  <p className="mt-1 text-[10px] font-medium text-slate-400">
                     {items.length} événement(s)
                   </p>
                   <div className="mt-4 space-y-2">
@@ -638,7 +638,7 @@ export default function CalendarView() {
                         <span
                           className={`mt-1 h-2 w-2 shrink-0 rounded-full ${item.actual ? "bg-emerald-500" : "bg-teal-400"}`}
                         />
-                        <span className="font-bold text-slate-600">
+                        <span className="font-medium text-slate-600">
                           {format(parseISO(item.date), "dd")} ·{" "}
                           {item.operationName} · {item.title}
                         </span>
@@ -660,10 +660,10 @@ export default function CalendarView() {
           >
             <div className="mb-5 flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+                <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
                   Agenda libre
                 </p>
-                <h2 className="text-xl font-black">
+                <h2 className="text-xl font-medium">
                   {eventForm.id ? "Modifier l’événement" : "Nouvel événement"}
                 </h2>
               </div>
@@ -753,7 +753,7 @@ export default function CalendarView() {
                 <button
                   type="button"
                   onClick={() => void deleteManualEvent()}
-                  className="text-sm font-bold text-red-600"
+                  className="text-sm font-medium text-red-600"
                 >
                   Supprimer
                 </button>
@@ -762,7 +762,7 @@ export default function CalendarView() {
               )}
               <button
                 type="submit"
-                className="rounded-xl bg-teal-800 px-5 py-2.5 text-sm font-black text-white"
+                className="rounded-xl bg-teal-800 px-5 py-2.5 text-sm font-medium text-white"
               >
                 Enregistrer
               </button>

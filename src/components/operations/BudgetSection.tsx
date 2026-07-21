@@ -61,15 +61,15 @@ export default function BudgetSection({
       <div className="mt-8 overflow-hidden rounded-2xl border border-slate-200 bg-white">
         <div className="flex items-center justify-between border-b border-teal-200 bg-teal-50 px-5 py-4 text-teal-950">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
               SUBVENTIONS
             </p>
-            <h3 className="font-black">Qui finance quoi, et combien ?</h3>
+            <h3 className="font-medium">Qui finance quoi, et combien ?</h3>
           </div>
           <button
             type="button"
             onClick={add}
-            className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-3 py-2 text-xs font-black text-white hover:bg-teal-800"
+            className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-3 py-2 text-xs font-medium text-white hover:bg-teal-800"
           >
             <Plus size={14} /> Ajouter
           </button>

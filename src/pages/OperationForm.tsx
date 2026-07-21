@@ -226,23 +226,23 @@ export default function OperationForm() {
     <div className="mx-auto max-w-[1500px] pb-28">
       <header className="mb-7 flex flex-col justify-between gap-5 md:flex-row md:items-end">
         <div>
-          <button type="button" onClick={() => navigate(id ? `/operations/${id}` : '/')} className="mb-4 inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-teal-800"><ArrowLeft size={17} /> Retour</button>
-          <p className="text-[10px] font-black uppercase tracking-[0.26em] text-teal-700">Fiche opération DMO</p>
-          <h1 className="mt-1 max-w-4xl text-3xl font-black tracking-tight text-slate-950 md:text-4xl">{id ? form.name || 'Modifier l’opération' : 'Créer une opération complète'}</h1>
+          <button type="button" onClick={() => navigate(id ? `/operations/${id}` : '/')} className="mb-4 inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-teal-800"><ArrowLeft size={17} /> Retour</button>
+          <p className="text-[10px] font-medium uppercase tracking-[0.26em] text-teal-700">Fiche opération DMO</p>
+          <h1 className="mt-1 max-w-4xl text-3xl font-semibold tracking-tight text-slate-950 md:text-4xl">{id ? form.name || 'Modifier l’opération' : 'Créer une opération complète'}</h1>
         </div>
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm"><p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Avancement</p><p className="mt-1 text-sm font-bold text-slate-700">Section {tabs.findIndex((tab) => tab.id === activeTab) + 1} sur {tabs.length}</p></div>
+        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 text-right shadow-sm"><p className="text-[10px] font-medium uppercase tracking-widest text-slate-400">Avancement</p><p className="mt-1 text-sm font-medium text-slate-700">Section {tabs.findIndex((tab) => tab.id === activeTab) + 1} sur {tabs.length}</p></div>
       </header>
 
-      {error && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-semibold text-red-900">{error}</div>}
-      {!editable && <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-semibold text-amber-900">Votre rôle permet la consultation, mais pas la modification.</div>}
+      {error && <div role="alert" className="mb-6 rounded-2xl border border-red-200 bg-red-50 px-5 py-4 text-sm font-medium text-red-900">{error}</div>}
+      {!editable && <div className="mb-6 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm font-medium text-amber-900">Votre rôle permet la consultation, mais pas la modification.</div>}
 
       <OperationTabs tabs={tabs} activeTab={activeTab} onChange={setActiveTab} />
       <form onSubmit={handleSubmit}>
         <fieldset disabled={!editable || saving} className="rounded-3xl border border-slate-200 bg-[#fbfcfa] p-5 shadow-sm md:p-8">{activeContent}</fieldset>
         <div className="fixed bottom-0 left-64 right-0 z-30 border-t border-slate-200 bg-white/95 px-8 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
-            <p className="hidden text-xs font-semibold text-slate-500 md:block">Les champs calculés seront mis à jour à l’enregistrement.</p>
-            <button disabled={!editable || saving} type="submit" className="ml-auto inline-flex items-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-black text-white shadow-lg shadow-teal-900/15 transition hover:-translate-y-0.5 hover:bg-teal-900 disabled:translate-y-0 disabled:opacity-50"><Save size={18} /> {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
+            <p className="hidden text-xs font-medium text-slate-500 md:block">Les champs calculés seront mis à jour à l’enregistrement.</p>
+            <button disabled={!editable || saving} type="submit" className="ml-auto inline-flex items-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-teal-900/15 transition hover:-translate-y-0.5 hover:bg-teal-900 disabled:translate-y-0 disabled:opacity-50"><Save size={18} /> {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
           </div>
         </div>
       </form>

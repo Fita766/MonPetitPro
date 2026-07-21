@@ -211,15 +211,15 @@ export default function ProgramSection({
       <div className="mt-10 overflow-hidden rounded-2xl border border-slate-200">
         <div className="flex items-center justify-between border-b border-teal-200 bg-teal-50 px-5 py-4 text-teal-950">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
               Tableau détaillé
             </p>
-            <h3 className="font-black">Typologies par financement</h3>
+            <h3 className="font-medium">Typologies par financement</h3>
           </div>
           <button
             type="button"
             onClick={clearTypologies}
-            className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-bold text-slate-200 hover:bg-white/10"
+            className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10"
           >
             <Trash2 size={14} /> Réinitialiser
           </button>
@@ -235,7 +235,7 @@ export default function ProgramSection({
                   <th
                     key={product}
                     colSpan={2}
-                    className="border border-slate-200 bg-slate-100 p-2 text-center font-black"
+                    className="border border-slate-200 bg-slate-100 p-2 text-center font-medium"
                   >
                     {product}
                   </th>
@@ -262,7 +262,7 @@ export default function ProgramSection({
             <tbody>
               {typologyNames.map((typology) => (
                 <tr key={typology}>
-                  <th className="border border-slate-200 bg-slate-50 p-2 text-left font-black">
+                  <th className="border border-slate-200 bg-slate-50 p-2 text-left font-medium">
                     {typology}
                   </th>
                   {products.flatMap((product) => {

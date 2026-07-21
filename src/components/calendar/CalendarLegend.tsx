@@ -1,6 +1,6 @@
 export default function CalendarLegend() {
   return (
-    <div className="flex flex-wrap items-center gap-4 text-xs font-semibold text-slate-500">
+    <div className="flex flex-wrap items-center gap-4 text-xs font-medium text-slate-500">
       <span className="flex items-center gap-2">
         <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> Prévisionnel /
         butoir

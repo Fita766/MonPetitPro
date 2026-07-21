@@ -55,10 +55,10 @@ function displayText(value: unknown): string {
 function Info({ label, value }: { label: string; value: unknown }) {
   return (
     <div className="rounded-xl bg-slate-50 p-3">
-      <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+      <p className="text-[10px] font-medium uppercase tracking-wider text-slate-400">
         {label}
       </p>
-      <p className="mt-1 break-words text-sm font-bold text-slate-800">
+      <p className="mt-1 break-words text-sm font-medium text-slate-800">
         {displayText(value)}
       </p>
     </div>
@@ -287,7 +287,7 @@ export default function OperationDetail() {
       <button
         type="button"
         onClick={() => navigate("/")}
-        className="mb-5 inline-flex items-center gap-2 text-sm font-bold text-slate-500 hover:text-teal-800"
+        className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-slate-500 hover:text-teal-800"
       >
         <ArrowLeft size={17} /> Toutes les opérations
       </button>
@@ -296,20 +296,20 @@ export default function OperationDetail() {
           style={{ backgroundColor: stage.color, color: stage.textColor }}
           className="px-7 py-4"
         >
-          <p className="text-xs font-black uppercase tracking-[0.24em]">
+          <p className="text-xs font-medium uppercase tracking-[0.24em]">
             Stade {operation.stage ?? "—"} · {stage.label}
           </p>
         </div>
         <div className="flex flex-col justify-between gap-5 px-7 py-6 lg:flex-row lg:items-end">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.24em] text-teal-700">
+            <p className="text-[10px] font-medium uppercase tracking-[0.24em] text-teal-700">
               {operation.operation_type ?? "Type non renseigné"} ·{" "}
               {operation.of_number || "N° OF —"}
             </p>
-            <h1 className="mt-1 max-w-5xl text-4xl font-black tracking-tight text-slate-950">
+            <h1 className="mt-1 max-w-5xl text-4xl font-semibold tracking-tight text-slate-950">
               {operation.name}
             </h1>
-            <p className="mt-2 text-sm font-semibold text-slate-500">
+            <p className="mt-2 text-sm font-medium text-slate-500">
               {[operation.department, operation.commune, operation.address]
                 .filter(Boolean)
                 .join(" · ") || "Localisation non renseignée"}
@@ -320,7 +320,7 @@ export default function OperationDetail() {
               <button
                 type="button"
                 onClick={() => navigate(`/operations/${operation.id}/edit`)}
-                className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-black text-white"
+                className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-medium text-white"
               >
                 <Edit3 size={16} /> Modifier
               </button>
@@ -338,14 +338,14 @@ export default function OperationDetail() {
         </div>
       </header>
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
           {error}
         </div>
       )}
 
       <div className="grid grid-cols-1 gap-5 xl:grid-cols-3">
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800">
+          <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-slate-800">
             <UsersRound size={17} className="text-teal-700" /> Équipe
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -358,7 +358,7 @@ export default function OperationDetail() {
           </div>
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800">
+          <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-slate-800">
             <Building2 size={17} className="text-teal-700" /> Programme
           </h2>
           <div className="mt-4 grid grid-cols-3 gap-3">
@@ -382,7 +382,7 @@ export default function OperationDetail() {
           </p>
         </section>
         <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800">
+          <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-slate-800">
             <BadgeEuro size={17} className="text-teal-700" /> Finances
           </h2>
           <div className="mt-4 grid grid-cols-2 gap-3">
@@ -415,10 +415,10 @@ export default function OperationDetail() {
                 key={subsidy.id}
                 className="flex justify-between gap-4 text-xs"
               >
-                <span className="font-bold text-slate-600">
+                <span className="font-medium text-slate-600">
                   {subsidy.provider}
                 </span>
-                <span className="font-black text-slate-900">
+                <span className="font-medium text-slate-900">
                   {subsidy.amount?.toLocaleString("fr-FR", {
                     style: "currency",
                     currency: "EUR",
@@ -434,7 +434,7 @@ export default function OperationDetail() {
       </div>
 
       <section className="mt-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <h2 className="flex items-center gap-2 text-sm font-black uppercase tracking-wider text-slate-800">
+        <h2 className="flex items-center gap-2 text-sm font-medium uppercase tracking-wider text-slate-800">
           <CalendarDays size={17} className="text-teal-700" /> Planning
           synthétique
         </h2>
@@ -444,10 +444,10 @@ export default function OperationDetail() {
               key={String(label)}
               className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-slate-900"
             >
-              <p className="text-[10px] font-black uppercase tracking-wider text-teal-700">
+              <p className="text-[10px] font-medium uppercase tracking-wider text-teal-700">
                 {label}
               </p>
-              <p className="mt-2 text-sm font-black">{displayDate(value)}</p>
+              <p className="mt-2 text-sm font-medium">{displayDate(value)}</p>
             </div>
           ))}
         </div>
@@ -459,7 +459,7 @@ export default function OperationDetail() {
         <div className="mt-5 grid grid-cols-1 gap-5 xl:grid-cols-3">
           {operation.is_objective && (
             <section className="rounded-2xl border border-teal-200 bg-teal-50 p-5">
-              <h2 className="flex items-center gap-2 font-black text-teal-950">
+              <h2 className="flex items-center gap-2 font-medium text-teal-950">
                 <Flag size={17} /> Objectif DMO {operation.objective_year}
               </h2>
               <p className="mt-2 text-sm text-teal-800">
@@ -470,7 +470,7 @@ export default function OperationDetail() {
           )}
           {conditions.length > 0 && (
             <section className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
-              <h2 className="font-black text-amber-950">
+              <h2 className="font-medium text-amber-950">
                 Conditions suspensives
               </h2>
               <div className="mt-3 space-y-2">
@@ -488,7 +488,7 @@ export default function OperationDetail() {
           )}
           {operation.synthesis_description && (
             <section className="rounded-2xl border border-slate-200 bg-white p-5">
-              <h2 className="flex items-center gap-2 font-black text-slate-900">
+              <h2 className="flex items-center gap-2 font-medium text-slate-900">
                 <FileText size={17} /> Synthèse
               </h2>
               <p className="mt-3 line-clamp-6 whitespace-pre-wrap text-sm leading-relaxed text-slate-600">
@@ -514,10 +514,10 @@ export default function OperationDetail() {
       <section className="mt-7 overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
         <div className="flex items-center justify-between border-b border-teal-200 bg-teal-50 px-6 py-5 text-slate-900">
           <div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
               Suivi partagé
             </p>
-            <h2 className="text-xl font-black">
+            <h2 className="text-xl font-medium">
               Observations · {observations.length}
             </h2>
           </div>
@@ -528,7 +528,7 @@ export default function OperationDetail() {
                 setEditing(null);
                 setForm(EMPTY_OBSERVATION_FORM(operation.id));
               }}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white hover:bg-teal-800"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
               <Plus size={16} /> Ajouter
             </button>
@@ -546,10 +546,10 @@ export default function OperationDetail() {
                 className="grid grid-cols-1 items-center gap-4 px-6 py-5 md:grid-cols-[110px_minmax(250px,1fr)_130px_130px_150px]"
               >
                 <div>
-                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-black text-slate-700">
+                  <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-medium text-slate-700">
                     {getObservationStatus(observation)}
                   </span>
-                  <p className="mt-2 text-[10px] font-bold text-slate-400">
+                  <p className="mt-2 text-[10px] font-medium text-slate-400">
                     Auteur {observation.author_initials ?? "—"}
                   </p>
                 </div>
@@ -558,7 +558,7 @@ export default function OperationDetail() {
                     {observation.description}
                   </p>
                   {observation.is_dg && (
-                    <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">
+                    <span className="mt-2 inline-block rounded bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
                       DG
                     </span>
                   )}
@@ -568,16 +568,16 @@ export default function OperationDetail() {
                   value={observation.responsible_person}
                 />
                 <div>
-                  <p className="text-[10px] font-black uppercase text-slate-400">
+                  <p className="text-[10px] font-medium uppercase text-slate-400">
                     Butoir
                   </p>
-                  <p className="mt-1 text-xs font-bold">
+                  <p className="mt-1 text-xs font-medium">
                     {displayDate(observation.deadline_date)}
                   </p>
-                  <p className="mt-2 text-[10px] font-black uppercase text-slate-400">
+                  <p className="mt-2 text-[10px] font-medium uppercase text-slate-400">
                     Résolution
                   </p>
-                  <p className="mt-1 text-xs font-bold">
+                  <p className="mt-1 text-xs font-medium">
                     {displayDate(observation.resolution_date)}
                   </p>
                 </div>
@@ -611,7 +611,7 @@ export default function OperationDetail() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-800/50 p-4 backdrop-blur-sm">
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white">
             <div className="flex items-center justify-between border-b border-slate-200 px-6 py-5">
-              <h2 className="text-xl font-black">
+              <h2 className="text-xl font-medium">
                 {editing ? "Modifier l’observation" : "Nouvelle observation"}
               </h2>
               <button

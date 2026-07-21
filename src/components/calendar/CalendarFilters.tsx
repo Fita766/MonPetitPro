@@ -20,7 +20,7 @@ export default function CalendarFilters({ view, filters, options, onChange }: { 
       {(view === 'conditions' || view === 'agenda') && <MultiSelectFilter label="COP" options={options.cops} values={filters.cops} onChange={(values) => set('cops', values)} />}
       {(view === 'deliveries' || view === 'management' || view === 'agenda') && <MultiSelectFilter label="Départements" options={options.departments} values={filters.departments} onChange={(values) => set('departments', values)} />}
       {(view === 'deliveries' || view === 'agenda') && <MultiSelectFilter label="Promoteurs" options={options.promoters} values={filters.promoters} onChange={(values) => set('promoters', values)} />}
-      {Object.values(filters).some((values) => values.length) && <button type="button" onClick={() => onChange({ operations: [], ctxs: [], cops: [], departments: [], promoters: [] })} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">Effacer</button>}
+      {Object.values(filters).some((values) => values.length) && <button type="button" onClick={() => onChange({ operations: [], ctxs: [], cops: [], departments: [], promoters: [] })} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500">Effacer</button>}
     </div>
   );
 }

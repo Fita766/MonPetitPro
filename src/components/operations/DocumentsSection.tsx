@@ -185,10 +185,10 @@ export default function DocumentsSection({
     <section className="mt-5 rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
       <div className="flex flex-col justify-between gap-4 md:flex-row md:items-center">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
             Livrables
           </p>
-          <h2 className="text-xl font-black text-slate-950">
+          <h2 className="text-xl font-medium text-slate-950">
             Fiche opération et revue documentaire
           </h2>
         </div>
@@ -196,7 +196,7 @@ export default function DocumentsSection({
           type="button"
           disabled={busy}
           onClick={() => void exportSynthesis()}
-          className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-black text-white hover:bg-teal-800 disabled:opacity-50"
+          className="inline-flex items-center justify-center gap-2 rounded-xl bg-teal-700 px-4 py-2.5 text-sm font-medium text-white hover:bg-teal-800 disabled:opacity-50"
         >
           {busy ? (
             <LoaderCircle className="animate-spin" size={16} />
@@ -211,7 +211,7 @@ export default function DocumentsSection({
           {reviewItems.length === 0 ? (
             <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center">
               <FileCheck2 className="mx-auto text-teal-700" />
-              <p className="mt-3 text-sm font-bold text-slate-700">
+              <p className="mt-3 text-sm font-medium text-slate-700">
                 La trame reprend automatiquement les échéances de la revue
                 documentaire.
               </p>
@@ -220,7 +220,7 @@ export default function DocumentsSection({
                   type="button"
                   disabled={busy}
                   onClick={() => void initialiseReview()}
-                  className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-black text-white"
+                  className="mt-4 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white"
                 >
                   Initialiser la revue
                 </button>
@@ -233,7 +233,7 @@ export default function DocumentsSection({
                   key={category}
                   className="overflow-hidden rounded-2xl border border-slate-200"
                 >
-                  <h3 className="bg-slate-100 px-4 py-3 text-xs font-black text-slate-800">
+                  <h3 className="bg-slate-100 px-4 py-3 text-xs font-medium text-slate-800">
                     {category}
                   </h3>
                   <div className="divide-y divide-slate-100">
@@ -242,10 +242,10 @@ export default function DocumentsSection({
                         key={item.id || item.label}
                         className="grid gap-2 px-4 py-3 sm:grid-cols-[1fr_105px_140px] sm:items-center"
                       >
-                        <p className="text-xs font-semibold text-slate-700">
+                        <p className="text-xs font-medium text-slate-700">
                           {item.label}
                         </p>
-                        <span className="text-xs font-bold text-slate-500">
+                        <span className="text-xs font-medium text-slate-500">
                           {item.expected_date || "À calculer"}
                         </span>
                         <input
@@ -270,7 +270,7 @@ export default function DocumentsSection({
           <div className="rounded-2xl border border-teal-200 bg-teal-50 p-5 text-teal-950">
             <div className="flex items-center gap-2">
               <Image size={17} className="text-teal-700" />
-              <h3 className="font-black">Plans et photos</h3>
+              <h3 className="font-medium">Plans et photos</h3>
             </div>
             {canEdit && (
               <div className="mt-4 space-y-3">
@@ -290,7 +290,7 @@ export default function DocumentsSection({
                   placeholder="Légende (facultatif)"
                   className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800"
                 />
-                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-black text-white hover:bg-teal-800">
+                <label className="flex cursor-pointer items-center justify-center gap-2 rounded-xl bg-teal-700 px-3 py-2.5 text-sm font-medium text-white hover:bg-teal-800">
                   <FilePlus2 size={16} /> Ajouter un fichier
                   <input
                     type="file"
@@ -309,7 +309,7 @@ export default function DocumentsSection({
                 href={urls[document.id || document.storage_path]}
                 target="_blank"
                 rel="noreferrer"
-                className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-xs font-bold text-slate-700 hover:border-teal-400"
+                className="flex items-center justify-between rounded-xl border border-slate-200 px-3 py-3 text-xs font-medium text-slate-700 hover:border-teal-400"
               >
                 <span className="truncate">
                   {document.caption || document.storage_path.split("/").pop()}

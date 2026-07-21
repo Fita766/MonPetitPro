@@ -7,7 +7,7 @@ export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
   );
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
-      <div className="mb-6 flex gap-5 text-xs font-bold text-slate-500">
+      <div className="mb-6 flex gap-5 text-xs font-medium text-slate-500">
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> Prévisionnel
         </span>
@@ -34,10 +34,10 @@ export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
                 className="w-2.5 rounded-t bg-emerald-500 md:w-4"
               />
             </div>
-            <p className="mt-2 text-[10px] font-black text-slate-500">
+            <p className="mt-2 text-[10px] font-medium text-slate-500">
               {row.label}
             </p>
-            <p className="mt-1 text-[9px] font-bold text-slate-400">
+            <p className="mt-1 text-[9px] font-medium text-slate-400">
               {row.expected}/{row.actual}
             </p>
           </div>
@@ -59,7 +59,7 @@ export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
             <tr className="bg-teal-50 text-teal-900">
               <th className="p-2 text-left">Prévisionnel</th>
               {rows.map((row) => (
-                <td key={row.month} className="p-2 text-center font-bold">
+                <td key={row.month} className="p-2 text-center font-medium">
                   {row.expectedCumulative}
                 </td>
               ))}
@@ -67,7 +67,7 @@ export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
             <tr className="bg-emerald-50 text-emerald-900">
               <th className="p-2 text-left">Réel</th>
               {rows.map((row) => (
-                <td key={row.month} className="p-2 text-center font-bold">
+                <td key={row.month} className="p-2 text-center font-medium">
                   {row.actualCumulative}
                 </td>
               ))}

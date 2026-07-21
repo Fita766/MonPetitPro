@@ -235,10 +235,10 @@ export default function Objectives() {
     <div className="mx-auto max-w-[1800px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
             Atterrissage annuel
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
             Objectifs DMO
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -250,7 +250,7 @@ export default function Objectives() {
           <select
             value={year}
             onChange={(event) => setYear(Number(event.target.value))}
-            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-black"
+            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-medium"
           >
             {availableYears.map((item) => (
               <option key={item}>{item}</option>
@@ -259,39 +259,39 @@ export default function Objectives() {
           {permissionGranted(permissions, 'objectives.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <FileSpreadsheet size={15} /> Excel
           </button>
           <button
             type="button"
             onClick={exportPdf}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <Download size={15} /> PDF
           </button></>}
         </div>
       </header>
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
           {error}
         </div>
       )}
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-3">
         <div className="rounded-2xl border border-teal-200 bg-teal-50 p-5 text-teal-950">
-          <p className="text-[10px] font-black uppercase tracking-widest text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-teal-700">
             Objectif immuable
           </p>
-          <p className="mt-2 text-3xl font-black">
+          <p className="mt-2 text-3xl font-medium">
             {objectiveTotal.toLocaleString("fr-FR")}
           </p>
           <p className="text-xs text-teal-700">logements</p>
         </div>
         <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
-          <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-emerald-700">
             Réel comptabilisé
           </p>
-          <p className="mt-2 text-3xl font-black text-emerald-950">
+          <p className="mt-2 text-3xl font-medium text-emerald-950">
             {actualTotal.toLocaleString("fr-FR")}
           </p>
           <p className="text-xs text-emerald-700">logements mis en gestion</p>
@@ -299,10 +299,10 @@ export default function Objectives() {
         <div
           className={`rounded-2xl border p-5 ${gainLossTotal >= 0 ? "border-teal-200 bg-teal-50" : "border-rose-200 bg-rose-50"}`}
         >
-          <p className="text-[10px] font-black uppercase tracking-widest text-slate-600">
+          <p className="text-[10px] font-medium uppercase tracking-widest text-slate-600">
             Logements-mois gagnés / perdus
           </p>
-          <p className="mt-2 text-3xl font-black text-slate-950">
+          <p className="mt-2 text-3xl font-medium text-slate-950">
             {gainLossTotal > 0 ? "+" : ""}
             {gainLossTotal.toLocaleString("fr-FR")}
           </p>
@@ -312,14 +312,14 @@ export default function Objectives() {
         <button
           type="button"
           onClick={() => setMode("objectives")}
-          className={`rounded-lg px-4 py-2 text-xs font-black ${mode === "objectives" ? "bg-white shadow-sm" : "text-slate-500"}`}
+          className={`rounded-lg px-4 py-2 text-xs font-medium ${mode === "objectives" ? "bg-white shadow-sm" : "text-slate-500"}`}
         >
           Objectif
         </button>
         <button
           type="button"
           onClick={() => setMode("objective-actual")}
-          className={`rounded-lg px-4 py-2 text-xs font-black ${mode === "objective-actual" ? "bg-white shadow-sm" : "text-slate-500"}`}
+          className={`rounded-lg px-4 py-2 text-xs font-medium ${mode === "objective-actual" ? "bg-white shadow-sm" : "text-slate-500"}`}
         >
           Objectif + réel hors objectif
         </button>
@@ -356,7 +356,7 @@ export default function Objectives() {
               ].map((header) => (
                 <th
                   key={header}
-                  className="whitespace-nowrap px-3 py-3 font-black uppercase tracking-wider"
+                  className="whitespace-nowrap px-3 py-3 font-medium uppercase tracking-wider"
                 >
                   {header}
                 </th>
@@ -368,18 +368,18 @@ export default function Objectives() {
               <tr key={row.id} className="border-b border-slate-100">
                 <td className="px-3 py-3">
                   <span
-                    className={`rounded-full px-2 py-1 text-[9px] font-black ${row.source === "objective" ? "bg-teal-100 text-teal-900" : "bg-emerald-100 text-emerald-900"}`}
+                    className={`rounded-full px-2 py-1 text-[9px] font-medium ${row.source === "objective" ? "bg-teal-100 text-teal-900" : "bg-emerald-100 text-emerald-900"}`}
                   >
                     {row.source === "objective" ? "OBJECTIF" : "RÉEL +"}
                   </span>
                 </td>
-                <td className="px-3 py-3 font-black text-slate-950">
+                <td className="px-3 py-3 font-medium text-slate-950">
                   {row.name}
                 </td>
                 <td className="px-3 py-3">{row.department}</td>
                 <td className="px-3 py-3">{row.commune}</td>
                 <td className="max-w-52 px-3 py-3">{row.address}</td>
-                <td className="px-3 py-3 text-center font-black">
+                <td className="px-3 py-3 text-center font-medium">
                   {row.objectiveHousingUnits || "—"}
                 </td>
                 <td className="px-3 py-3">
@@ -388,13 +388,13 @@ export default function Objectives() {
                 <td className="px-3 py-3">
                   {displayDate(row.expectedManagementDate)}
                 </td>
-                <td className="px-3 py-3 font-bold text-emerald-700">
+                <td className="px-3 py-3 font-medium text-emerald-700">
                   {displayDate(row.actualManagementDate)}
                 </td>
                 {row.months.map((month) => (
                   <td
                     key={month.month}
-                    className={`px-2 py-3 text-center font-bold ${month.realized ? "bg-emerald-100 text-emerald-900" : "text-slate-400"}`}
+                    className={`px-2 py-3 text-center font-medium ${month.realized ? "bg-emerald-100 text-emerald-900" : "text-slate-400"}`}
                   >
                     {month.realized
                       ? "✓"
@@ -409,7 +409,7 @@ export default function Objectives() {
                   </td>
                 ))}
                 <td
-                  className={`px-3 py-3 text-center text-sm font-black ${(row.gainLoss ?? 0) >= 0 ? "text-teal-700" : "text-rose-700"}`}
+                  className={`px-3 py-3 text-center text-sm font-medium ${(row.gainLoss ?? 0) >= 0 ? "text-teal-700" : "text-rose-700"}`}
                 >
                   {row.gainLoss == null
                     ? "—"
@@ -426,7 +426,7 @@ export default function Objectives() {
             )}
           </tbody>
           <tfoot>
-            <tr className="bg-slate-100 font-black">
+            <tr className="bg-slate-100 font-medium">
               <td colSpan={9} className="px-3 py-3 text-right">
                 RÉEL CUMULÉ
               </td>

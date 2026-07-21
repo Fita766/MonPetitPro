@@ -37,7 +37,7 @@ export default function Sidebar() {
             <Building2 size={24} />
           </div>
           <div>
-            <h1 className="font-bold text-slate-800 text-lg leading-tight">
+            <h1 className="font-semibold text-slate-800 text-lg leading-tight">
               MonPetitPro
             </h1>
             <p className="text-xs text-slate-500">Suivi d'Action Immo</p>

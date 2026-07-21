@@ -34,7 +34,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
         <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
-          <h1 className="text-2xl font-black text-slate-950">
+          <h1 className="text-2xl font-semibold text-slate-950">
             {suspended ? 'Compte suspendu' : 'Compte en attente de validation'}
           </h1>
           <p className="mt-3 text-slate-600">
@@ -43,7 +43,7 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
               : 'Un administrateur doit encore activer votre compte et lui attribuer un rôle.'}
           </p>
           <button type="button" onClick={() => void supabase.auth.signOut()}
-            className="mt-6 rounded-xl bg-teal-700 px-5 py-3 font-bold text-white hover:bg-teal-800">
+            className="mt-6 rounded-xl bg-teal-700 px-5 py-3 font-medium text-white hover:bg-teal-800">
             Se déconnecter
           </button>
         </div>

@@ -110,13 +110,13 @@ export default function PlanningSection({
             <div className="absolute right-3 top-3 text-teal-600/60">
               <LockKeyhole size={14} />
             </div>
-            <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
               {code}
             </p>
-            <p className="mt-1 min-h-8 text-xs font-bold text-slate-300">
+            <p className="mt-1 min-h-8 text-xs font-medium text-slate-300">
               {label}
             </p>
-            <p className="mt-2 text-lg font-black">{formatDate(value)}</p>
+            <p className="mt-2 text-lg font-medium">{formatDate(value)}</p>
             <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-400">
               <Calculator size={11} /> {formula}
             </p>

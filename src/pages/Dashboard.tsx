@@ -208,10 +208,10 @@ export default function Dashboard() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
             Portefeuille immobilier
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
             Opérations
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -228,14 +228,14 @@ export default function Dashboard() {
           {permissionGranted(permissions, 'operations.export') && <><button
             type="button"
             onClick={() => void exportOperationsExcel(filtered, columns)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 shadow-sm hover:border-teal-400"
           >
             <FileSpreadsheet size={15} /> Excel
           </button>
           <button
             type="button"
             onClick={() => exportOperationsPdf(filtered, columns)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-bold text-slate-700 shadow-sm hover:border-teal-400"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 shadow-sm hover:border-teal-400"
           >
             <FileDown size={15} /> PDF
           </button></>}
@@ -243,7 +243,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate("/operations/new")}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-black text-white shadow-lg shadow-teal-950/15 hover:bg-teal-900"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-950/15 hover:bg-teal-900"
             >
               <Plus size={17} /> Nouvelle opération
             </button>
@@ -254,7 +254,7 @@ export default function Dashboard() {
       {error && (
         <div
           role="alert"
-          className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900"
+          className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900"
         >
           {error}
         </div>
@@ -322,7 +322,7 @@ export default function Dashboard() {
             values={filters.labels}
             onChange={(value) => setFilter("labels", value)}
           />
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500">
             Du{" "}
             <input
               aria-label="Livraison à partir du"
@@ -334,7 +334,7 @@ export default function Dashboard() {
               className="outline-none"
             />
           </label>
-          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500">
+          <label className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500">
             Au{" "}
             <input
               aria-label="Livraison jusqu’au"
@@ -358,7 +358,7 @@ export default function Dashboard() {
       {operations.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-slate-300 bg-white p-16 text-center">
           <Building2 className="mx-auto text-slate-300" size={42} />
-          <h2 className="mt-4 text-xl font-black text-slate-800">
+          <h2 className="mt-4 text-xl font-medium text-slate-800">
             Aucune opération
           </h2>
           <p className="mt-2 text-sm text-slate-500">
@@ -379,7 +379,7 @@ export default function Dashboard() {
                     {selectedColumns.map((column) => (
                       <th
                         key={column.key}
-                        className="whitespace-nowrap px-3 py-3 font-black uppercase tracking-wider"
+                        className="whitespace-nowrap px-3 py-3 font-medium uppercase tracking-wider"
                       >
                         <button
                           type="button"
@@ -418,14 +418,14 @@ export default function Dashboard() {
                                   backgroundColor: stage.color,
                                   color: stage.textColor,
                                 }}
-                                className="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-black"
+                                className="inline-flex whitespace-nowrap rounded-full px-2.5 py-1 text-[10px] font-medium"
                               >
                                 {operation.stage
                                   ? `${operation.stage} · ${stage.label}`
                                   : stage.label}
                               </span>
                             ) : column.key === "name" ? (
-                              <span className="font-black text-slate-950">
+                              <span className="font-medium text-slate-950">
                                 {operation.name}
                               </span>
                             ) : (
@@ -488,33 +488,33 @@ export default function Dashboard() {
                     }}
                     className="px-5 py-3"
                   >
-                    <p className="text-[10px] font-black uppercase tracking-[0.2em]">
+                    <p className="text-[10px] font-medium uppercase tracking-[0.2em]">
                       Stade {operation.stage ?? "—"} · {stage.label}
                     </p>
                   </div>
                   <div className="p-5">
-                    <h2 className="break-words text-xl font-black text-slate-950">
+                    <h2 className="break-words text-xl font-medium text-slate-950">
                       {operation.name}
                     </h2>
-                    <p className="mt-2 text-sm font-semibold text-slate-500">
+                    <p className="mt-2 text-sm font-medium text-slate-500">
                       {[operation.department, operation.commune]
                         .filter(Boolean)
                         .join(" · ") || "Localisation non renseignée"}
                     </p>
                     <div className="mt-4 grid grid-cols-2 gap-3 text-xs">
                       <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="font-black uppercase text-slate-400">
+                        <p className="font-medium uppercase text-slate-400">
                           CTX
                         </p>
-                        <p className="mt-1 font-bold text-slate-800">
+                        <p className="mt-1 font-medium text-slate-800">
                           {operation.project_manager || "—"}
                         </p>
                       </div>
                       <div className="rounded-xl bg-slate-50 p-3">
-                        <p className="font-black uppercase text-slate-400">
+                        <p className="font-medium uppercase text-slate-400">
                           COP
                         </p>
-                        <p className="mt-1 font-bold text-slate-800">
+                        <p className="mt-1 font-medium text-slate-800">
                           {operation.operations_manager || "—"}
                         </p>
                       </div>

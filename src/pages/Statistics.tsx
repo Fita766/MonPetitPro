@@ -256,10 +256,10 @@ export default function Statistics() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
             Indicateurs DMO
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
             Statistiques
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -276,21 +276,21 @@ export default function Statistics() {
           {permissionGranted(permissions, 'statistics.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <FileSpreadsheet size={15} /> Excel
           </button>
           <button
             type="button"
             onClick={exportPdf}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <Download size={15} /> PDF
           </button></>}
         </div>
       </header>
       {error && (
-        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900">
+        <div className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
           {error}
         </div>
       )}
@@ -301,7 +301,7 @@ export default function Statistics() {
               key={item.id}
               type="button"
               onClick={() => setTab(item.id)}
-              className={`rounded-xl px-4 py-2.5 text-sm font-black ${tab === item.id ? "bg-teal-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"}`}
+              className={`rounded-xl px-4 py-2.5 text-sm font-medium ${tab === item.id ? "bg-teal-700 text-white shadow-sm" : "text-slate-500 hover:bg-slate-100"}`}
             >
               {item.label}
             </button>
@@ -314,31 +314,31 @@ export default function Statistics() {
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
             <div className="rounded-2xl border border-teal-200 bg-teal-50 p-5 text-teal-950">
               <Building2 className="text-teal-700" />
-              <p className="mt-4 text-3xl font-black">{operations.length}</p>
+              <p className="mt-4 text-3xl font-medium">{operations.length}</p>
               <p className="text-xs text-slate-400">opérations</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <BarChart3 className="text-teal-700" />
-              <p className="mt-4 text-3xl font-black">
+              <p className="mt-4 text-3xl font-medium">
                 {totalHousing.toLocaleString("fr-FR")}
               </p>
               <p className="text-xs text-slate-500">logements suivis</p>
             </div>
             <div className="rounded-2xl border border-slate-200 bg-white p-5">
               <FileSpreadsheet className="text-teal-600" />
-              <p className="mt-4 text-3xl font-black">{observations.length}</p>
+              <p className="mt-4 text-3xl font-medium">{observations.length}</p>
               <p className="text-xs text-slate-500">observations</p>
             </div>
             <div className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5">
               <CheckCircle2 className="text-emerald-700" />
-              <p className="mt-4 text-3xl font-black text-emerald-950">
+              <p className="mt-4 text-3xl font-medium text-emerald-950">
                 {completedObservations}
               </p>
               <p className="text-xs text-emerald-700">terminées</p>
             </div>
             <div className="rounded-2xl border border-rose-200 bg-rose-50 p-5">
               <TriangleAlert className="text-rose-700" />
-              <p className="mt-4 text-3xl font-black text-rose-950">
+              <p className="mt-4 text-3xl font-medium text-rose-950">
                 {lateObservations}
               </p>
               <p className="text-xs text-rose-700">en retard</p>

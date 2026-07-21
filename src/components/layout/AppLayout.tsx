@@ -21,7 +21,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         {schemaMessage && (
           <div
             role="alert"
-            className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-950"
+            className="mb-6 rounded-xl border border-amber-300 bg-amber-50 px-4 py-3 text-sm font-medium text-amber-950"
           >
             {schemaMessage}
           </div>

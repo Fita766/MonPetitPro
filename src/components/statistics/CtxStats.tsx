@@ -29,7 +29,7 @@ export default function CtxStats({
             ].map((label) => (
               <th
                 key={label}
-                className="px-4 py-3 font-black uppercase tracking-wider"
+                className="px-4 py-3 font-medium uppercase tracking-wider"
               >
                 {label}
               </th>
@@ -39,11 +39,11 @@ export default function CtxStats({
         <tbody>
           {rows.map((row) => (
             <tr key={row.name} className="border-b border-slate-100">
-              <td className="px-4 py-4 font-black text-slate-950">
+              <td className="px-4 py-4 font-medium text-slate-950">
                 {row.name}
               </td>
               <td className="px-4 py-4">{row.deliveredOperations}</td>
-              <td className="px-4 py-4 font-bold">{row.deliveredHousing}</td>
+              <td className="px-4 py-4 font-medium">{row.deliveredHousing}</td>
               <td className="px-4 py-4">{row.reservations}</td>
               <td className="px-4 py-4">
                 {number(row.reservationsPerHousing, 2)}

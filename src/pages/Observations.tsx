@@ -408,7 +408,7 @@ export default function Observations() {
     const status = statusFor(observation);
     return (
       <span
-        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-black ${STATUS_STYLES[status]}`}
+        className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-medium ${STATUS_STYLES[status]}`}
       >
         {status}
       </span>
@@ -426,10 +426,10 @@ export default function Observations() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-black uppercase tracking-[0.28em] text-teal-700">
+          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
             Suivi collectif
           </p>
-          <h1 className="mt-1 text-4xl font-black tracking-tight text-slate-950">
+          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
             Observations
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -459,14 +459,14 @@ export default function Observations() {
           {permissionGranted(permissions, 'observations.export') && <><button
             type="button"
             onClick={() => void exportExcel()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <FileSpreadsheet size={15} /> Excel
           </button>
           <button
             type="button"
             onClick={exportPdf}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <Download size={15} /> PDF
           </button></>}
@@ -474,7 +474,7 @@ export default function Observations() {
             <button
               type="button"
               onClick={() => openCreate()}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-black text-white"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2 text-sm font-medium text-white"
             >
               <Plus size={17} /> Ajouter
             </button>
@@ -484,7 +484,7 @@ export default function Observations() {
       {error && (
         <div
           role="alert"
-          className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-semibold text-red-900"
+          className="mb-5 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900"
         >
           {error}
         </div>
@@ -560,7 +560,7 @@ export default function Observations() {
                 dg: event.target.value as ObservationFilters["dg"],
               })
             }
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <option value="all">Toutes infos</option>
             <option value="only">DG uniquement</option>
@@ -569,13 +569,13 @@ export default function Observations() {
           <button
             type="button"
             onClick={() => setFilters(EMPTY_FILTERS)}
-            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-bold text-slate-500"
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500"
           >
             Effacer
           </button>
         </div>
         {view === "structured" && (
-          <label className="mt-3 flex items-center gap-2 text-xs font-semibold text-slate-600">
+          <label className="mt-3 flex items-center gap-2 text-xs font-medium text-slate-600">
             <input
               type="checkbox"
               checked={showEmpty}
@@ -599,13 +599,13 @@ export default function Observations() {
                 className="flex w-full flex-col justify-between gap-3 border-b border-teal-200 bg-teal-50 px-5 py-4 text-left text-slate-900 md:flex-row md:items-center"
               >
                 <div>
-                  <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+                  <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
                     {operation.operation_type ?? "Type non renseigné"} ·{" "}
                     {operation.stage ? `Stade ${operation.stage}` : "Stade —"}
                   </p>
-                  <h2 className="mt-1 text-lg font-black">{operation.name}</h2>
+                  <h2 className="mt-1 text-lg font-medium">{operation.name}</h2>
                 </div>
-                <p className="text-xs font-bold text-slate-500">
+                <p className="text-xs font-medium text-slate-500">
                   CTX {operation.project_manager ?? "—"} · COP{" "}
                   {operation.operations_manager ?? "—"} · {items.length} point
                   {items.length > 1 ? "s" : ""}
@@ -618,7 +618,7 @@ export default function Observations() {
                     <button
                       type="button"
                       onClick={() => openCreate(operation.id)}
-                      className="ml-2 font-bold text-teal-700"
+                      className="ml-2 font-medium text-teal-700"
                     >
                       Ajouter un point
                     </button>
@@ -632,10 +632,10 @@ export default function Observations() {
                       className="grid grid-cols-1 items-center gap-3 px-5 py-4 md:grid-cols-[100px_minmax(240px,1fr)_110px_110px_110px_130px]"
                     >
                       <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">
+                        <p className="text-[10px] font-medium uppercase text-slate-400">
                           Info
                         </p>
-                        <p className="mt-1 text-xs font-bold">
+                        <p className="mt-1 text-xs font-medium">
                           {new Date(
                             `${observation.info_date}T12:00:00`,
                           ).toLocaleDateString("fr-FR")}
@@ -645,11 +645,11 @@ export default function Observations() {
                         <div className="flex flex-wrap items-center gap-2">
                           {statusBadge(observation)}
                           {observation.is_dg && (
-                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-black text-amber-900">
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
                               <EyeOff size={11} /> DG
                             </span>
                           )}
-                          <span className="text-[10px] font-bold text-slate-400">
+                          <span className="text-[10px] font-medium text-slate-400">
                             par {observation.author_initials ?? "—"}
                           </span>
                         </div>
@@ -658,26 +658,26 @@ export default function Observations() {
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">
+                        <p className="text-[10px] font-medium uppercase text-slate-400">
                           Réalisateur
                         </p>
-                        <p className="mt-1 text-xs font-bold">
+                        <p className="mt-1 text-xs font-medium">
                           {observation.responsible_person}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">
+                        <p className="text-[10px] font-medium uppercase text-slate-400">
                           Butoir
                         </p>
-                        <p className="mt-1 text-xs font-bold">
+                        <p className="mt-1 text-xs font-medium">
                           {observation.deadline_date}
                         </p>
                       </div>
                       <div>
-                        <p className="text-[10px] font-black uppercase text-slate-400">
+                        <p className="text-[10px] font-medium uppercase text-slate-400">
                           Résolution
                         </p>
-                        <p className="mt-1 text-xs font-bold">
+                        <p className="mt-1 text-xs font-medium">
                           {observation.resolution_date ?? "—"}
                         </p>
                       </div>
@@ -729,7 +729,7 @@ export default function Observations() {
                 ].map((label) => (
                   <th
                     key={label}
-                    className="px-3 py-3 font-black uppercase tracking-wider"
+                    className="px-3 py-3 font-medium uppercase tracking-wider"
                   >
                     {label}
                   </th>
@@ -739,7 +739,7 @@ export default function Observations() {
             <tbody>
               {filtered.map((observation) => (
                 <tr key={observation.id} className="border-b border-slate-100">
-                  <td className="px-3 py-3 font-black">
+                  <td className="px-3 py-3 font-medium">
                     {observation.operations?.name}
                   </td>
                   <td className="max-w-xl px-3 py-3">
@@ -790,10 +790,10 @@ export default function Observations() {
           <div className="max-h-[92vh] w-full max-w-4xl overflow-y-auto rounded-3xl bg-white shadow-2xl">
             <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200 bg-white px-6 py-5">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-[0.2em] text-teal-700">
+                <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
                   Observation
                 </p>
-                <h2 className="text-xl font-black text-slate-950">
+                <h2 className="text-xl font-medium text-slate-950">
                   {editing ? "Modifier le point" : "Ajouter un point"}
                 </h2>
               </div>

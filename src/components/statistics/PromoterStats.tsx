@@ -28,7 +28,7 @@ export default function PromoterStats({ rows }: { rows: PromoterStat[] }) {
             ].map((label) => (
               <th
                 key={label}
-                className="px-3 py-3 font-black uppercase tracking-wider"
+                className="px-3 py-3 font-medium uppercase tracking-wider"
               >
                 {label}
               </th>
@@ -38,11 +38,11 @@ export default function PromoterStats({ rows }: { rows: PromoterStat[] }) {
         <tbody>
           {rows.map((row) => (
             <tr key={row.name} className="border-b border-slate-100">
-              <td className="px-3 py-3 font-black text-slate-950">
+              <td className="px-3 py-3 font-medium text-slate-950">
                 {row.name}
               </td>
               <td className="px-3 py-3">{row.operations}</td>
-              <td className="px-3 py-3 font-bold">{number(row.housing)}</td>
+              <td className="px-3 py-3 font-medium">{number(row.housing)}</td>
               <td className="px-3 py-3">{number(row.collectiveHousing)}</td>
               <td className="px-3 py-3">{number(row.individualHousing)}</td>
               <td className="px-3 py-3">{number(row.reservations)}</td>
