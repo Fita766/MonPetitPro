@@ -28,3 +28,6 @@ dossiers modifs/
 
 # Worktrees de développement isolés
 .worktrees/
+
+# Captures générées par les vérifications locales
+artifacts/

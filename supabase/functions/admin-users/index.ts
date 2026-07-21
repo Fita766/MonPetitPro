@@ -162,13 +162,14 @@ Deno.serve(async (request) => {
           target_initials: payload.initials?.trim().toUpperCase() || "SD",
         });
         if (error) throw error;
-        const { data: sourceUser } = await service.auth.admin.listUsers();
-        const demo = sourceUser?.users.find((user) => user.email?.toLowerCase() === sourceEmail);
-        if (demo) {
+        const { data: transfer, error: journalError } = await service.from("account_data_transfers")
+          .select("source_user_id").eq("id", transferId).single();
+        if (journalError) throw journalError;
+        if (transfer?.source_user_id) {
           const { error: profileError } = await service.from("profiles")
-            .update({ status: "suspended" }).eq("id", demo.id);
+            .update({ status: "suspended" }).eq("id", transfer.source_user_id);
           if (profileError) throw profileError;
-          const { error: banError } = await service.auth.admin.updateUserById(demo.id, {
+          const { error: banError } = await service.auth.admin.updateUserById(transfer.source_user_id, {
             ban_duration: "876000h",
           });
           if (banError) throw banError;
