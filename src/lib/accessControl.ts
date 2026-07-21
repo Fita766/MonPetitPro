@@ -110,3 +110,14 @@ export function normalizePermissionKeys(keys: readonly string[]): PermissionKey[
 export function broadActionGranted(keys: readonly PermissionKey[], action: BroadPermissionAction): boolean {
   return BROAD_ACTION_KEYS[action].some((key) => keys.includes(key));
 }
+
+export function permissionGranted(keys: readonly PermissionKey[], permission: PermissionKey): boolean {
+  return keys.includes(permission);
+}
+
+export function accountAccessState(
+  profile: { status?: 'pending' | 'active' | 'suspended' } | null,
+): 'missing' | 'pending' | 'active' | 'suspended' {
+  if (!profile) return 'missing';
+  return profile.status ?? 'pending';
+}

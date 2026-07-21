@@ -2,11 +2,13 @@ import { useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { isSchemaMigrationError, SCHEMA_MIGRATION_MESSAGE } from '../lib/permissions';
 import { useStore } from '../store/useStore';
+import { normalizePermissionKeys } from '../lib/accessControl';
 import type { Profile } from '../types/domain';
 
 export function useProfile(): void {
   const user = useStore((state) => state.user);
   const setProfile = useStore((state) => state.setProfile);
+  const setPermissions = useStore((state) => state.setPermissions);
   const setIsLoadingProfile = useStore((state) => state.setIsLoadingProfile);
   const setSchemaMessage = useStore((state) => state.setSchemaMessage);
 
@@ -16,25 +18,34 @@ export function useProfile(): void {
     async function loadProfile() {
       if (!user) {
         setProfile(null);
+        setPermissions([]);
         setIsLoadingProfile(false);
         return;
       }
 
       setIsLoadingProfile(true);
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, email, display_name, initials, role, created_at, updated_at')
-        .eq('id', user.id)
-        .maybeSingle();
+      const [profileResult, permissionsResult] = await Promise.all([
+        supabase
+          .from('profiles')
+          .select('id, email, display_name, initials, role, custom_role_id, status, is_owner, last_seen_at, created_at, updated_at, custom_role:custom_roles(id, name, description, color_key, is_active, is_system)')
+          .eq('id', user.id)
+          .maybeSingle(),
+        supabase.rpc('my_permissions'),
+      ]);
 
       if (cancelled) return;
 
-      if (error) {
+      if (profileResult.error || permissionsResult.error) {
         setProfile(null);
-        if (isSchemaMigrationError(error)) setSchemaMessage(SCHEMA_MIGRATION_MESSAGE);
+        setPermissions([]);
+        const error = profileResult.error ?? permissionsResult.error;
+        if (error && isSchemaMigrationError(error)) setSchemaMessage(SCHEMA_MIGRATION_MESSAGE);
       } else {
         setSchemaMessage(null);
-        setProfile((data as Profile | null) ?? null);
+        setProfile((profileResult.data as unknown as Profile | null) ?? null);
+        const keys = ((permissionsResult.data ?? []) as Array<{ permission_key?: string } | string>)
+          .map((row) => typeof row === 'string' ? row : row.permission_key ?? '');
+        setPermissions(normalizePermissionKeys(keys));
       }
       setIsLoadingProfile(false);
     }
@@ -43,5 +54,5 @@ export function useProfile(): void {
     return () => {
       cancelled = true;
     };
-  }, [setIsLoadingProfile, setProfile, setSchemaMessage, user]);
+  }, [setIsLoadingProfile, setPermissions, setProfile, setSchemaMessage, user]);
 }

@@ -3,8 +3,10 @@ import {
   PERMISSION_DEFINITIONS,
   PERMISSION_GROUPS,
   ROLE_COLORS,
+  accountAccessState,
   broadActionGranted,
   normalizePermissionKeys,
+  permissionGranted,
 } from '../accessControl';
 
 describe('catalogue des permissions', () => {
@@ -34,5 +36,14 @@ describe('catalogue des permissions', () => {
     expect(broadActionGranted(['observations.validate'], 'validateResolution')).toBe(true);
     expect(broadActionGranted(['admin.users.manage'], 'administerUsers')).toBe(true);
     expect(broadActionGranted([], 'read')).toBe(false);
+  });
+
+  it('bloque les comptes non actifs et vérifie une permission précise', () => {
+    expect(accountAccessState(null)).toBe('missing');
+    expect(accountAccessState({ status: 'pending' })).toBe('pending');
+    expect(accountAccessState({ status: 'suspended' })).toBe('suspended');
+    expect(accountAccessState({ status: 'active' })).toBe('active');
+    expect(permissionGranted(['operations.view'], 'operations.view')).toBe(true);
+    expect(permissionGranted(['operations.view'], 'operations.create')).toBe(false);
   });
 });

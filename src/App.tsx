@@ -12,12 +12,12 @@ import CalendarView from './pages/CalendarView';
 import Statistics from './pages/Statistics';
 import AdminUsers from './pages/AdminUsers';
 import { useProfile } from './hooks/useProfile';
-import { can } from './lib/permissions';
+import { accountAccessState, permissionGranted } from './lib/accessControl';
 import Objectives from './pages/Objectives';
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
-  const { user, isLoadingAuth, isLoadingProfile } = useStore();
+  const { user, profile, isLoadingAuth, isLoadingProfile } = useStore();
   
   if (isLoadingAuth || (user && isLoadingProfile)) {
     return <div className="min-h-screen flex items-center justify-center">Chargement...</div>;
@@ -26,17 +26,41 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   if (!user) {
     return <Navigate to="/login" replace />;
   }
+
+  const accessState = accountAccessState(profile);
+  if (accessState !== 'active') {
+    const suspended = accessState === 'suspended';
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 p-6">
+        <div className="w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-8 text-center shadow-sm">
+          <h1 className="text-2xl font-black text-slate-950">
+            {suspended ? 'Compte suspendu' : 'Compte en attente de validation'}
+          </h1>
+          <p className="mt-3 text-slate-600">
+            {suspended
+              ? 'Votre accès a été suspendu par un administrateur.'
+              : 'Un administrateur doit encore activer votre compte et lui attribuer un rôle.'}
+          </p>
+          <button type="button" onClick={() => void supabase.auth.signOut()}
+            className="mt-6 rounded-xl bg-teal-700 px-5 py-3 font-bold text-white hover:bg-teal-800">
+            Se déconnecter
+          </button>
+        </div>
+      </div>
+    );
+  }
   
   return <AppLayout>{children}</AppLayout>;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
-  const { profile, isLoadingProfile } = useStore();
+  const { permissions, isLoadingProfile } = useStore();
   return (
     <ProtectedRoute>
       {isLoadingProfile
         ? <div className="p-8 text-center text-slate-500">Chargement du profil…</div>
-        : can(profile?.role, 'administerUsers') ? children : <Navigate to="/" replace />}
+        : permissionGranted(permissions, 'admin.users.view') || permissionGranted(permissions, 'admin.roles.view')
+          ? children : <Navigate to="/" replace />}
     </ProtectedRoute>
   );
 }
