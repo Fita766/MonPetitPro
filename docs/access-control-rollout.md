@@ -19,6 +19,13 @@ Cette procédure ne supprime aucune donnée métier.
 select public.bootstrap_owner('sd@familleducastel.com');
 ```
 
+Le transfert initial utilise `demo@papa-immo.fr` comme source,
+`sd@familleducastel.com` comme cible et `SD` comme initiales de remplacement.
+La fonction `transfer_account_data` réaffecte en une transaction les opérations,
+observations et événements. Elle conserve les initiales déjà renseignées,
+complète uniquement celles qui sont vides et journalise les volumes déplacés.
+Elle ne copie ni ne supprime aucune ligne métier.
+
 La fonction n’est exécutable ni par un utilisateur anonyme ni par un utilisateur authentifié ordinaire.
 
 ## Compte démo

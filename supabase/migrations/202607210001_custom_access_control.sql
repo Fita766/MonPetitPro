@@ -245,6 +245,75 @@ $$;
 revoke all on function public.bootstrap_owner(text) from public, anon, authenticated;
 grant execute on function public.bootstrap_owner(text) to service_role;
 
+-- Réaffectation atomique des données créées avec le compte de démonstration.
+-- Les lignes sont mises à jour en place : aucun doublon métier n'est créé.
+create or replace function public.transfer_account_data(
+  source_email text,
+  target_email text,
+  target_initials text default 'SD'
+)
+returns uuid language plpgsql security definer set search_path = '' as $$
+declare
+  source_id uuid;
+  target_id uuid;
+  transfer_id uuid;
+  moved_operations integer := 0;
+  moved_observations integer := 0;
+  moved_events integer := 0;
+begin
+  if not public.has_permission('admin.demo_transfer')
+     or not exists (
+       select 1 from public.profiles
+       where id = (select auth.uid()) and is_owner and status = 'active'
+     ) then
+    raise exception 'seul un propriétaire actif peut transférer les données du compte démo';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtext('monpetitpro:account-data-transfer'));
+
+  select id into source_id from auth.users where lower(email) = lower(source_email);
+  if source_id is null then raise exception 'compte source introuvable : %', source_email; end if;
+
+  select id into target_id from auth.users where lower(email) = lower(target_email);
+  if target_id is null then raise exception 'compte cible introuvable : %', target_email; end if;
+  if source_id = target_id then raise exception 'les comptes source et cible doivent être différents'; end if;
+
+  update public.operations set user_id = target_id where user_id = source_id;
+  get diagnostics moved_operations = row_count;
+
+  update public.observations
+  set user_id = target_id,
+      author_initials = coalesce(nullif(btrim(author_initials), ''), target_initials)
+  where user_id = source_id;
+  get diagnostics moved_observations = row_count;
+
+  update public.events set user_id = target_id where user_id = source_id;
+  get diagnostics moved_events = row_count;
+
+  -- Un second clic retourne le journal existant au lieu de créer un faux transfert à zéro.
+  if moved_operations + moved_observations + moved_events = 0 then
+    select t.id into transfer_id
+    from public.account_data_transfers t
+    where t.source_user_id = source_id and t.target_user_id = target_id
+    order by t.transferred_at desc limit 1;
+    if transfer_id is not null then return transfer_id; end if;
+  end if;
+
+  insert into public.account_data_transfers (
+    source_user_id, target_user_id, source_email, target_email,
+    operations_count, observations_count, events_count, transferred_by, details
+  ) values (
+    source_id, target_id, lower(source_email), lower(target_email),
+    moved_operations, moved_observations, moved_events, (select auth.uid()),
+    jsonb_build_object('target_initials', target_initials)
+  ) returning id into transfer_id;
+
+  return transfer_id;
+end;
+$$;
+revoke all on function public.transfer_account_data(text, text, text) from public, anon;
+grant execute on function public.transfer_account_data(text, text, text) to authenticated;
+
 -- RLS du catalogue et des rôles.
 alter table public.permission_definitions enable row level security;
 alter table public.custom_roles enable row level security;
