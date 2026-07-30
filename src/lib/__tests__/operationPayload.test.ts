@@ -55,6 +55,34 @@ describe('toOperationPayload', () => {
       authorized_deadline_date: '2028-02-24',
     });
   });
+
+  it('sépare le mode de réalisation de la nature et conserve la commune officielle', () => {
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'VEFA',
+      program_nature: 'Résidence intergénérationnelle',
+      commune_id: '11111111-1111-1111-1111-111111111111',
+      commune: 'CLAIROIX',
+      department: '60',
+      zoning: 'B1',
+    });
+
+    expect(payload).toMatchObject({
+      operation_type: 'VEFA',
+      program_nature: 'Résidence intergénérationnelle',
+      commune_id: '11111111-1111-1111-1111-111111111111',
+      commune: 'CLAIROIX',
+      department: '60',
+      zoning: 'B1',
+    });
+  });
+
+  it('refuse une ancienne nature utilisée à la place du mode MOD ou VEFA', () => {
+    expect(() => toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'Réhabilitation',
+    })).toThrow(/mode de réalisation/i);
+  });
 });
 
 describe('fromOperationRow', () => {

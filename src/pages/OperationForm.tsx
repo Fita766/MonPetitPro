@@ -11,8 +11,9 @@ import {
   canEditOperationField,
 } from '../lib/operationFieldPermissions';
 import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
+import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { OperationProgramLine, OperationProgramSection, OperationSubsidy, SuspensiveCondition } from '../types/domain';
+import type { CommuneReference, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -32,16 +33,6 @@ const tabs: OperationTab[] = [
   { id: 'synthesis', label: 'Synthèse', shortLabel: 'Synthèse', icon: FileText },
 ];
 
-interface Suggestions {
-  ctx: string[];
-  cop: string[];
-  promoters: string[];
-}
-
-function unique(values: (string | null | undefined)[]): string[] {
-  return [...new Set(values.filter((value): value is string => Boolean(value?.trim())))].sort((a, b) => a.localeCompare(b, 'fr'));
-}
-
 export default function OperationForm() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -59,7 +50,8 @@ export default function OperationForm() {
     subsidies: [] as string[],
     conditions: [] as string[],
   });
-  const [suggestions, setSuggestions] = useState<Suggestions>({ ctx: [], cop: [], promoters: [] });
+  const [references, setReferences] = useState<ReferenceValue[]>([]);
+  const [communes, setCommunes] = useState<CommuneReference[]>([]);
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,7 +82,11 @@ export default function OperationForm() {
   const loadData = useCallback(async () => {
     setLoading(true);
     setError(null);
-    const suggestionRequest = supabase.from('operations').select('project_manager, operations_manager, promoter_name');
+    const referenceRequest = supabase.from('reference_values')
+      .select('id,kind,label,is_active,sort_order').order('sort_order').order('label');
+    const communeRequest = supabase.from('communes')
+      .select('id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active')
+      .order('name');
     const requests = id ? [
       supabase.from('operations').select('*').eq('id', id).single(),
       supabase.from('operation_program_sections').select('*').eq('operation_id', id).order('sort_order'),
@@ -99,14 +95,15 @@ export default function OperationForm() {
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
 
-    const [suggestionResult, results] = await Promise.all([suggestionRequest, Promise.all(requests)]);
-    if (suggestionResult.data) {
-      setSuggestions({
-        ctx: unique(suggestionResult.data.map((row) => row.project_manager)),
-        cop: unique(suggestionResult.data.map((row) => row.operations_manager)),
-        promoters: unique(suggestionResult.data.map((row) => row.promoter_name)),
-      });
-    }
+    const [referenceResult, communeResult, results] = await Promise.all([
+      referenceRequest,
+      communeRequest,
+      Promise.all(requests),
+    ]);
+    if (referenceResult.data) setReferences(referenceResult.data as ReferenceValue[]);
+    if (communeResult.data) setCommunes(communeResult.data as CommuneReference[]);
+    const referenceError = referenceResult.error ?? communeResult.error;
+    if (referenceError) setError(referenceError.message);
 
     if (id) {
       const firstError = results.find((result) => result.error)?.error;
@@ -147,6 +144,17 @@ export default function OperationForm() {
   const changeField = useCallback(<K extends keyof OperationFormData>(key: K, value: OperationFormData[K]) => {
     if (!canEditField(key)) return;
     setForm((current) => ({ ...current, [key]: value }));
+  }, [canEditField]);
+  const chooseCommune = useCallback((commune: CommuneReference) => {
+    if (!canEditField('commune_id')) return;
+    const selected = selectCommune(commune);
+    setForm((current) => ({
+      ...current,
+      commune_id: selected.communeId,
+      commune: selected.commune,
+      department: selected.department,
+      zoning: selected.zoning,
+    }));
   }, [canEditField]);
 
   const syncProgram = async (operationId: string) => {
@@ -289,15 +297,16 @@ export default function OperationForm() {
       case 'program': return <ProgramSection {...common}
         detailsEditable={!id || permissionGranted(permissions, 'operations.edit_program')}
         sections={programSections} lines={programLines}
-        onSectionsChange={setProgramSections} onLinesChange={setProgramLines} />;
+        onSectionsChange={setProgramSections} onLinesChange={setProgramLines}
+        references={references} />;
       case 'planning': return <PlanningSection {...common} />;
       case 'budget': return <BudgetSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_budget')} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
       case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
       case 'objectives': return <ObjectivesSection {...common} />;
       case 'synthesis': return <SynthesisSection {...common} />;
-      default: return <GeneralSection {...common} suggestions={suggestions} />;
+      default: return <GeneralSection {...common} references={references} communes={communes} onCommuneSelect={chooseCommune} />;
     }
-  }, [activeTab, canEditField, changeField, conditions, form, id, permissions, programLines, programSections, subsidies, suggestions]);
+  }, [activeTab, canEditField, changeField, chooseCommune, communes, conditions, form, id, permissions, programLines, programSections, references, subsidies]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

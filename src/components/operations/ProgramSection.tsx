@@ -1,9 +1,10 @@
 import { Plus } from 'lucide-react';
 import { calculateProgramTotals } from '../../lib/program';
-import type { OperationProgramLine, OperationProgramSection } from '../../types/domain';
-import { CheckField, FieldLabel, SectionHeading, SelectInput } from './FormControls';
+import type { OperationProgramLine, OperationProgramSection, ReferenceValue } from '../../types/domain';
+import { CheckField, FieldLabel, SectionHeading } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
 import ProgramSectionCard from './program/ProgramSectionCard';
+import ReferenceSelect from './ReferenceSelect';
 
 interface ProgramSectionProps extends OperationSectionProps {
   sections: OperationProgramSection[];
@@ -11,14 +12,8 @@ interface ProgramSectionProps extends OperationSectionProps {
   onSectionsChange: (rows: OperationProgramSection[]) => void;
   onLinesChange: (rows: OperationProgramLine[]) => void;
   detailsEditable?: boolean;
+  references: ReferenceValue[];
 }
-
-const certifications = ['PASSIVHAUS', 'NF HABITAT', 'NF Habitat HQE', 'BEE+', 'BEE', 'SO', 'BBCA', 'Autres'];
-const thermalValues = [
-  'RT 2012', 'RT 2012 - 10%', 'RT 2012 - 20%', 'RT2012 - E3C2 - Bbio niv 2',
-  'RE 2020', 'RE 2020 - 10%', 'RE 2020 - 20%', 'RE 2020 Palier 25',
-  'RE 2020 Palier 28', 'RE 2020 Palier 31', 'RE 2020 Bbio',
-];
 
 export default function ProgramSection({
   form,
@@ -29,6 +24,7 @@ export default function ProgramSection({
   onSectionsChange,
   onLinesChange,
   detailsEditable = true,
+  references,
 }: ProgramSectionProps) {
   const totals = calculateProgramTotals(sections, lines);
 
@@ -119,19 +115,15 @@ export default function ProgramSection({
       <div className="mt-10 grid gap-5 md:grid-cols-2">
         <div>
           <FieldLabel>Certification</FieldLabel>
-          <SelectInput disabled={!canEditField('certification')} value={form.certification}
-            onChange={(event) => onChange('certification', event.target.value)}>
-            <option value="">Non renseignée</option>
-            {certifications.map((item) => <option key={item}>{item}</option>)}
-          </SelectInput>
+          <ReferenceSelect disabled={!canEditField('certification')} valueId={form.certification}
+            options={references.filter((row) => row.kind === 'certification').map((row) => ({ id: row.label, label: row.label, isActive: row.is_active }))}
+            onSelect={(option) => onChange('certification', option.label)} />
         </div>
         <div>
           <FieldLabel>Réglementation thermique</FieldLabel>
-          <SelectInput disabled={!canEditField('thermal_regulation')} value={form.thermal_regulation}
-            onChange={(event) => onChange('thermal_regulation', event.target.value)}>
-            <option value="">Non renseignée</option>
-            {thermalValues.map((item) => <option key={item}>{item}</option>)}
-          </SelectInput>
+          <ReferenceSelect disabled={!canEditField('thermal_regulation')} valueId={form.thermal_regulation}
+            options={references.filter((row) => row.kind === 'thermal_regulation').map((row) => ({ id: row.label, label: row.label, isActive: row.is_active }))}
+            onSelect={(option) => onChange('thermal_regulation', option.label)} />
         </div>
       </div>
       <div className="mt-5 grid gap-3 md:grid-cols-2 xl:grid-cols-4">

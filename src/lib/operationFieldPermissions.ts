@@ -50,8 +50,10 @@ const LABELS: Partial<Record<OperationField, string>> = {
   gesprojet_number: 'Numéro Gesprojet',
   department: 'Département',
   commune: 'Commune',
+  commune_id: 'Commune officielle',
   address: 'Adresse',
   operation_type: 'Type d’opération',
+  program_nature: 'Nature du programme',
   promoter_name: 'Promoteur',
   project_manager: 'CTX / conducteur de travaux',
   operations_manager: 'COP / conducteur d’opération',
@@ -146,4 +148,3 @@ export function canEditOperationField(
   if (isCreating && permissions.includes('operations.create')) return true;
   return permissions.includes(operationFieldPermission(field));
 }
-

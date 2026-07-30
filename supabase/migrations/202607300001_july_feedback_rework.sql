@@ -98,6 +98,19 @@ alter table public.operations
   add column if not exists tender_expected_date date,
   add column if not exists cpr_expected_date date;
 
+-- Les anciennes valeurs mélangeaient le mode de réalisation et la nature métier.
+update public.operations
+set program_nature = coalesce(program_nature, operation_type),
+    operation_type = 'MOD'
+where operation_type is null or operation_type not in ('MOD', 'VEFA');
+
+do $$ begin
+  alter table public.operations
+    add constraint operations_realization_mode_check
+    check (operation_type in ('MOD', 'VEFA'));
+exception when duplicate_object then null;
+end $$;
+
 create index if not exists operations_commune_id_idx
   on public.operations(commune_id);
 
@@ -565,8 +578,8 @@ using (public.has_permission('admin.audit.view'));
 with field_groups(group_key, legacy_permission, fields) as (
   values
     ('operation_fields_identity', 'operations.edit_identity', array[
-      'name','stage','of_number','gesprojet_number','department','commune','address',
-      'operation_type','promoter_name'
+      'name','stage','of_number','gesprojet_number','department','commune','commune_id','address',
+      'operation_type','program_nature','promoter_name'
     ]::text[]),
     ('operation_fields_team', 'operations.edit_team', array[
       'project_manager','operations_manager','assistant_name','gpa_assistant_name',
@@ -635,7 +648,7 @@ on conflict do nothing;
 
 with field_groups(legacy_permission, fields) as (
   values
-    ('operations.edit_identity', array['name','stage','of_number','gesprojet_number','department','commune','address','operation_type','promoter_name']::text[]),
+    ('operations.edit_identity', array['name','stage','of_number','gesprojet_number','department','commune','commune_id','address','operation_type','program_nature','promoter_name']::text[]),
     ('operations.edit_team', array['project_manager','operations_manager','assistant_name','gpa_assistant_name','manager_name','animation_provider']::text[]),
     ('operations.edit_program', array['total_housing_units','individual_housing_units','collective_housing_units','plus_units','plai_units','pls_units','lli_units','lls_units','brs_units','psla_units','student_units','specific_units','anru_units','acv_units','commercial_units','other_units','thermal_regulation','certification','clesence_bbca','clesence_reversible','clesence_land_sobriety','clesence_green_space','zoning','category']::text[]),
     ('operations.edit_planning', array['co_cpi_date','cei_cef_date','csi_ca_date','development_to_assembly_date','approvals_submission_date','lls_approval_date','lli_approval_date','anru_approval_date','permit_number','permit_submission_date','permit_order_date','tender_date','vefa_cpr_or_sale_agreement_date','vefa_deed_or_land_purchase_date','works_order_expected_date','works_order_actual_date','contractual_delivery_date','m8_actual_date','assembly_to_works_date','m7_actual_date','m4_actual_date','show_home_actual_date','opl_actual_date','progress_status','expected_delivery_date','risk_assessment','actual_delivery_date','delivery_reservations_count','justified_delay_days','penalty_amount','reservations_clearance_date','daact_date','dpe','management_actual_date','gpa_count','h2_actual_date']::text[]),
@@ -692,6 +705,11 @@ begin
     where old_row -> new_value.key is distinct from new_row -> new_value.key
   loop
     required_permission := 'operations.field.' || changed_field || '.edit';
+    if changed_field in ('commune', 'department', 'zoning')
+       and old.commune_id is distinct from new.commune_id
+       and public.has_permission('operations.field.commune_id.edit') then
+      continue;
+    end if;
     if exists (
       select 1 from public.permission_definitions
       where key = required_permission
