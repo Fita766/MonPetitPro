@@ -66,4 +66,11 @@ describe("migration des retours du 29 juillet", () => {
       );
     }
   });
+
+  it("enregistre budget et subventions dans une seule transaction SQL", () => {
+    expect(sql).toContain("function public.save_operation_finance");
+    expect(sql).toContain("Permission budget insuffisante");
+    expect(sql).toMatch(/delete from public\.operation_budget_lines[\s\S]*insert into public\.operation_budget_lines/);
+    expect(sql).toMatch(/delete from public\.operation_subsidies[\s\S]*insert into public\.operation_subsidies/);
+  });
 });

@@ -13,7 +13,7 @@ import {
 import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
 import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { CommuneReference, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
+import type { CommuneReference, OperationBudgetLine, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -42,12 +42,12 @@ export default function OperationForm() {
   const [form, setForm] = useState<OperationFormData>({ ...EMPTY_OPERATION_FORM });
   const [programSections, setProgramSections] = useState<OperationProgramSection[]>(() => createDefaultProgram().sections);
   const [programLines, setProgramLines] = useState<OperationProgramLine[]>([]);
+  const [budgetLines, setBudgetLines] = useState<OperationBudgetLine[]>([]);
   const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
   const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
   const [loadedIds, setLoadedIds] = useState({
     programSections: [] as string[],
     programLines: [] as string[],
-    subsidies: [] as string[],
     conditions: [] as string[],
   });
   const [references, setReferences] = useState<ReferenceValue[]>([]);
@@ -91,6 +91,7 @@ export default function OperationForm() {
       supabase.from('operations').select('*').eq('id', id).single(),
       supabase.from('operation_program_sections').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_program_lines').select('*').eq('operation_id', id).order('sort_order'),
+      supabase.from('operation_budget_lines').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_subsidies').select('*').eq('operation_id', id).order('created_at'),
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
@@ -113,8 +114,9 @@ export default function OperationForm() {
         const operation = results[0].data as Record<string, unknown>;
         const loadedSections = (results[1].data ?? []) as OperationProgramSection[];
         const loadedLines = (results[2].data ?? []) as OperationProgramLine[];
-        const loadedSubsidies = (results[3].data ?? []) as OperationSubsidy[];
-        const loadedConditions = (results[4].data ?? []) as SuspensiveCondition[];
+        const loadedBudgetLines = (results[3].data ?? []) as OperationBudgetLine[];
+        const loadedSubsidies = (results[4].data ?? []) as OperationSubsidy[];
+        const loadedConditions = (results[5].data ?? []) as SuspensiveCondition[];
         setForm(fromOperationRow(operation));
         if (loadedSections.length) {
           setProgramSections(loadedSections);
@@ -124,12 +126,12 @@ export default function OperationForm() {
           setProgramSections(fallback.sections);
           setProgramLines(fallback.lines);
         }
+        setBudgetLines(loadedBudgetLines);
         setSubsidies(loadedSubsidies);
         setConditions(loadedConditions);
         setLoadedIds({
           programSections: loadedSections.flatMap((row) => row.id ? [row.id] : []),
           programLines: loadedLines.flatMap((row) => row.id ? [row.id] : []),
-          subsidies: loadedSubsidies.flatMap((row) => row.id ? [row.id] : []),
           conditions: loadedConditions.flatMap((row) => row.id ? [row.id] : []),
         });
       }
@@ -204,22 +206,33 @@ export default function OperationForm() {
     setLoadedIds((current) => ({ ...current, programSections: sectionIds, programLines: lineIds }));
   };
 
-  const syncSubsidies = async (operationId: string) => {
-    const rows = subsidies.filter((row) => row.provider.trim()).map((row) => ({
-      ...(row.id ? { id: row.id } : {}), operation_id: operationId, provider: row.provider.trim(), purpose: row.purpose.trim(), amount: row.amount,
+  const syncFinance = async (operationId: string) => {
+    const normalizedBudget = budgetLines.map((row, index) => ({
+      ...row,
+      id: row.id ?? crypto.randomUUID(),
+      operation_id: operationId,
+      sort_order: index,
     }));
-    const savedIds: string[] = [];
-    if (rows.length) {
-      const { data, error: saveError } = await supabase.from('operation_subsidies').upsert(rows).select('id');
-      if (saveError) throw saveError;
-      savedIds.push(...(data ?? []).map((row) => row.id));
-    }
-    const removed = loadedIds.subsidies.filter((rowId) => !savedIds.includes(rowId));
-    if (removed.length) {
-      const { error: deleteError } = await supabase.from('operation_subsidies').delete().in('id', removed);
-      if (deleteError) throw deleteError;
-    }
-    setLoadedIds((current) => ({ ...current, subsidies: savedIds }));
+    const normalizedSubsidies = subsidies
+      .filter((row) => row.provider.trim())
+      .map((row) => ({
+        ...row,
+        id: row.id ?? crypto.randomUUID(),
+        operation_id: operationId,
+        provider: row.provider.trim(),
+        purpose: row.purpose.trim(),
+        forecast_amount: row.forecast_amount ?? row.amount ?? null,
+        final_amount: row.final_amount ?? null,
+        comment: row.comment?.trim() || null,
+      }));
+    const { error: financeError } = await supabase.rpc('save_operation_finance', {
+      p_operation_id: operationId,
+      p_budget: normalizedBudget,
+      p_subsidies: normalizedSubsidies,
+    });
+    if (financeError) throw financeError;
+    setBudgetLines(normalizedBudget);
+    setSubsidies(normalizedSubsidies);
   };
 
   const syncConditions = async (operationId: string) => {
@@ -279,7 +292,7 @@ export default function OperationForm() {
       if (operationError) throw operationError;
       const operationId = data.id as string;
       if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncProgram(operationId);
-      if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncSubsidies(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncFinance(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_conditions')) await syncConditions(operationId);
       triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
       navigate(`/operations/${operationId}`);
@@ -300,13 +313,15 @@ export default function OperationForm() {
         onSectionsChange={setProgramSections} onLinesChange={setProgramLines}
         references={references} />;
       case 'planning': return <PlanningSection {...common} />;
-      case 'budget': return <BudgetSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_budget')} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
+      case 'budget': return <BudgetSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_budget')}
+        budgetLines={budgetLines} onBudgetLinesChange={setBudgetLines}
+        subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
       case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
       case 'objectives': return <ObjectivesSection {...common} />;
       case 'synthesis': return <SynthesisSection {...common} />;
       default: return <GeneralSection {...common} references={references} communes={communes} onCommuneSelect={chooseCommune} />;
     }
-  }, [activeTab, canEditField, changeField, chooseCommune, communes, conditions, form, id, permissions, programLines, programSections, references, subsidies]);
+  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, permissions, programLines, programSections, references, subsidies]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

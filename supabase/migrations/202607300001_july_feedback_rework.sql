@@ -739,6 +739,108 @@ on conflict do nothing;
 alter table public.custom_role_permissions
   enable trigger protect_system_role_permissions;
 
+create or replace function public.save_operation_finance(
+  p_operation_id uuid,
+  p_budget jsonb,
+  p_subsidies jsonb
+)
+returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if not public.has_permission('operations.edit_budget') then
+    raise exception 'Permission budget insuffisante' using errcode = '42501';
+  end if;
+
+  if not exists (select 1 from public.operations where id = p_operation_id) then
+    raise exception 'Opération introuvable';
+  end if;
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(coalesce(p_budget, '[]'::jsonb)) as item(id uuid)
+    join public.operation_budget_lines existing on existing.id = item.id
+    where existing.operation_id <> p_operation_id
+  ) then
+    raise exception 'Ligne budgétaire étrangère à cette opération' using errcode = '42501';
+  end if;
+
+  delete from public.operation_budget_lines
+  where operation_id = p_operation_id
+    and id not in (
+      select item.id
+      from jsonb_to_recordset(coalesce(p_budget, '[]'::jsonb)) as item(id uuid)
+      where item.id is not null
+    );
+
+  insert into public.operation_budget_lines (
+    id, operation_id, family, realization_mode,
+    forecast_ht, forecast_ttc, forecast_equity,
+    final_ht, final_ttc, final_equity, sort_order
+  )
+  select
+    item.id, p_operation_id, item.family, item.realization_mode,
+    item.forecast_ht, item.forecast_ttc, item.forecast_equity,
+    item.final_ht, item.final_ttc, item.final_equity, item.sort_order
+  from jsonb_to_recordset(coalesce(p_budget, '[]'::jsonb)) as item(
+    id uuid, family text, realization_mode text,
+    forecast_ht numeric, forecast_ttc numeric, forecast_equity numeric,
+    final_ht numeric, final_ttc numeric, final_equity numeric, sort_order integer
+  )
+  on conflict (id) do update set
+    family = excluded.family,
+    realization_mode = excluded.realization_mode,
+    forecast_ht = excluded.forecast_ht,
+    forecast_ttc = excluded.forecast_ttc,
+    forecast_equity = excluded.forecast_equity,
+    final_ht = excluded.final_ht,
+    final_ttc = excluded.final_ttc,
+    final_equity = excluded.final_equity,
+    sort_order = excluded.sort_order;
+
+  delete from public.operation_subsidies
+  where operation_id = p_operation_id
+    and id not in (
+      select item.id
+      from jsonb_to_recordset(coalesce(p_subsidies, '[]'::jsonb)) as item(id uuid)
+      where item.id is not null
+    );
+
+  if exists (
+    select 1
+    from jsonb_to_recordset(coalesce(p_subsidies, '[]'::jsonb)) as item(id uuid)
+    join public.operation_subsidies existing on existing.id = item.id
+    where existing.operation_id <> p_operation_id
+  ) then
+    raise exception 'Subvention étrangère à cette opération' using errcode = '42501';
+  end if;
+
+  insert into public.operation_subsidies (
+    id, operation_id, provider, purpose, amount,
+    forecast_amount, final_amount, comment
+  )
+  select
+    item.id, p_operation_id, item.provider, coalesce(item.purpose, ''),
+    item.forecast_amount, item.forecast_amount, item.final_amount, item.comment
+  from jsonb_to_recordset(coalesce(p_subsidies, '[]'::jsonb)) as item(
+    id uuid, provider text, purpose text,
+    forecast_amount numeric, final_amount numeric, comment text
+  )
+  on conflict (id) do update set
+    provider = excluded.provider,
+    purpose = excluded.purpose,
+    amount = excluded.amount,
+    forecast_amount = excluded.forecast_amount,
+    final_amount = excluded.final_amount,
+    comment = excluded.comment;
+end;
+$$;
+
+revoke all on function public.save_operation_finance(uuid, jsonb, jsonb) from public;
+grant execute on function public.save_operation_finance(uuid, jsonb, jsonb) to authenticated;
+
 create or replace function public.can_edit_any_operation_field()
 returns boolean language sql stable security definer set search_path = '' as $$
   select exists (
