@@ -1,10 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  Download,
   Edit3,
   EyeOff,
-  FileSpreadsheet,
   LayoutGrid,
   List,
   Plus,
@@ -32,6 +30,8 @@ import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
 import type { Profile } from "../types/domain";
+import { authorizedColumns, projectExportRows, selectedExportColumns, type ExportColumn } from "../lib/exportRegistry";
+import ExportColumnDialog from "../components/exports/ExportColumnDialog";
 
 interface ObservationOperation {
   id: string;
@@ -48,6 +48,22 @@ interface ObservationWithOperation extends ObservationRow {
   status: string;
   is_dg: boolean;
 }
+
+const OBSERVATION_EXPORT_REGISTRY: ExportColumn<ObservationWithOperation>[] = [
+  { key: "operation", label: "Opération", group: "Opération", formatter: (row) => row.operations?.name ?? "" },
+  { key: "type", label: "Type", group: "Opération", formatter: (row) => row.operations?.operation_type ?? "" },
+  { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => row.operations?.project_manager ?? "" },
+  { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
+  { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
+  { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
+  { key: "responsible", label: "Responsable", group: "Suivi", formatter: (row) => row.responsible_person },
+  { key: "deadline", label: "Date butoir", group: "Suivi", formatter: (row) => row.deadline_date ? new Date(`${row.deadline_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
+  { key: "completion", label: "Réalisation", group: "Suivi", formatter: (row) => row.completion_date ?? "" },
+  { key: "resolution", label: "Résolution proposée", group: "Suivi", formatter: (row) => row.resolution_date ?? "" },
+  { key: "status", label: "Statut", group: "Suivi", formatter: (row) => getObservationStatus(row) },
+  { key: "dg", label: "DG", group: "Confidentiel", requiredPermission: "observations.view_dg", formatter: (row) => row.is_dg ? "Oui" : "Non" },
+  { key: "author", label: "Auteur", group: "Suivi", formatter: (row) => row.author_initials ?? "" },
+];
 
 interface ObservationFilters {
   operations: string[];
@@ -430,6 +446,37 @@ export default function Observations() {
     document.save(`observations-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  // Conservés pendant la transition de format pour garantir la lecture des
+  // anciennes extractions déjà ouvertes dans une session.
+  void exportExcel;
+  void exportPdf;
+  const exportColumns = authorizedColumns(OBSERVATION_EXPORT_REGISTRY, permissions);
+  const exportSelectedExcel = async (keys: string[], source = filtered) => {
+    const columns = selectedExportColumns(keys, exportColumns);
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet("Observations");
+    sheet.addRow(columns.map((column) => column.label));
+    projectExportRows(source, keys, exportColumns).forEach((row) => sheet.addRow(row));
+    columns.forEach((column, index) => { sheet.getColumn(index + 1).width = Math.min(55, Math.max(14, column.label.length + 5)); });
+    sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
+    sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF0F766E" } };
+    downloadBlob(await workbook.xlsx.writeBuffer(), `observations-${new Date().toISOString().slice(0, 10)}.xlsx`);
+  };
+  const exportSelectedPdf = (keys: string[], source = filtered) => {
+    const columns = selectedExportColumns(keys, exportColumns);
+    const document = new jsPDF({ orientation: columns.length > 5 ? "landscape" : "portrait" });
+    document.setFontSize(16);
+    document.text("MonPetitPro — Observations", 14, 15);
+    autoTable(document, {
+      startY: 21,
+      head: [columns.map((column) => column.label)],
+      body: projectExportRows(source, keys, exportColumns),
+      styles: { fontSize: 7, cellPadding: 1.5 },
+      headStyles: { fillColor: [15, 118, 110] },
+    });
+    document.save(`observations-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
   const statusBadge = (observation: ObservationWithOperation) => {
     const status = statusFor(observation);
     return (
@@ -490,20 +537,17 @@ export default function Observations() {
               <List size={16} />
             </button>
           </div>
-          {permissionGranted(permissions, 'observations.export') && <><button
-            type="button"
-            onClick={() => void exportExcel()}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
-          >
-            <FileSpreadsheet size={15} /> Excel
-          </button>
-          <button
-            type="button"
-            onClick={exportPdf}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
-          >
-            <Download size={15} /> PDF
-          </button></>}
+          {permissionGranted(permissions, 'observations.export') && <ExportColumnDialog
+            columns={exportColumns}
+            storageKey="mpp-export-columns-observations"
+            defaultKeys={["operation", "ctx", "cop", "info_date", "description", "responsible", "deadline", "resolution", "status"]}
+            onExcel={(keys) => exportSelectedExcel(keys)}
+            onPdf={(keys) => exportSelectedPdf(keys)}
+            extraAction={canViewDg ? {
+              label: "Exporter uniquement les informations DG",
+              onClick: (keys) => exportSelectedExcel(keys, filtered.filter((row) => row.is_dg)),
+            } : undefined}
+          />}
           {permissionGranted(permissions, 'observations.create') && (
             <button
               type="button"

@@ -5,8 +5,6 @@ import {
   Building2,
   CalendarDays,
   Edit3,
-  FileDown,
-  FileSpreadsheet,
   Plus,
   RotateCcw,
   Search,
@@ -27,14 +25,17 @@ import {
   exportOperationsExcel,
   exportOperationsPdf,
   formatOperationValue,
+  OPERATION_EXPORT_REGISTRY,
   OPERATION_COLUMNS,
 } from "../lib/operationExport";
+import { authorizedColumns } from "../lib/exportRegistry";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import ColumnPicker from "../components/operations/ColumnPicker";
 import type { OperationStage } from "../types/domain";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import { buildAlerts, type AlertOperation } from "../lib/alerts";
 import UpcomingAlerts from "../components/dashboard/UpcomingAlerts";
+import ExportColumnDialog from "../components/exports/ExportColumnDialog";
 
 interface DashboardOperation extends FilterableOperation {
   id: string;
@@ -156,6 +157,10 @@ export default function Dashboard() {
     const column = OPERATION_COLUMNS.find((candidate) => candidate.key === key);
     return column ? [column] : [];
   });
+  const exportColumns = useMemo(
+    () => authorizedColumns(OPERATION_EXPORT_REGISTRY, permissions),
+    [permissions],
+  );
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const alerts = useMemo(
@@ -233,20 +238,13 @@ export default function Dashboard() {
             selected={columns}
             onChange={setColumns}
           />
-          {permissionGranted(permissions, 'operations.export') && <><button
-            type="button"
-            onClick={() => void exportOperationsExcel(filtered, columns)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 shadow-sm hover:border-teal-400"
-          >
-            <FileSpreadsheet size={15} /> Excel
-          </button>
-          <button
-            type="button"
-            onClick={() => exportOperationsPdf(filtered, columns)}
-            className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 shadow-sm hover:border-teal-400"
-          >
-            <FileDown size={15} /> PDF
-          </button></>}
+          {permissionGranted(permissions, 'operations.export') && <ExportColumnDialog
+            columns={exportColumns}
+            storageKey="mpp-export-columns-operations"
+            defaultKeys={DEFAULT_COLUMNS}
+            onExcel={(keys) => exportOperationsExcel(filtered, keys)}
+            onPdf={(keys) => exportOperationsPdf(filtered, keys)}
+          />}
           {permissionGranted(permissions, 'operations.create') && (
             <button
               type="button"
