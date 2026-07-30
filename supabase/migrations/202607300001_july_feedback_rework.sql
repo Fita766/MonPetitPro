@@ -83,6 +83,14 @@ on conflict (key) do update set
   description = excluded.description,
   sort_order = excluded.sort_order;
 
+insert into public.permission_definitions(key, group_key, label, description, sort_order) values
+  ('objectives.delete_initial','objectives','Supprimer un objectif initial','Retirer exceptionnellement un objectif initial déjà figé',521)
+on conflict (key) do update set
+  group_key = excluded.group_key,
+  label = excluded.label,
+  description = excluded.description,
+  sort_order = excluded.sort_order;
+
 insert into public.custom_role_permissions (role_id, permission_key)
 select role.id, permission.key
 from public.custom_roles role
@@ -206,6 +214,72 @@ create table if not exists public.operation_objectives (
 
 create index if not exists operation_objectives_year_kind_idx
   on public.operation_objectives(objective_year, kind, category);
+
+create or replace function public.freeze_objective_record()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  operation_row public.operations%rowtype;
+begin
+  if tg_op = 'UPDATE' and old.category = 'initial' then
+    if new.category is distinct from old.category
+      and not public.has_permission('objectives.delete_initial') then
+      raise exception 'Le reclassement d’un objectif initial nécessite une autorisation dédiée'
+        using errcode = '42501';
+    end if;
+    new.snapshot_date := old.snapshot_date;
+    new.snapshot_housing_units := old.snapshot_housing_units;
+    return new;
+  end if;
+
+  if tg_op = 'INSERT' then
+    select * into operation_row from public.operations where id = new.operation_id;
+    new.snapshot_date := coalesce(
+      new.snapshot_date,
+      case new.kind
+        when 'works_order' then operation_row.works_order_expected_date
+        when 'management' then operation_row.management_expected_date
+      end
+    );
+    new.snapshot_housing_units := coalesce(
+      new.snapshot_housing_units,
+      operation_row.total_housing_units,
+      0
+    );
+    new.created_by := coalesce(new.created_by, auth.uid());
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists freeze_objective_record on public.operation_objectives;
+create trigger freeze_objective_record
+before insert or update on public.operation_objectives
+for each row execute function public.freeze_objective_record();
+
+create or replace function public.protect_initial_objective_deletion()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.category = 'initial'
+    and not public.has_permission('objectives.delete_initial') then
+    raise exception 'La suppression d’un objectif initial nécessite une autorisation dédiée'
+      using errcode = '42501';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists protect_initial_objective_deletion on public.operation_objectives;
+create trigger protect_initial_objective_deletion
+before delete on public.operation_objectives
+for each row execute function public.protect_initial_objective_deletion();
 
 create table if not exists public.operation_significant_works (
   id uuid primary key default uuid_generate_v4(),
@@ -582,6 +656,28 @@ begin
   end loop;
 end $$;
 
+drop policy if exists operation_child_read on public.operation_objectives;
+drop policy if exists operation_child_insert on public.operation_objectives;
+drop policy if exists operation_child_update on public.operation_objectives;
+drop policy if exists operation_child_delete on public.operation_objectives;
+drop policy if exists operation_objectives_read on public.operation_objectives;
+drop policy if exists operation_objectives_insert on public.operation_objectives;
+drop policy if exists operation_objectives_update on public.operation_objectives;
+drop policy if exists operation_objectives_delete on public.operation_objectives;
+create policy operation_objectives_read on public.operation_objectives
+for select to authenticated
+using (public.has_any_permission(array['operations.view', 'objectives.view']));
+create policy operation_objectives_insert on public.operation_objectives
+for insert to authenticated
+with check (public.has_permission('objectives.manage'));
+create policy operation_objectives_update on public.operation_objectives
+for update to authenticated
+using (public.has_permission('objectives.manage'))
+with check (public.has_permission('objectives.manage'));
+create policy operation_objectives_delete on public.operation_objectives
+for delete to authenticated
+using (public.has_permission('objectives.manage'));
+
 drop policy if exists platform_migration_journal_read
   on public.platform_migration_journal;
 create policy platform_migration_journal_read
@@ -672,6 +768,7 @@ from (values
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_completion'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_status'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_dg'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'objectives.delete_initial'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.view_all'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.edit_assigned'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.assign'),

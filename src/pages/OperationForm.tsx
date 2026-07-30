@@ -13,7 +13,7 @@ import {
 import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
 import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { CommuneReference, OperationBudgetLine, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
+import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -44,10 +44,12 @@ export default function OperationForm() {
   const [programLines, setProgramLines] = useState<OperationProgramLine[]>([]);
   const [budgetLines, setBudgetLines] = useState<OperationBudgetLine[]>([]);
   const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
+  const [objectives, setObjectives] = useState<OperationObjective[]>([]);
   const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
   const [loadedIds, setLoadedIds] = useState({
     programSections: [] as string[],
     programLines: [] as string[],
+    objectives: [] as string[],
     conditions: [] as string[],
   });
   const [references, setReferences] = useState<ReferenceValue[]>([]);
@@ -93,6 +95,7 @@ export default function OperationForm() {
       supabase.from('operation_program_lines').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_budget_lines').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_subsidies').select('*').eq('operation_id', id).order('created_at'),
+      supabase.from('operation_objectives').select('*').eq('operation_id', id).order('kind'),
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
 
@@ -116,7 +119,8 @@ export default function OperationForm() {
         const loadedLines = (results[2].data ?? []) as OperationProgramLine[];
         const loadedBudgetLines = (results[3].data ?? []) as OperationBudgetLine[];
         const loadedSubsidies = (results[4].data ?? []) as OperationSubsidy[];
-        const loadedConditions = (results[5].data ?? []) as SuspensiveCondition[];
+        const loadedObjectives = (results[5].data ?? []) as OperationObjective[];
+        const loadedConditions = (results[6].data ?? []) as SuspensiveCondition[];
         setForm(fromOperationRow(operation));
         if (loadedSections.length) {
           setProgramSections(loadedSections);
@@ -128,10 +132,12 @@ export default function OperationForm() {
         }
         setBudgetLines(loadedBudgetLines);
         setSubsidies(loadedSubsidies);
+        setObjectives(loadedObjectives);
         setConditions(loadedConditions);
         setLoadedIds({
           programSections: loadedSections.flatMap((row) => row.id ? [row.id] : []),
           programLines: loadedLines.flatMap((row) => row.id ? [row.id] : []),
+          objectives: loadedObjectives.flatMap((row) => row.id ? [row.id] : []),
           conditions: loadedConditions.flatMap((row) => row.id ? [row.id] : []),
         });
       }
@@ -253,10 +259,32 @@ export default function OperationForm() {
     setLoadedIds((current) => ({ ...current, conditions: savedIds }));
   };
 
+  const syncObjectives = async (operationId: string) => {
+    const rows = objectives.map((row) => ({
+      ...row,
+      id: row.id ?? crypto.randomUUID(),
+      operation_id: operationId,
+      created_by: row.created_by ?? user?.id ?? null,
+    }));
+    const savedIds: string[] = [];
+    if (rows.length) {
+      const { data, error: saveError } = await supabase.from('operation_objectives').upsert(rows).select('id');
+      if (saveError) throw saveError;
+      savedIds.push(...(data ?? []).map((row) => row.id as string));
+    }
+    const removed = loadedIds.objectives.filter((rowId) => !savedIds.includes(rowId));
+    if (removed.length) {
+      const { error: deleteError } = await supabase.from('operation_objectives').delete().in('id', removed);
+      if (deleteError) throw deleteError;
+    }
+    setObjectives(rows);
+    setLoadedIds((current) => ({ ...current, objectives: savedIds }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editable) return;
-    if (form.is_objective && !form.objective_year) {
+    if (objectives.some((objective) => !objective.objective_year)) {
       setError('Indiquez l’année de l’objectif DMO.');
       setActiveTab('objectives');
       return;
@@ -284,7 +312,13 @@ export default function OperationForm() {
       const formWithProgramTotals = !id || permissionGranted(permissions, 'operations.edit_program')
         ? calculatedProgramForm
         : form;
-      const payload = toOperationPayload(formWithProgramTotals, user?.id);
+      const managementInitial = objectives.find((objective) =>
+        objective.kind === 'management' && objective.category === 'initial');
+      const payload = toOperationPayload({
+        ...formWithProgramTotals,
+        is_objective: Boolean(managementInitial),
+        objective_year: managementInitial ? String(managementInitial.objective_year) : '',
+      }, user?.id);
       const query = id
         ? supabase.from('operations').update(payload).eq('id', id).select('id').single()
         : supabase.from('operations').insert(payload).select('id').single();
@@ -293,6 +327,7 @@ export default function OperationForm() {
       const operationId = data.id as string;
       if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncProgram(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncFinance(operationId);
+      if (!id || permissionGranted(permissions, 'objectives.manage')) await syncObjectives(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_conditions')) await syncConditions(operationId);
       triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
       navigate(`/operations/${operationId}`);
@@ -317,11 +352,14 @@ export default function OperationForm() {
         budgetLines={budgetLines} onBudgetLinesChange={setBudgetLines}
         subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
       case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
-      case 'objectives': return <ObjectivesSection {...common} />;
+      case 'objectives': return <ObjectivesSection {...common}
+        detailsEditable={!id || permissionGranted(permissions, 'objectives.manage')}
+        canDeleteInitial={permissionGranted(permissions, 'objectives.delete_initial')}
+        objectives={objectives} onObjectivesChange={setObjectives} />;
       case 'synthesis': return <SynthesisSection {...common} />;
       default: return <GeneralSection {...common} references={references} communes={communes} onCommuneSelect={chooseCommune} />;
     }
-  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, permissions, programLines, programSections, references, subsidies]);
+  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, subsidies]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

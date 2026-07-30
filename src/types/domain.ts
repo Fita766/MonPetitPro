@@ -51,7 +51,7 @@ export type PermissionKey =
   | 'documents.view' | 'documents.upload' | 'documents.review' | 'documents.delete'
   | 'references.view' | 'references.manage'
   | 'calendar.view' | 'calendar.manage' | 'calendar.export'
-  | 'objectives.view' | 'objectives.manage' | 'objectives.export'
+  | 'objectives.view' | 'objectives.manage' | 'objectives.delete_initial' | 'objectives.export'
   | 'statistics.view' | 'statistics.export'
   | 'admin.users.view' | 'admin.users.manage' | 'admin.users.invite' | 'admin.users.suspend'
   | 'admin.roles.view' | 'admin.roles.manage' | 'admin.audit.view' | 'admin.demo_transfer'

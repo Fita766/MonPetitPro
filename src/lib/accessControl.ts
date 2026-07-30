@@ -70,6 +70,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   group('objectives', 'Objectifs et statistiques', [
     ['objectives.view', 'Consulter les objectifs', 'Voir le suivi annuel DMO.'],
     ['objectives.manage', 'Gérer les objectifs', 'Créer et ajuster les objectifs autorisés.'],
+    ['objectives.delete_initial', 'Supprimer un objectif initial', 'Retirer exceptionnellement un objectif initial déjà figé.'],
     ['objectives.export', 'Exporter les objectifs', 'Créer les exports PDF et Excel.'],
     ['statistics.view', 'Consulter les statistiques', 'Voir les indicateurs DMO.'],
     ['statistics.export', 'Exporter les statistiques', 'Créer les exports PDF et Excel.'],

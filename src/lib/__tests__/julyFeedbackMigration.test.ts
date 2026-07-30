@@ -73,4 +73,12 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toMatch(/delete from public\.operation_budget_lines[\s\S]*insert into public\.operation_budget_lines/);
     expect(sql).toMatch(/delete from public\.operation_subsidies[\s\S]*insert into public\.operation_subsidies/);
   });
+
+  it("fige les objectifs initiaux et protège leur suppression", () => {
+    expect(sql).toContain("function public.freeze_objective_record");
+    expect(sql).toContain("new.snapshot_date := old.snapshot_date");
+    expect(sql).toContain("new.snapshot_housing_units := old.snapshot_housing_units");
+    expect(sql).toContain("objectives.delete_initial");
+    expect(sql).toContain("function public.protect_initial_objective_deletion");
+  });
 });
