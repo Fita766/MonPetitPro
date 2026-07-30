@@ -1,50 +1,60 @@
 # Mise en service des accès personnalisés
 
-Cette procédure ne supprime aucune donnée métier.
+Cette procédure ne supprime aucune donnée métier. Il n’existe plus de parcours
+« Sécuriser la démo » : le regroupement des données historiques a déjà été traité.
 
 ## Avant le déploiement
 
 1. Sauvegarder la base Supabase.
-2. Appliquer `202607200001_dmo_extension.sql`, puis `202607210001_custom_access_control.sql`.
+2. Appliquer toutes les migrations décrites dans `docs/database-migration.md`.
 3. Dans Supabase Auth, désactiver **Allow new users to sign up**.
-4. Déployer la fonction `admin-users`. Elle utilise les secrets Supabase fournis automatiquement ; `SUPABASE_SECRET_KEY` reste une surcharge optionnelle.
-
-Commandes Supabase CLI, depuis la racine du projet :
+4. Déployer la fonction `admin-users`.
 
 ```bash
 supabase link --project-ref VOTRE_PROJECT_REF
 supabase db push
-supabase secrets set INVITE_REDIRECT_URL=https://votre-domaine.fr
 supabase functions deploy admin-users
 ```
 
 La clé secrète Supabase reste exclusivement dans les secrets de la fonction Edge.
 Elle ne doit jamais être ajoutée à un fichier `VITE_*` ni copiée dans le navigateur.
 
-## Premier propriétaire
+## Compte propriétaire
 
-1. Depuis Supabase Dashboard, inviter `sd@familleducastel.com`.
-2. Attendre que l’invitation soit acceptée et que le mot de passe soit défini.
-3. Exécuter depuis SQL Editor avec un compte de service :
+Le compte propriétaire attendu est `sd@familleducastel.com`. S’il n’est pas encore
+propriétaire, exécuter depuis le SQL Editor avec un compte de service :
 
 ```sql
 select public.bootstrap_owner('sd@familleducastel.com');
 ```
 
-La fonction n’est exécutable ni par un utilisateur anonyme ni par un utilisateur authentifié ordinaire.
+La fonction n’est exécutable ni anonymement ni par un utilisateur authentifié
+ordinaire.
 
-Après sa première connexion, le propriétaire ouvre **Utilisateurs** dans le menu,
-crée ses rôles, coche leurs autorisations puis invite les membres de son équipe.
+## Création des utilisateurs
 
-## Compte démo
+Depuis **Administration → Utilisateurs**, le propriétaire :
 
-Le transfert initial utilise `demo@papa-immo.fr` comme source,
-`sd@familleducastel.com` comme cible et `SD` comme initiales de remplacement.
-La fonction `transfer_account_data` réaffecte en une transaction les opérations,
-observations et événements. Elle conserve les initiales déjà renseignées,
-complète uniquement celles qui sont vides et journalise les volumes déplacés.
-Elle ne copie ni ne supprime aucune ligne métier.
+1. crée ou modifie les rôles ;
+2. choisit leur couleur parmi les couleurs proposées ;
+3. coche séparément chaque autorisation ;
+4. crée un compte avec son adresse, son rôle et un mot de passe temporaire ;
+5. transmet ce mot de passe à la personne par le canal de son choix.
 
-Ne pas supprimer `demo@papa-immo.fr`. Le transfert guidé réaffecte ses données,
-puis suspend ce compte afin de préserver les références historiques. Cette action
-reste bloquée derrière une confirmation explicite dans l’onglet **Sécuriser la démo**.
+Il n’y a aucun e-mail d’invitation à configurer. À la première connexion,
+MonPetitPro bloque l’accès aux données tant que l’utilisateur n’a pas remplacé
+son mot de passe temporaire.
+
+Le propriétaire peut ensuite suspendre ou réactiver un compte, lui attribuer un
+autre rôle, définir un nouveau mot de passe temporaire et révoquer ses sessions.
+
+## Règles de sécurité
+
+- Chaque personne utilise son propre compte.
+- Les rôles et autorisations sont permanents en base.
+- Les restrictions sont contrôlées dans l’interface et par les politiques RLS.
+- Les droits d’édition du programme, du budget, des objectifs et de la synthèse
+  sont indépendants.
+- Les observations DG et les observations affectées à d’autres personnes ne sont
+  visibles que si le rôle l’autorise explicitement.
+- Aucun compte de démonstration ne doit rester utilisable en production.

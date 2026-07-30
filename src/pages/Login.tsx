@@ -56,7 +56,7 @@ export default function Login() {
         </form>
 
         <p className="mt-6 text-center text-xs text-slate-500">
-          Les comptes sont créés ou invités par un administrateur.
+          Les comptes sont créés par un administrateur avec un mot de passe temporaire.
         </p>
       </div>
     </div>

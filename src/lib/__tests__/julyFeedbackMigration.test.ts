@@ -36,7 +36,16 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("platform_migration_journal");
     expect(sql).toContain("source_count");
     expect(sql).toContain("migrated_count");
-    expect(sql).toMatch(/raise exception[\s\S]*migration/i);
+    for (const migration of [
+      "programme",
+      "budget",
+      "objectifs",
+      "travaux significatifs",
+      "subventions",
+      "affectations",
+    ]) {
+      expect(sql).toMatch(new RegExp(`migration ${migration}[\\s\\S]*source`, "i"));
+    }
   });
 
   it("prépare les nouveaux jalons prévisionnels demandés", () => {
@@ -64,6 +73,29 @@ describe("migration des retours du 29 juillet", () => {
       expect(sql).toContain(
         `alter table public.${table} enable row level security`,
       );
+    }
+  });
+
+  it("applique le droit métier exact à chaque sous-table", () => {
+    for (const [table, permission] of [
+      ["operation_program_sections", "operations.edit_program"],
+      ["operation_program_lines", "operations.edit_program"],
+      ["operation_budget_lines", "operations.edit_budget"],
+      ["operation_objectives", "objectives.manage"],
+      ["operation_significant_works", "operations.edit_synthesis"],
+    ]) {
+      expect(sql).toContain(`('${table}', '${permission}')`);
+    }
+  });
+
+  it("indexe les clés étrangères utilisées par les suppressions et les politiques", () => {
+    for (const index of [
+      "observations_assignee_idx",
+      "operations_commune_id_idx",
+      "operation_program_lines_section_idx",
+      "operation_objectives_created_by_idx",
+    ]) {
+      expect(sql).toContain(`index if not exists ${index}`);
     }
   });
 

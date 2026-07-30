@@ -79,3 +79,22 @@ export function normalizeProgramLine(
   };
 }
 
+export function reorderProgramLine(
+  lines: readonly OperationProgramLine[],
+  lineId: string,
+  direction: -1 | 1,
+): OperationProgramLine[] {
+  const target = lines.find((line) => line.id === lineId);
+  if (!target) return [...lines];
+  const sectionLines = lines
+    .filter((line) => line.section_id === target.section_id)
+    .sort((a, b) => a.sort_order - b.sort_order);
+  const index = sectionLines.findIndex((line) => line.id === lineId);
+  const destination = index + direction;
+  if (index < 0 || destination < 0 || destination >= sectionLines.length) return [...lines];
+  [sectionLines[index], sectionLines[destination]] = [sectionLines[destination], sectionLines[index]];
+  const orders = new Map(sectionLines.map((line, order) => [line.id, order * 10]));
+  return lines.map((line) => line.section_id === target.section_id && line.id
+    ? { ...line, sort_order: orders.get(line.id) ?? line.sort_order }
+    : line);
+}

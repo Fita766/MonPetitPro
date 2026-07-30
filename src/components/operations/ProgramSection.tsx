@@ -1,5 +1,5 @@
 import { Plus } from 'lucide-react';
-import { calculateProgramTotals } from '../../lib/program';
+import { calculateProgramTotals, reorderProgramLine } from '../../lib/program';
 import type { OperationProgramLine, OperationProgramSection, ReferenceValue } from '../../types/domain';
 import { CheckField, FieldLabel, SectionHeading } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
@@ -100,6 +100,7 @@ export default function ProgramSection({
             onSectionChange={(patch) => updateSection(section, patch)}
             onAddLine={() => addLine(section)}
             onLineChange={updateLine}
+            onMoveLine={(line, direction) => line.id && onLinesChange(reorderProgramLine(lines, line.id, direction))}
             onRemoveLine={(target) => onLinesChange(lines.filter((line) => line !== target))}
             onMove={(direction) => moveSection(section, direction)}
             onRemoveSection={() => {

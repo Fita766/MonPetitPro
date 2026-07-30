@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { calculateProgramTotals, createDefaultProgram } from '../program';
+import { calculateProgramTotals, createDefaultProgram, reorderProgramLine } from '../program';
 
 describe('operation program', () => {
   it('calculates totals once from active detailed lines', () => {
@@ -49,5 +49,20 @@ describe('operation program', () => {
     expect(program.sections.map((section) => section.kind)).toEqual(['collective', 'individual', 'commercial']);
     expect(program.sections.map((section) => section.enabled)).toEqual([true, false, false]);
     expect(program.lines).toEqual([]);
+  });
+
+  it('reorders lines only inside their own section', () => {
+    const lines = [
+      { id: 'a', section_id: 'one', label: 'A', product: 'PLUS' as const, units: 1, average_surface: null, sort_order: 0 },
+      { id: 'b', section_id: 'one', label: 'B', product: 'PLUS' as const, units: 1, average_surface: null, sort_order: 10 },
+      { id: 'c', section_id: 'two', label: 'C', product: 'PLAI' as const, units: 1, average_surface: null, sort_order: 0 },
+    ];
+
+    const reordered = reorderProgramLine(lines, 'b', -1);
+    expect(reordered.filter((line) => line.section_id === 'one')
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((line) => [line.id, line.sort_order]))
+      .toEqual([['b', 0], ['a', 10]]);
+    expect(reordered.find((line) => line.id === 'c')?.sort_order).toBe(0);
   });
 });

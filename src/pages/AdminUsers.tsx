@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Check, ChevronRight, KeyRound, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
+import { Check, ChevronRight, Copy, KeyRound, RefreshCw, ShieldCheck, UserPlus, Users } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { PERMISSION_GROUPS, ROLE_COLORS, permissionGranted } from '../lib/accessControl';
 import { buildRolePermissionRows, validateNewUser } from '../lib/roleAdministration';
@@ -201,7 +201,15 @@ export default function AdminUsers() {
       {!loading && tab === 'roles' && <div className="grid gap-6 lg:grid-cols-[310px_1fr]">
         <aside className="h-fit rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"><div className="mb-3 flex items-center justify-between px-2"><h2 className="font-medium">Rôles enregistrés</h2>{canManageRoles && <button type="button" onClick={() => setRoleDraft(emptyRole())} className="rounded-lg bg-teal-50 px-3 py-2 text-xs font-medium text-teal-800">+ Nouveau</button>}</div><div className="space-y-2">{roles.map((role) => { const color = roleColor(role.color_key); return <button key={role.id} type="button" onClick={() => setRoleDraft({ ...role, permissions: [...role.permissions] })} className={`flex w-full items-center gap-3 rounded-xl border p-3 text-left ${roleDraft.id === role.id ? 'border-teal-500 bg-teal-50' : 'border-slate-100 hover:border-slate-300'}`}><span className={`h-3 w-3 rounded-full ${color.swatchClass}`} /><span className="min-w-0 flex-1"><span className="block truncate text-sm font-medium">{role.name}</span><span className="text-xs text-slate-500">{role.permissions.length} autorisation(s)</span></span><ChevronRight size={16} /></button>; })}</div></aside>
         <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm"><div className="grid gap-4 md:grid-cols-[1fr_220px]"><div><label className="text-xs font-medium uppercase tracking-wider text-slate-500">Nom du rôle</label><input disabled={!canManageRoles || roleDraft.is_system} value={roleDraft.name} onChange={(e) => setRoleDraft({ ...roleDraft, name: e.target.value })} placeholder="Ex. Responsable de secteur" className="mt-1 w-full rounded-xl border border-slate-200 px-4 py-3 text-lg font-medium" /></div><div><label className="text-xs font-medium uppercase tracking-wider text-slate-500">Couleur</label><div className="mt-2 flex flex-wrap gap-2">{ROLE_COLORS.map((color) => <button disabled={!canManageRoles || roleDraft.is_system} aria-label={color.label} title={color.label} key={color.key} type="button" onClick={() => setRoleDraft({ ...roleDraft, color_key: color.key })} className={`h-7 w-7 rounded-full ${color.swatchClass} ${roleDraft.color_key === color.key ? 'ring-2 ring-slate-800 ring-offset-2' : ''}`} />)}</div></div></div><textarea disabled={!canManageRoles || roleDraft.is_system} value={roleDraft.description ?? ''} onChange={(e) => setRoleDraft({ ...roleDraft, description: e.target.value })} placeholder="En une phrase, à qui sert ce rôle ?" className="mt-4 min-h-20 w-full rounded-xl border border-slate-200 px-4 py-3" />
-          {roleDraft.is_system && <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-900">Rôle historique protégé. Créez un nouveau rôle pour personnaliser les droits.</div>}
+          {roleDraft.is_system && <div className="mt-4 rounded-xl bg-amber-50 p-3 text-sm font-medium text-amber-900">Rôle historique protégé. Dupliquez-le pour personnaliser ses droits.</div>}
+          {roleDraft.id && canManageRoles && <button type="button" onClick={() => setRoleDraft({
+            ...roleDraft,
+            id: '',
+            name: `${roleDraft.name} (copie)`,
+            is_system: false,
+          })} className="mt-3 inline-flex items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-700 hover:border-teal-400">
+            <Copy size={15} /> Dupliquer ce rôle
+          </button>}
           <div className="mt-6">
             <label className="block text-xs font-medium uppercase tracking-wider text-slate-500">Rechercher une autorisation</label>
             <input type="search" value={permissionSearch} onChange={(event) => setPermissionSearch(event.target.value)}

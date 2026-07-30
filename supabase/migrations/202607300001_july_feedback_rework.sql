@@ -168,6 +168,8 @@ create table if not exists public.operation_program_lines (
 
 create index if not exists operation_program_lines_operation_idx
   on public.operation_program_lines(operation_id, section_id, sort_order);
+create index if not exists operation_program_lines_section_idx
+  on public.operation_program_lines(section_id);
 
 create table if not exists public.operation_budget_lines (
   id uuid primary key default uuid_generate_v4(),
@@ -214,6 +216,8 @@ create table if not exists public.operation_objectives (
 
 create index if not exists operation_objectives_year_kind_idx
   on public.operation_objectives(objective_year, kind, category);
+create index if not exists operation_objectives_created_by_idx
+  on public.operation_objectives(created_by);
 
 create or replace function public.freeze_objective_record()
 returns trigger
@@ -637,49 +641,45 @@ using (public.has_permission('references.manage'))
 with check (public.has_permission('references.manage'));
 
 do $$
-declare child_table text;
+declare child_config record;
 begin
-  foreach child_table in array array[
-    'operation_program_sections', 'operation_program_lines',
-    'operation_budget_lines', 'operation_objectives',
-    'operation_significant_works'
-  ] loop
-    execute format('drop policy if exists operation_child_read on public.%I', child_table);
+  for child_config in
+    select * from (values
+      ('operation_program_sections', 'operations.edit_program'),
+      ('operation_program_lines', 'operations.edit_program'),
+      ('operation_budget_lines', 'operations.edit_budget'),
+      ('operation_objectives', 'objectives.manage'),
+      ('operation_significant_works', 'operations.edit_synthesis')
+    ) config(table_name, edit_permission)
+  loop
+    execute format('drop policy if exists operation_child_read on public.%I', child_config.table_name);
     execute format(
       'create policy operation_child_read on public.%I for select to authenticated
        using (public.has_permission(''operations.view''))',
-      child_table
+      child_config.table_name
     );
-    execute format('drop policy if exists operation_child_insert on public.%I', child_table);
+    execute format('drop policy if exists operation_child_insert on public.%I', child_config.table_name);
     execute format(
       'create policy operation_child_insert on public.%I for insert to authenticated
-       with check (public.has_any_permission(array[
-         ''operations.edit_program'', ''operations.edit_budget'',
-         ''operations.edit_objectives'', ''operations.edit_synthesis''
-       ]))',
-      child_table
+       with check (public.has_permission(%L))',
+      child_config.table_name,
+      child_config.edit_permission
     );
-    execute format('drop policy if exists operation_child_update on public.%I', child_table);
+    execute format('drop policy if exists operation_child_update on public.%I', child_config.table_name);
     execute format(
       'create policy operation_child_update on public.%I for update to authenticated
-       using (public.has_any_permission(array[
-         ''operations.edit_program'', ''operations.edit_budget'',
-         ''operations.edit_objectives'', ''operations.edit_synthesis''
-       ]))
-       with check (public.has_any_permission(array[
-         ''operations.edit_program'', ''operations.edit_budget'',
-         ''operations.edit_objectives'', ''operations.edit_synthesis''
-       ]))',
-      child_table
+       using (public.has_permission(%L))
+       with check (public.has_permission(%L))',
+      child_config.table_name,
+      child_config.edit_permission,
+      child_config.edit_permission
     );
-    execute format('drop policy if exists operation_child_delete on public.%I', child_table);
+    execute format('drop policy if exists operation_child_delete on public.%I', child_config.table_name);
     execute format(
       'create policy operation_child_delete on public.%I for delete to authenticated
-       using (public.has_any_permission(array[
-         ''operations.edit_program'', ''operations.edit_budget'',
-         ''operations.edit_objectives'', ''operations.edit_synthesis''
-       ]))',
-      child_table
+       using (public.has_permission(%L))',
+      child_config.table_name,
+      child_config.edit_permission
     );
   end loop;
 end $$;
@@ -1217,6 +1217,31 @@ begin
   if source_count > migrated_count then
     raise exception
       'migration objectifs incomplète : % source(s), % migrée(s)',
+      source_count,
+      migrated_count;
+  end if;
+
+  select count(*) into source_count
+  from public.operations
+  where nullif(btrim(significant_works), '') is not null;
+  select count(*) into migrated_count
+  from public.operation_significant_works
+  where label = 'Historique à détailler';
+  if source_count > migrated_count then
+    raise exception
+      'migration travaux significatifs incomplète : % source(s), % migrée(s)',
+      source_count,
+      migrated_count;
+  end if;
+
+  select count(*) into source_count
+  from public.operation_subsidies;
+  select count(*) into migrated_count
+  from public.operation_subsidies
+  where amount is null or forecast_amount is not distinct from amount;
+  if source_count <> migrated_count then
+    raise exception
+      'migration subventions incomplète : % source(s), % migrée(s)',
       source_count,
       migrated_count;
   end if;

@@ -288,7 +288,7 @@ export default function AdminReferences() {
               }}
               className={`w-full rounded-xl px-3 py-2.5 text-left text-sm transition ${
                 tab === item.kind
-                  ? "bg-slate-900 text-white"
+                  ? "bg-teal-700 text-white"
                   : "text-slate-600 hover:bg-slate-50 hover:text-slate-950"
               }`}
             >

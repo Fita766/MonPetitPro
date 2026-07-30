@@ -4,6 +4,8 @@ import { describe, expect, it } from 'vitest';
 
 const UI_FILES = [
   'src/pages/AdminUsers.tsx',
+  'src/pages/AdminReferences.tsx',
+  'src/pages/AuditHistory.tsx',
   'src/pages/CalendarView.tsx',
   'src/pages/Dashboard.tsx',
   'src/pages/Objectives.tsx',

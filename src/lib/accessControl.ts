@@ -78,12 +78,11 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   group('administration', 'Administration', [
     ['admin.users.view', 'Consulter les utilisateurs', 'Voir les comptes et leurs états.'],
     ['admin.users.manage', 'Modifier les utilisateurs', 'Modifier le profil et attribuer un rôle.'],
-    ['admin.users.invite', 'Créer et inviter des utilisateurs', 'Envoyer une invitation ou un mot de passe temporaire.'],
+    ['admin.users.invite', 'Créer des utilisateurs', 'Définir un compte et son mot de passe temporaire.'],
     ['admin.users.suspend', 'Suspendre des utilisateurs', 'Bloquer et réactiver un compte.'],
     ['admin.roles.view', 'Consulter les rôles', 'Voir les rôles et leurs permissions.'],
     ['admin.roles.manage', 'Créer et modifier les rôles', 'Gérer la matrice des permissions.'],
     ['admin.audit.view', 'Consulter l’historique', 'Voir les actions administratives et métier.'],
-    ['admin.demo_transfer', 'Transférer les données démo', 'Réaffecter les données au compte propriétaire.'],
   ]),
 ];
 

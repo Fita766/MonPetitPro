@@ -10,6 +10,7 @@ interface ProgramSectionCardProps {
   onSectionChange: (patch: Partial<OperationProgramSection>) => void;
   onAddLine: () => void;
   onLineChange: (line: OperationProgramLine, patch: Partial<OperationProgramLine>) => void;
+  onMoveLine: (line: OperationProgramLine, direction: -1 | 1) => void;
   onRemoveLine: (line: OperationProgramLine) => void;
   onMove: (direction: -1 | 1) => void;
   onRemoveSection: () => void;
@@ -23,6 +24,7 @@ export default function ProgramSectionCard({
   onSectionChange,
   onAddLine,
   onLineChange,
+  onMoveLine,
   onRemoveLine,
   onMove,
   onRemoveSection,
@@ -50,7 +52,9 @@ export default function ProgramSectionCard({
         {lines.length === 0 && <p className="rounded-xl border border-dashed border-slate-300 bg-white p-5 text-center text-sm text-slate-500">Aucune ligne dans cette catégorie.</p>}
         {lines.map((line) => <ProgramLineEditor key={line.id ?? `${line.section_id}-${line.sort_order}`}
           line={line} showProduct={section.kind !== 'commercial'} disabled={disabled}
-          onChange={(patch) => onLineChange(line, patch)} onRemove={() => onRemoveLine(line)} />)}
+          onChange={(patch) => onLineChange(line, patch)}
+          onMove={(direction) => onMoveLine(line, direction)}
+          onRemove={() => onRemoveLine(line)} />)}
         <button disabled={disabled} type="button" onClick={onAddLine}
           className="inline-flex items-center gap-2 rounded-lg border border-teal-200 bg-white px-3 py-2 text-xs font-medium text-teal-800 hover:bg-teal-50 disabled:opacity-40">
           <Plus size={15} /> Ajouter une ligne

@@ -97,7 +97,7 @@ export default function AuditHistory() {
         return <div key={row.id} className="border-b border-slate-100">
           <button type="button" onClick={() => setExpanded(expanded === row.id ? null : row.id)} className="grid w-full grid-cols-[24px_130px_1fr_180px_170px] items-center gap-3 px-4 py-4 text-left text-xs hover:bg-slate-50">
             {expanded === row.id ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-            <span className={`w-fit rounded-full px-2 py-1 ${row.action === 'INSERT' ? 'bg-emerald-100 text-emerald-800' : row.action === 'DELETE' ? 'bg-rose-100 text-rose-800' : 'bg-sky-100 text-sky-800'}`}>
+            <span className={`w-fit rounded-full px-2 py-1 ${row.action === 'INSERT' ? 'bg-emerald-100 text-emerald-800' : row.action === 'DELETE' ? 'bg-rose-100 text-rose-800' : 'bg-stone-100 text-stone-800'}`}>
               {row.action === 'INSERT' ? 'CRÉATION' : row.action === 'DELETE' ? 'SUPPRESSION' : 'MODIFICATION'}
             </span>
             <span><strong>{tableLabels[row.table_name] ?? row.table_name}</strong> · {recordName(row)}</span>

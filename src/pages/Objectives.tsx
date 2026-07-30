@@ -143,7 +143,7 @@ export default function Objectives() {
       <div className="mb-6 grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-5">
         {[
           ['Objectif initial', report.summary.initialUnits, 'bg-teal-50 border-teal-200'],
-          ['Compléments', report.summary.supplementaryUnits, 'bg-sky-50 border-sky-200'],
+          ['Compléments', report.summary.supplementaryUnits, 'bg-stone-50 border-stone-200'],
           ['Réalisé initial', report.summary.realizedInitialUnits, 'bg-emerald-50 border-emerald-200'],
           ['Réalisé complément', report.summary.realizedSupplementaryUnits, 'bg-lime-50 border-lime-200'],
           ['Réel hors objectif', report.summary.realizedOutsideUnits, 'bg-amber-50 border-amber-200'],

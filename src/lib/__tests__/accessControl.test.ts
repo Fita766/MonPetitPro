@@ -20,7 +20,7 @@ describe('catalogue des permissions', () => {
     expect(keys).toContain('references.view');
     expect(keys).toContain('references.manage');
     expect(keys).toContain('admin.roles.manage');
-    expect(keys).toContain('admin.demo_transfer');
+    expect(keys).not.toContain('admin.demo_transfer');
   });
 
   it('fournit une palette fermée compréhensible sans saisie hexadécimale', () => {
