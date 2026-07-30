@@ -45,6 +45,42 @@ create table if not exists public.communes (
 create index if not exists communes_search_idx
   on public.communes(department_code, is_active, name);
 
+insert into public.permission_definitions (
+  key, group_key, label, description, sort_order
+) values
+  (
+    'references.view',
+    'references',
+    'Consulter les référentiels',
+    'Utiliser les communes et listes métier',
+    350
+  ),
+  (
+    'references.manage',
+    'references',
+    'Gérer les référentiels',
+    'Ajouter, corriger et désactiver les valeurs',
+    360
+  )
+on conflict (key) do update
+set group_key = excluded.group_key,
+    label = excluded.label,
+    description = excluded.description,
+    sort_order = excluded.sort_order;
+
+insert into public.custom_role_permissions (role_id, permission_key)
+select role.id, permission.key
+from public.custom_roles role
+cross join (values ('references.view'), ('references.manage')) permission(key)
+where role.name = 'Administrateur'
+on conflict (role_id, permission_key) do nothing;
+
+insert into public.custom_role_permissions (role_id, permission_key)
+select role.id, 'references.view'
+from public.custom_roles role
+where role.name in ('Responsable', 'Contributeur', 'Lecteur')
+on conflict (role_id, permission_key) do nothing;
+
 alter table public.profiles
   add column if not exists must_change_password boolean not null default false;
 
@@ -405,12 +441,34 @@ alter table public.platform_migration_journal enable row level security;
 drop policy if exists reference_values_read on public.reference_values;
 create policy reference_values_read on public.reference_values
 for select to authenticated
-using (public.has_permission('operations.view'));
+using (public.has_permission('references.view'));
+
+drop policy if exists reference_values_insert on public.reference_values;
+create policy reference_values_insert on public.reference_values
+for insert to authenticated
+with check (public.has_permission('references.manage'));
+
+drop policy if exists reference_values_update on public.reference_values;
+create policy reference_values_update on public.reference_values
+for update to authenticated
+using (public.has_permission('references.manage'))
+with check (public.has_permission('references.manage'));
 
 drop policy if exists communes_read on public.communes;
 create policy communes_read on public.communes
 for select to authenticated
-using (public.has_permission('operations.view'));
+using (public.has_permission('references.view'));
+
+drop policy if exists communes_insert on public.communes;
+create policy communes_insert on public.communes
+for insert to authenticated
+with check (public.has_permission('references.manage'));
+
+drop policy if exists communes_update on public.communes;
+create policy communes_update on public.communes
+for update to authenticated
+using (public.has_permission('references.manage'))
+with check (public.has_permission('references.manage'));
 
 do $$
 declare child_table text;

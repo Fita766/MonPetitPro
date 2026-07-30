@@ -9,6 +9,7 @@ import {
   BarChart3,
   UserCog,
   Target,
+  BookOpenCheck,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { permissionGranted } from "../../lib/accessControl";
@@ -70,6 +71,12 @@ export default function Sidebar() {
           <NavLink to="/admin/users" className={navItemClass}>
             <UserCog size={20} />
             <span className="font-medium">Utilisateurs</span>
+          </NavLink>
+        )}
+        {permissionGranted(permissions, 'references.view') && (
+          <NavLink to="/admin/references" className={navItemClass}>
+            <BookOpenCheck size={20} />
+            <span className="font-medium">Référentiels</span>
           </NavLink>
         )}
       </nav>

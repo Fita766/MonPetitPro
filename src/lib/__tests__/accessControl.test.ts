@@ -17,6 +17,8 @@ describe('catalogue des permissions', () => {
     expect(PERMISSION_GROUPS.flatMap((group) => group.permissions)).toEqual(PERMISSION_DEFINITIONS);
     expect(keys).toContain('operations.edit_budget');
     expect(keys).toContain('observations.validate');
+    expect(keys).toContain('references.view');
+    expect(keys).toContain('references.manage');
     expect(keys).toContain('admin.roles.manage');
     expect(keys).toContain('admin.demo_transfer');
   });

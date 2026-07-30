@@ -49,6 +49,10 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ['documents.review', 'Compléter la revue documentaire', 'Initialiser et renseigner les dates de réception.'],
     ['documents.delete', 'Supprimer des documents', 'Retirer un plan ou une photo.'],
   ]),
+  group('references', 'Référentiels métier', [
+    ['references.view', 'Consulter les référentiels', 'Utiliser les listes de communes, équipes, partenaires et caractéristiques.'],
+    ['references.manage', 'Gérer les référentiels', 'Ajouter, corriger, ordonner et désactiver les valeurs proposées.'],
+  ]),
   group('calendar', 'Calendriers', [
     ['calendar.view', 'Consulter les calendriers', 'Voir les jalons et agendas.'],
     ['calendar.manage', 'Gérer l’agenda libre', 'Créer, modifier et supprimer les événements libres.'],

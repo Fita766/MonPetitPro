@@ -46,6 +46,7 @@ export type PermissionKey =
   | 'observations.view' | 'observations.view_dg' | 'observations.create' | 'observations.edit_own'
   | 'observations.edit_all' | 'observations.validate' | 'observations.delete' | 'observations.export'
   | 'documents.view' | 'documents.upload' | 'documents.review' | 'documents.delete'
+  | 'references.view' | 'references.manage'
   | 'calendar.view' | 'calendar.manage' | 'calendar.export'
   | 'objectives.view' | 'objectives.manage' | 'objectives.export'
   | 'statistics.view' | 'statistics.export'
