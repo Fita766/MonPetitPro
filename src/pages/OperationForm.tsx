@@ -10,8 +10,9 @@ import {
   OPERATION_FIELD_PERMISSION_DEFINITIONS,
   canEditOperationField,
 } from '../lib/operationFieldPermissions';
+import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { OperationSubsidy, OperationTypology, SuspensiveCondition } from '../types/domain';
+import type { OperationProgramLine, OperationProgramSection, OperationSubsidy, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -48,10 +49,16 @@ export default function OperationForm() {
   const user = useStore((state) => state.user);
   const [activeTab, setActiveTab] = useState('general');
   const [form, setForm] = useState<OperationFormData>({ ...EMPTY_OPERATION_FORM });
-  const [typologies, setTypologies] = useState<OperationTypology[]>([]);
+  const [programSections, setProgramSections] = useState<OperationProgramSection[]>(() => createDefaultProgram().sections);
+  const [programLines, setProgramLines] = useState<OperationProgramLine[]>([]);
   const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
   const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
-  const [loadedIds, setLoadedIds] = useState({ typologies: [] as string[], subsidies: [] as string[], conditions: [] as string[] });
+  const [loadedIds, setLoadedIds] = useState({
+    programSections: [] as string[],
+    programLines: [] as string[],
+    subsidies: [] as string[],
+    conditions: [] as string[],
+  });
   const [suggestions, setSuggestions] = useState<Suggestions>({ ctx: [], cop: [], promoters: [] });
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
@@ -86,7 +93,8 @@ export default function OperationForm() {
     const suggestionRequest = supabase.from('operations').select('project_manager, operations_manager, promoter_name');
     const requests = id ? [
       supabase.from('operations').select('*').eq('id', id).single(),
-      supabase.from('operation_typologies').select('*').eq('operation_id', id).order('typology'),
+      supabase.from('operation_program_sections').select('*').eq('operation_id', id).order('sort_order'),
+      supabase.from('operation_program_lines').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_subsidies').select('*').eq('operation_id', id).order('created_at'),
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
@@ -106,15 +114,24 @@ export default function OperationForm() {
         setError(isSchemaMigrationError(firstError) ? SCHEMA_MIGRATION_MESSAGE : firstError.message);
       } else {
         const operation = results[0].data as Record<string, unknown>;
-        const loadedTypologies = (results[1].data ?? []) as OperationTypology[];
-        const loadedSubsidies = (results[2].data ?? []) as OperationSubsidy[];
-        const loadedConditions = (results[3].data ?? []) as SuspensiveCondition[];
+        const loadedSections = (results[1].data ?? []) as OperationProgramSection[];
+        const loadedLines = (results[2].data ?? []) as OperationProgramLine[];
+        const loadedSubsidies = (results[3].data ?? []) as OperationSubsidy[];
+        const loadedConditions = (results[4].data ?? []) as SuspensiveCondition[];
         setForm(fromOperationRow(operation));
-        setTypologies(loadedTypologies);
+        if (loadedSections.length) {
+          setProgramSections(loadedSections);
+          setProgramLines(loadedLines);
+        } else {
+          const fallback = createDefaultProgram();
+          setProgramSections(fallback.sections);
+          setProgramLines(fallback.lines);
+        }
         setSubsidies(loadedSubsidies);
         setConditions(loadedConditions);
         setLoadedIds({
-          typologies: loadedTypologies.flatMap((row) => row.id ? [row.id] : []),
+          programSections: loadedSections.flatMap((row) => row.id ? [row.id] : []),
+          programLines: loadedLines.flatMap((row) => row.id ? [row.id] : []),
           subsidies: loadedSubsidies.flatMap((row) => row.id ? [row.id] : []),
           conditions: loadedConditions.flatMap((row) => row.id ? [row.id] : []),
         });
@@ -132,28 +149,51 @@ export default function OperationForm() {
     setForm((current) => ({ ...current, [key]: value }));
   }, [canEditField]);
 
-  const syncTypologies = async (operationId: string) => {
-    const meaningful = typologies.filter((row) => row.units != null || row.average_surface != null);
-    const rows = meaningful.map((row) => ({
-      ...(row.id ? { id: row.id } : {}),
+  const syncProgram = async (operationId: string) => {
+    const sectionRows = programSections.map((section) => ({
+      id: section.id ?? crypto.randomUUID(),
       operation_id: operationId,
-      typology: row.typology,
-      product: row.product,
-      units: row.units,
-      average_surface: row.average_surface,
+      kind: section.kind,
+      label: section.label.trim() || 'Catégorie sans nom',
+      enabled: section.enabled,
+      sort_order: section.sort_order,
     }));
-    const savedIds: string[] = [];
-    if (rows.length) {
-      const { data, error: saveError } = await supabase.from('operation_typologies').upsert(rows, { onConflict: 'operation_id,typology,product' }).select('id');
-      if (saveError) throw saveError;
-      savedIds.push(...(data ?? []).map((row) => row.id));
+    const { data: savedSections, error: sectionError } = await supabase
+      .from('operation_program_sections').upsert(sectionRows).select('id');
+    if (sectionError) throw sectionError;
+    const sectionIds = (savedSections ?? []).map((row) => row.id as string);
+
+    const lineRows = programLines
+      .filter((line) => line.label.trim() || line.units != null || line.average_surface != null)
+      .map((line) => ({
+        id: line.id ?? crypto.randomUUID(),
+        operation_id: operationId,
+        section_id: line.section_id,
+        label: line.label.trim() || 'Sans désignation',
+        product: line.product,
+        units: line.units,
+        average_surface: line.average_surface,
+        sort_order: line.sort_order,
+      }));
+    const lineIds: string[] = [];
+    if (lineRows.length) {
+      const { data, error: lineError } = await supabase
+        .from('operation_program_lines').upsert(lineRows).select('id');
+      if (lineError) throw lineError;
+      lineIds.push(...(data ?? []).map((row) => row.id as string));
     }
-    const removed = loadedIds.typologies.filter((rowId) => !savedIds.includes(rowId));
-    if (removed.length) {
-      const { error: deleteError } = await supabase.from('operation_typologies').delete().in('id', removed);
-      if (deleteError) throw deleteError;
+
+    const removedLines = loadedIds.programLines.filter((rowId) => !lineIds.includes(rowId));
+    if (removedLines.length) {
+      const { error } = await supabase.from('operation_program_lines').delete().in('id', removedLines);
+      if (error) throw error;
     }
-    setLoadedIds((current) => ({ ...current, typologies: savedIds }));
+    const removedSections = loadedIds.programSections.filter((rowId) => !sectionIds.includes(rowId));
+    if (removedSections.length) {
+      const { error } = await supabase.from('operation_program_sections').delete().in('id', removedSections);
+      if (error) throw error;
+    }
+    setLoadedIds((current) => ({ ...current, programSections: sectionIds, programLines: lineIds }));
   };
 
   const syncSubsidies = async (operationId: string) => {
@@ -204,14 +244,33 @@ export default function OperationForm() {
     setError(null);
 
     try {
-      const payload = toOperationPayload(form, user?.id);
+      const totals = calculateProgramTotals(programSections, programLines);
+      const calculatedProgramForm: OperationFormData = {
+        ...form,
+        total_housing_units: String(totals.total),
+        collective_housing_units: String(totals.collective),
+        individual_housing_units: String(totals.individual),
+        commercial_units: String(totals.commercial),
+        other_units: String(totals.other),
+        plus_units: String(totals.byProduct.PLUS),
+        plai_units: String(totals.byProduct.PLAI),
+        pls_units: String(totals.byProduct.PLS),
+        lli_units: String(totals.byProduct.LLI),
+        brs_units: String(totals.byProduct.BRS),
+        psla_units: String(totals.byProduct.PSLA),
+        lls_units: String(totals.byProduct.PLUS + totals.byProduct.PLAI + totals.byProduct.PLS),
+      };
+      const formWithProgramTotals = !id || permissionGranted(permissions, 'operations.edit_program')
+        ? calculatedProgramForm
+        : form;
+      const payload = toOperationPayload(formWithProgramTotals, user?.id);
       const query = id
         ? supabase.from('operations').update(payload).eq('id', id).select('id').single()
         : supabase.from('operations').insert(payload).select('id').single();
       const { data, error: operationError } = await query;
       if (operationError) throw operationError;
       const operationId = data.id as string;
-      if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncTypologies(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncProgram(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncSubsidies(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_conditions')) await syncConditions(operationId);
       triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
@@ -227,7 +286,10 @@ export default function OperationForm() {
   const activeContent = useMemo(() => {
     const common = { form, onChange: changeField, canEditField };
     switch (activeTab) {
-      case 'program': return <ProgramSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_program')} typologies={typologies} onTypologiesChange={setTypologies} />;
+      case 'program': return <ProgramSection {...common}
+        detailsEditable={!id || permissionGranted(permissions, 'operations.edit_program')}
+        sections={programSections} lines={programLines}
+        onSectionsChange={setProgramSections} onLinesChange={setProgramLines} />;
       case 'planning': return <PlanningSection {...common} />;
       case 'budget': return <BudgetSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_budget')} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
       case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
@@ -235,7 +297,7 @@ export default function OperationForm() {
       case 'synthesis': return <SynthesisSection {...common} />;
       default: return <GeneralSection {...common} suggestions={suggestions} />;
     }
-  }, [activeTab, canEditField, changeField, conditions, form, id, permissions, subsidies, suggestions, typologies]);
+  }, [activeTab, canEditField, changeField, conditions, form, id, permissions, programLines, programSections, subsidies, suggestions]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

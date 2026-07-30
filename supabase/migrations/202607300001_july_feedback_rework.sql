@@ -211,8 +211,13 @@ where forecast_amount is null and amount is not null;
 insert into public.operation_program_sections (
   operation_id, kind, label, enabled, sort_order
 )
-select distinct operation_id, 'collective', 'Logements collectifs', true, 0
-from public.operation_typologies
+select operation.id, seed.kind, seed.label, seed.enabled, seed.sort_order
+from public.operations operation
+cross join (values
+  ('collective', 'Logements collectifs', true, 0),
+  ('individual', 'Logements individuels', false, 10),
+  ('commercial', 'Commerces et locaux', false, 20)
+) seed(kind, label, enabled, sort_order)
 on conflict (operation_id, kind, label) do nothing;
 
 insert into public.operation_program_lines (
@@ -240,6 +245,37 @@ join public.operation_program_sections section
  and section.kind = 'collective'
  and section.label = 'Logements collectifs'
 on conflict (source_typology_id) do nothing;
+
+-- Si le détail historique n'expliquait pas tout le total, une ligne explicite
+-- conserve exactement le volume existant au lieu de perdre silencieusement des logements.
+with detailed_totals as (
+  select operation_id, coalesce(sum(units), 0) as detailed_units
+  from public.operation_program_lines
+  group by operation_id
+)
+insert into public.operation_program_lines (
+  operation_id, section_id, label, product, units, average_surface, sort_order
+)
+select
+  operation.id,
+  section.id,
+  'Complément historique à détailler',
+  null,
+  operation.total_housing_units - coalesce(detailed.detailed_units, 0),
+  null,
+  990
+from public.operations operation
+join public.operation_program_sections section
+  on section.operation_id = operation.id
+ and section.kind = 'collective'
+ and section.label = 'Logements collectifs'
+left join detailed_totals detailed on detailed.operation_id = operation.id
+where operation.total_housing_units > coalesce(detailed.detailed_units, 0)
+  and not exists (
+    select 1 from public.operation_program_lines existing
+    where existing.operation_id = operation.id
+      and existing.label = 'Complément historique à détailler'
+  );
 
 insert into public.operation_budget_lines (
   operation_id, family, realization_mode, forecast_ht, final_ht
