@@ -21,7 +21,7 @@ interface TemplateDefinition {
 
 export interface GeneratedReviewItem extends TemplateDefinition {
   expected_date: string | null;
-  received_date: null;
+  received_date: string | null;
   sort_order: number;
 }
 
@@ -185,4 +185,24 @@ export function buildDocumentReviewTemplate(
     received_date: null,
     sort_order: index,
   }));
+}
+
+export function reconcileDocumentReviewItems<T extends {
+  id?: string;
+  category: string;
+  label: string;
+  received_date: string | null;
+}>(
+  existing: T[],
+  generated: GeneratedReviewItem[],
+): Array<GeneratedReviewItem & { id?: string }> {
+  const byKey = new Map(existing.map((item) => [`${item.category}\u0000${item.label}`, item]));
+  return generated.map((item) => {
+    const prior = byKey.get(`${item.category}\u0000${item.label}`);
+    return {
+      ...item,
+      ...(prior?.id ? { id: prior.id } : {}),
+      received_date: prior?.received_date ?? null,
+    };
+  });
 }

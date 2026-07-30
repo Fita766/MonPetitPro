@@ -411,6 +411,18 @@ where operation.is_objective
   and operation.objective_year is not null
 on conflict (operation_id, kind, objective_year, category) do nothing;
 
+insert into public.operation_significant_works (
+  operation_id, label, amount_ht, comment, sort_order
+)
+select operation.id, 'Historique à détailler', null, operation.significant_works, 0
+from public.operations operation
+where nullif(btrim(operation.significant_works), '') is not null
+  and not exists (
+    select 1 from public.operation_significant_works existing
+    where existing.operation_id = operation.id
+      and existing.label = 'Historique à détailler'
+  );
+
 -- Affectation sûre : une observation n'est rattachée que si une seule personne
 -- active correspond au nom, aux initiales ou au préfixe de l'adresse e-mail.
 with candidates as (
@@ -484,6 +496,22 @@ select
   jsonb_build_object('source_columns', array['is_objective', 'objective_year'])
 from public.operations
 where is_objective and objective_year is not null
+on conflict (migration_key) do update
+set source_count = excluded.source_count,
+    migrated_count = excluded.migrated_count,
+    details = excluded.details,
+    completed_at = now();
+
+insert into public.platform_migration_journal (
+  migration_key, source_count, migrated_count, details
+)
+select
+  '202607300001-significant-works',
+  count(*),
+  (select count(*) from public.operation_significant_works where label = 'Historique à détailler'),
+  jsonb_build_object('source_column', 'operations.significant_works')
+from public.operations
+where nullif(btrim(significant_works), '') is not null
 on conflict (migration_key) do update
 set source_count = excluded.source_count,
     migrated_count = excluded.migrated_count,

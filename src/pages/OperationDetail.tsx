@@ -505,9 +505,7 @@ export default function OperationDetail() {
         operation={operation}
         documents={documents}
         reviewItems={reviewItems}
-        typologies={typologies}
         subsidies={subsidies}
-        conditions={conditions}
         canEdit={permissionGranted(permissions, 'documents.upload') || permissionGranted(permissions, 'documents.review')}
         onChanged={() => setRefreshKey((key) => key + 1)}
         onError={setError}

@@ -13,7 +13,7 @@ import {
 import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
 import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
+import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSignificantWork, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -45,11 +45,13 @@ export default function OperationForm() {
   const [budgetLines, setBudgetLines] = useState<OperationBudgetLine[]>([]);
   const [subsidies, setSubsidies] = useState<OperationSubsidy[]>([]);
   const [objectives, setObjectives] = useState<OperationObjective[]>([]);
+  const [significantWorks, setSignificantWorks] = useState<OperationSignificantWork[]>([]);
   const [conditions, setConditions] = useState<SuspensiveCondition[]>([]);
   const [loadedIds, setLoadedIds] = useState({
     programSections: [] as string[],
     programLines: [] as string[],
     objectives: [] as string[],
+    significantWorks: [] as string[],
     conditions: [] as string[],
   });
   const [references, setReferences] = useState<ReferenceValue[]>([]);
@@ -96,6 +98,7 @@ export default function OperationForm() {
       supabase.from('operation_budget_lines').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('operation_subsidies').select('*').eq('operation_id', id).order('created_at'),
       supabase.from('operation_objectives').select('*').eq('operation_id', id).order('kind'),
+      supabase.from('operation_significant_works').select('*').eq('operation_id', id).order('sort_order'),
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
 
@@ -120,7 +123,8 @@ export default function OperationForm() {
         const loadedBudgetLines = (results[3].data ?? []) as OperationBudgetLine[];
         const loadedSubsidies = (results[4].data ?? []) as OperationSubsidy[];
         const loadedObjectives = (results[5].data ?? []) as OperationObjective[];
-        const loadedConditions = (results[6].data ?? []) as SuspensiveCondition[];
+        const loadedSignificantWorks = (results[6].data ?? []) as OperationSignificantWork[];
+        const loadedConditions = (results[7].data ?? []) as SuspensiveCondition[];
         setForm(fromOperationRow(operation));
         if (loadedSections.length) {
           setProgramSections(loadedSections);
@@ -133,11 +137,13 @@ export default function OperationForm() {
         setBudgetLines(loadedBudgetLines);
         setSubsidies(loadedSubsidies);
         setObjectives(loadedObjectives);
+        setSignificantWorks(loadedSignificantWorks);
         setConditions(loadedConditions);
         setLoadedIds({
           programSections: loadedSections.flatMap((row) => row.id ? [row.id] : []),
           programLines: loadedLines.flatMap((row) => row.id ? [row.id] : []),
           objectives: loadedObjectives.flatMap((row) => row.id ? [row.id] : []),
+          significantWorks: loadedSignificantWorks.flatMap((row) => row.id ? [row.id] : []),
           conditions: loadedConditions.flatMap((row) => row.id ? [row.id] : []),
         });
       }
@@ -281,6 +287,30 @@ export default function OperationForm() {
     setLoadedIds((current) => ({ ...current, objectives: savedIds }));
   };
 
+  const syncSignificantWorks = async (operationId: string) => {
+    const rows = significantWorks.filter((row) => row.label.trim() || row.comment?.trim()).map((row, index) => ({
+      ...row,
+      id: row.id ?? crypto.randomUUID(),
+      operation_id: operationId,
+      label: row.label.trim() || 'Travaux à détailler',
+      comment: row.comment?.trim() || null,
+      sort_order: index,
+    }));
+    const savedIds: string[] = [];
+    if (rows.length) {
+      const { data, error: saveError } = await supabase.from('operation_significant_works').upsert(rows).select('id');
+      if (saveError) throw saveError;
+      savedIds.push(...(data ?? []).map((row) => row.id as string));
+    }
+    const removed = loadedIds.significantWorks.filter((rowId) => !savedIds.includes(rowId));
+    if (removed.length) {
+      const { error: deleteError } = await supabase.from('operation_significant_works').delete().in('id', removed);
+      if (deleteError) throw deleteError;
+    }
+    setSignificantWorks(rows);
+    setLoadedIds((current) => ({ ...current, significantWorks: savedIds }));
+  };
+
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editable) return;
@@ -328,6 +358,7 @@ export default function OperationForm() {
       if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncProgram(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncFinance(operationId);
       if (!id || permissionGranted(permissions, 'objectives.manage')) await syncObjectives(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_synthesis')) await syncSignificantWorks(operationId);
       if (!id || permissionGranted(permissions, 'operations.edit_conditions')) await syncConditions(operationId);
       triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
       navigate(`/operations/${operationId}`);
@@ -356,10 +387,12 @@ export default function OperationForm() {
         detailsEditable={!id || permissionGranted(permissions, 'objectives.manage')}
         canDeleteInitial={permissionGranted(permissions, 'objectives.delete_initial')}
         objectives={objectives} onObjectivesChange={setObjectives} />;
-      case 'synthesis': return <SynthesisSection {...common} />;
+      case 'synthesis': return <SynthesisSection {...common}
+        detailsEditable={!id || permissionGranted(permissions, 'operations.edit_synthesis')}
+        significantWorks={significantWorks} onSignificantWorksChange={setSignificantWorks} />;
       default: return <GeneralSection {...common} references={references} communes={communes} onCommuneSelect={chooseCommune} />;
     }
-  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, subsidies]);
+  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, significantWorks, subsidies]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

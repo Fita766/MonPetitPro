@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDocumentReviewTemplate,
   calculateReviewExpectedDate,
+  reconcileDocumentReviewItems,
 } from "../documentReview";
 
 describe("calculateReviewExpectedDate", () => {
@@ -11,6 +12,20 @@ describe("calculateReviewExpectedDate", () => {
 
   it("retourne null sans date d’ancrage", () => {
     expect(calculateReviewExpectedDate(null, -4)).toBeNull();
+  });
+  it("recalcule les dates attendues sans écraser une date reçue", () => {
+    const [generated] = buildDocumentReviewTemplate({
+      works_order_actual_date: "2025-01-15",
+      expected_delivery_date: "2026-07-31",
+    });
+    expect(reconcileDocumentReviewItems([
+      { id: "existing", operation_id: "op", category: generated.category, label: generated.label, offset_months: 1, expected_date: "2020-01-01", received_date: "2025-03-20", sort_order: 99 },
+    ], [generated])[0]).toMatchObject({
+      id: "existing",
+      expected_date: generated.expected_date,
+      received_date: "2025-03-20",
+      sort_order: generated.sort_order,
+    });
   });
 });
 

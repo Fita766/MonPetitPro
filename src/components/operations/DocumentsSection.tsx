@@ -7,18 +7,21 @@ import {
   LoaderCircle,
 } from "lucide-react";
 import { supabase } from "../../lib/supabase";
-import { buildDocumentReviewTemplate } from "../../lib/documentReview";
+import { buildDocumentReviewTemplate, reconcileDocumentReviewItems } from "../../lib/documentReview";
 import {
   generateSynthesisPdf,
   type SynthesisImage,
 } from "../../lib/synthesisPdf";
+import { buildSynthesisModel, type SynthesisModel } from "../../lib/synthesisModel";
 import type {
   DocumentReviewItem,
   Operation,
+  OperationBudgetLine,
   OperationDocument,
+  OperationProgramLine,
+  OperationProgramSection,
+  OperationSignificantWork,
   OperationSubsidy,
-  OperationTypology,
-  SuspensiveCondition,
 } from "../../types/domain";
 
 type DetailOperation = Partial<Operation> & Pick<Operation, "id" | "name">;
@@ -27,9 +30,7 @@ interface Props {
   operation: DetailOperation;
   documents: OperationDocument[];
   reviewItems: DocumentReviewItem[];
-  typologies: OperationTypology[];
   subsidies: OperationSubsidy[];
-  conditions: SuspensiveCondition[];
   canEdit: boolean;
   onChanged: () => void;
   onError: (message: string) => void;
@@ -49,9 +50,7 @@ export default function DocumentsSection({
   operation,
   documents,
   reviewItems,
-  typologies,
   subsidies,
-  conditions,
   canEdit,
   onChanged,
   onError,
@@ -59,6 +58,8 @@ export default function DocumentsSection({
   const [kind, setKind] = useState<"plan" | "photo">("plan");
   const [caption, setCaption] = useState("");
   const [busy, setBusy] = useState(false);
+  const [preparedSynthesis, setPreparedSynthesis] = useState<SynthesisModel | null>(null);
+  const [synthesisWarnings, setSynthesisWarnings] = useState<string[]>([]);
   const [urls, setUrls] = useState<Record<string, string>>({});
 
   useEffect(() => {
@@ -97,7 +98,8 @@ export default function DocumentsSection({
 
   const initialiseReview = async () => {
     setBusy(true);
-    const rows = buildDocumentReviewTemplate(operation).map((item) => ({
+    const rows = reconcileDocumentReviewItems(reviewItems, buildDocumentReviewTemplate(operation)).map((item) => ({
+      ...(item.id ? { id: item.id } : {}),
       operation_id: operation.id,
       category: item.category,
       label: item.label,
@@ -106,7 +108,7 @@ export default function DocumentsSection({
       received_date: item.received_date,
       sort_order: item.sort_order,
     }));
-    const { error } = await supabase.from("document_review_items").insert(rows);
+    const { error } = await supabase.from("document_review_items").upsert(rows);
     if (error) onError(error.message);
     else onChanged();
     setBusy(false);
@@ -154,7 +156,25 @@ export default function DocumentsSection({
   };
 
   const exportSynthesis = async () => {
+    if (preparedSynthesis) {
+      generateSynthesisPdf(preparedSynthesis);
+      setPreparedSynthesis(null);
+      setSynthesisWarnings([]);
+      return;
+    }
     setBusy(true);
+    const [sectionResult, lineResult, budgetResult, workResult] = await Promise.all([
+      supabase.from("operation_program_sections").select("*").eq("operation_id", operation.id).order("sort_order"),
+      supabase.from("operation_program_lines").select("*").eq("operation_id", operation.id).order("sort_order"),
+      supabase.from("operation_budget_lines").select("*").eq("operation_id", operation.id).order("sort_order"),
+      supabase.from("operation_significant_works").select("*").eq("operation_id", operation.id).order("sort_order"),
+    ]);
+    const dataError = sectionResult.error ?? lineResult.error ?? budgetResult.error ?? workResult.error;
+    if (dataError) {
+      onError(dataError.message);
+      setBusy(false);
+      return;
+    }
     const imageDocuments = documents.filter(
       (document) =>
         urls[document.id || document.storage_path] &&
@@ -171,13 +191,21 @@ export default function DocumentsSection({
         /* Le PDF est généré sans l’image inaccessible. */
       }
     }
-    generateSynthesisPdf({
+    const model = buildSynthesisModel({
       operation,
-      typologies,
+      sections: (sectionResult.data as OperationProgramSection[] | null) ?? [],
+      lines: (lineResult.data as OperationProgramLine[] | null) ?? [],
+      budgetLines: (budgetResult.data as OperationBudgetLine[] | null) ?? [],
       subsidies,
-      conditions,
+      significantWorks: (workResult.data as OperationSignificantWork[] | null) ?? [],
       images,
     });
+    if (model.warnings.length) {
+      setPreparedSynthesis(model);
+      setSynthesisWarnings(model.warnings);
+    } else {
+      generateSynthesisPdf(model);
+    }
     setBusy(false);
   };
 
@@ -206,6 +234,13 @@ export default function DocumentsSection({
           Fiche de synthèse PDF
         </button>
       </div>
+      {synthesisWarnings.length > 0 && (
+        <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-5 py-4 text-sm text-amber-950">
+          <p className="font-medium">La fiche peut être générée, mais ces informations manquent :</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">{synthesisWarnings.map((warning) => <li key={warning}>{warning}</li>)}</ul>
+          <p className="mt-2 text-xs">Cliquez de nouveau sur le bouton pour générer avec les données disponibles.</p>
+        </div>
+      )}
       <div className="mt-6 grid gap-6 xl:grid-cols-[minmax(0,1.4fr)_minmax(320px,0.6fr)]">
         <div>
           {reviewItems.length === 0 ? (
@@ -228,6 +263,10 @@ export default function DocumentsSection({
             </div>
           ) : (
             <div className="max-h-[620px] space-y-4 overflow-y-auto pr-2">
+              {canEdit && <button type="button" disabled={busy} onClick={() => void initialiseReview()}
+                className="rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs text-teal-800">
+                Recalculer les dates attendues
+              </button>}
               {grouped.map(([category, items]) => (
                 <div
                   key={category}
