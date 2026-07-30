@@ -11,7 +11,7 @@ const operations = [
 describe('aggregatePromoters', () => {
   it('agrège les années sélectionnées et exclut les valeurs absentes des moyennes', () => {
     const [promo] = aggregatePromoters(operations, [2026]).filter((row) => row.name === 'Promo A');
-    expect(promo).toMatchObject({ operations: 2, housing: 50, collectiveHousing: 45, individualHousing: 5, reservations: 70, reservationsPerHousing: 1.4, reservationsPerOperation: 35, averageClearanceDays: 30 });
+    expect(promo).toMatchObject({ operations: 2, housing: 50, collectiveHousing: 45, individualHousing: 5, reservations: 70, reservationsPerHousing: 1.4, reservationsPerOperation: 35, averageClearanceDays: 30, operationIds: ['1', '2'] });
   });
 
   it('accepte plusieurs années', () => {
@@ -38,6 +38,6 @@ describe('buildDeliveryStats', () => {
 
 describe('aggregateBudget', () => {
   it('somme les budgets des opérations rattachées aux années choisies sans transformer null en valeur individuelle', () => {
-    expect(aggregateBudget(operations, [2026])).toEqual({ operations: 3, initialBudget: 6_000_000, finalBudget: 5_000_000, variance: -1_000_000, operationsWithInitialBudget: 3, operationsWithFinalBudget: 2 });
+    expect(aggregateBudget(operations, [2026])).toEqual({ operations: 3, initialBudget: 6_000_000, finalBudget: 5_000_000, variance: -1_000_000, operationsWithInitialBudget: 3, operationsWithFinalBudget: 2, operationIds: ['1', '2', '4'] });
   });
 });

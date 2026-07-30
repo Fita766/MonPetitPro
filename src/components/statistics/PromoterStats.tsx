@@ -6,7 +6,7 @@ function number(value: number | null, decimals = 0) {
     : value.toLocaleString("fr-FR", { maximumFractionDigits: decimals });
 }
 
-export default function PromoterStats({ rows }: { rows: PromoterStat[] }) {
+export default function PromoterStats({ rows, onDetail }: { rows: PromoterStat[]; onDetail?: (title: string, ids: string[]) => void }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
       <table className="min-w-[1400px] w-full text-left text-xs">
@@ -25,6 +25,7 @@ export default function PromoterStats({ rows }: { rows: PromoterStat[] }) {
               "Op. en retard",
               "Logt en retard",
               "DO",
+              "Détail",
             ].map((label) => (
               <th
                 key={label}
@@ -58,11 +59,12 @@ export default function PromoterStats({ rows }: { rows: PromoterStat[] }) {
               <td className="px-3 py-3 text-rose-700">{row.lateOperations}</td>
               <td className="px-3 py-3 text-rose-700">{row.lateHousing}</td>
               <td className="px-3 py-3">{row.doOperations}</td>
+              <td className="px-3 py-3"><button type="button" onClick={() => onDetail?.(`Promoteur · ${row.name}`, row.operationIds)} className="text-teal-700 underline">Voir le détail</button></td>
             </tr>
           ))}
           {rows.length === 0 && (
             <tr>
-              <td colSpan={12} className="p-10 text-center text-slate-400">
+              <td colSpan={13} className="p-10 text-center text-slate-400">
                 Aucune livraison promoteur sur la période.
               </td>
             </tr>

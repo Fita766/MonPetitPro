@@ -1,5 +1,6 @@
 export default function BudgetStats({
   stats,
+  onDetail,
 }: {
   stats: {
     operations: number;
@@ -8,7 +9,9 @@ export default function BudgetStats({
     variance: number;
     operationsWithInitialBudget: number;
     operationsWithFinalBudget: number;
+    operationIds: string[];
   };
+  onDetail?: (title: string, ids: string[]) => void;
 }) {
   const currency = (value: number) =>
     value.toLocaleString("fr-FR", {
@@ -23,6 +26,7 @@ export default function BudgetStats({
           Opérations
         </p>
         <p className="mt-2 text-3xl font-medium">{stats.operations}</p>
+        <button type="button" onClick={() => onDetail?.("Budget", stats.operationIds)} className="mt-2 text-xs text-teal-700 underline">Voir le détail</button>
       </div>
       <div className="rounded-2xl border border-slate-200 bg-white p-6">
         <p className="text-[10px] font-medium uppercase tracking-widest text-slate-400">

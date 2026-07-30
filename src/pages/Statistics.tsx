@@ -18,6 +18,8 @@ import {
   aggregateCtxStats,
   aggregatePromoters,
   buildDeliveryStats,
+  buildWorksOrderStats,
+  type StatisticsBasis,
   type StatisticsOperation,
 } from "../lib/statistics";
 import {
@@ -30,8 +32,9 @@ import PromoterStats from "../components/statistics/PromoterStats";
 import CtxStats from "../components/statistics/CtxStats";
 import DeliveryStats from "../components/statistics/DeliveryStats";
 import BudgetStats from "../components/statistics/BudgetStats";
+import StatisticsDetailDialog from "../components/statistics/StatisticsDetailDialog";
 
-type StatisticsTab = "overview" | "promoters" | "ctx" | "deliveries" | "budget";
+type StatisticsTab = "overview" | "promoters" | "ctx" | "deliveries" | "works_orders" | "budget";
 type StatsObservation = ObservationRow & { status: string };
 
 const TABS: { id: StatisticsTab; label: string }[] = [
@@ -39,6 +42,7 @@ const TABS: { id: StatisticsTab; label: string }[] = [
   { id: "promoters", label: "Promoteurs" },
   { id: "ctx", label: "CTX" },
   { id: "deliveries", label: "Livraisons" },
+  { id: "works_orders", label: "OS travaux" },
   { id: "budget", label: "Budget" },
 ];
 
@@ -51,13 +55,15 @@ export default function Statistics() {
     String(currentYear),
   ]);
   const [tab, setTab] = useState<StatisticsTab>("overview");
+  const [budgetBasis, setBudgetBasis] = useState<StatisticsBasis>("delivery");
+  const [detail, setDetail] = useState<{ title: string; ids: string[]; basis: StatisticsBasis } | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
     void Promise.all([
-      supabase.from("operations").select("*"),
+      supabase.from("operations").select("*,operation_budget_lines(*)"),
       supabase.from("observations").select("*"),
     ]).then(([operationResult, observationResult]) => {
       if (cancelled) return;
@@ -83,9 +89,10 @@ export default function Statistics() {
   const years = useMemo(() => {
     const values = new Set<string>([String(currentYear)]);
     operations.forEach((operation) => {
-      const date =
-        operation.actual_delivery_date || operation.expected_delivery_date;
-      if (date) values.add(date.slice(0, 4));
+      for (const date of [
+        operation.actual_delivery_date, operation.expected_delivery_date,
+        operation.works_order_actual_date, operation.works_order_expected_date,
+      ]) if (date) values.add(date.slice(0, 4));
     });
     return [...values].sort((left, right) => Number(right) - Number(left));
   }, [currentYear, operations]);
@@ -106,9 +113,13 @@ export default function Statistics() {
     () => buildDeliveryStats(operations, focusYear),
     [focusYear, operations],
   );
+  const worksOrderRows = useMemo(
+    () => buildWorksOrderStats(operations, focusYear),
+    [focusYear, operations],
+  );
   const budget = useMemo(
-    () => aggregateBudget(operations, numericYears),
-    [numericYears, operations],
+    () => aggregateBudget(operations, numericYears, budgetBasis),
+    [budgetBasis, numericYears, operations],
   );
   const completedObservations = observations.filter((observation) =>
     ["Terminé", "Réussi"].includes(getObservationStatus(observation)),
@@ -178,6 +189,11 @@ export default function Statistics() {
           row.expectedCumulative,
           row.actualCumulative,
         ]),
+      };
+    if (tab === "works_orders")
+      return {
+        headers: ["Mois", "Prévisionnel", "Réel", "Prévisionnel cumulé", "Réel cumulé"],
+        rows: worksOrderRows.map((row) => [row.label, row.expected, row.actual, row.expectedCumulative, row.actualCumulative]),
       };
     if (tab === "budget")
       return {
@@ -345,14 +361,22 @@ export default function Statistics() {
             </div>
           </div>
           <div className="mt-6">
-            <DeliveryStats rows={deliveryRows} />
+            <DeliveryStats rows={deliveryRows} onDetail={(title, ids) => setDetail({ title, ids, basis: "delivery" })} />
           </div>
         </div>
       )}
-      {tab === "promoters" && <PromoterStats rows={promoters} />}
-      {tab === "ctx" && <CtxStats rows={ctxRows} year={focusYear} />}
-      {tab === "deliveries" && <DeliveryStats rows={deliveryRows} />}
-      {tab === "budget" && <BudgetStats stats={budget} />}
+      {tab === "promoters" && <PromoterStats rows={promoters} onDetail={(title, ids) => setDetail({ title, ids, basis: "delivery" })} />}
+      {tab === "ctx" && <CtxStats rows={ctxRows} year={focusYear} onDetail={(title, ids) => setDetail({ title, ids, basis: "delivery" })} />}
+      {tab === "deliveries" && <DeliveryStats rows={deliveryRows} onDetail={(title, ids) => setDetail({ title, ids, basis: "delivery" })} />}
+      {tab === "works_orders" && <DeliveryStats title="OS travaux" rows={worksOrderRows} onDetail={(title, ids) => setDetail({ title, ids, basis: "works_order" })} />}
+      {tab === "budget" && <div>
+        <div className="mb-4 flex w-fit rounded-xl bg-slate-100 p-1">
+          <button type="button" onClick={() => setBudgetBasis("delivery")} className={`rounded-lg px-4 py-2 text-xs ${budgetBasis === "delivery" ? "bg-white shadow-sm" : "text-slate-500"}`}>Par livraison</button>
+          <button type="button" onClick={() => setBudgetBasis("works_order")} className={`rounded-lg px-4 py-2 text-xs ${budgetBasis === "works_order" ? "bg-white shadow-sm" : "text-slate-500"}`}>Par OS travaux</button>
+        </div>
+        <BudgetStats stats={budget} onDetail={(title, ids) => setDetail({ title, ids, basis: budgetBasis })} />
+      </div>}
+      {detail && <StatisticsDetailDialog title={detail.title} operationIds={detail.ids} operations={operations} basis={detail.basis} onClose={() => setDetail(null)} />}
     </div>
   );
 }

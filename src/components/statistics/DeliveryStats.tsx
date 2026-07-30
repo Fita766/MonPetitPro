@@ -1,12 +1,17 @@
 import type { DeliveryMonthStat } from "../../lib/statistics";
 
-export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
+export default function DeliveryStats({ rows, title = "Livraisons", onDetail }: {
+  rows: DeliveryMonthStat[];
+  title?: string;
+  onDetail?: (title: string, ids: string[]) => void;
+}) {
   const maximum = Math.max(
     1,
     ...rows.flatMap((row) => [row.expected, row.actual]),
   );
   return (
     <div className="rounded-2xl border border-slate-200 bg-white p-6">
+      <h2 className="mb-4 text-lg font-medium text-slate-950">{title}</h2>
       <div className="mb-6 flex gap-5 text-xs font-medium text-slate-500">
         <span className="flex items-center gap-2">
           <span className="h-2.5 w-2.5 rounded-full bg-teal-400" /> Prévisionnel
@@ -40,6 +45,7 @@ export default function DeliveryStats({ rows }: { rows: DeliveryMonthStat[] }) {
             <p className="mt-1 text-[9px] font-medium text-slate-400">
               {row.expected}/{row.actual}
             </p>
+            <button type="button" onClick={() => onDetail?.(`${title} · ${row.label}`, row.operationIds)} className="mt-1 text-[9px] text-teal-700 underline">Détail</button>
           </div>
         ))}
       </div>

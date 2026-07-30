@@ -1,4 +1,7 @@
 import { differenceInCalendarDays, parseISO } from 'date-fns';
+import type { OperationBudgetLine } from '../types/domain';
+
+export type StatisticsBasis = 'works_order' | 'delivery';
 
 export interface StatisticsOperation {
   id: string;
@@ -7,6 +10,8 @@ export interface StatisticsOperation {
   project_manager?: string | null;
   actual_delivery_date?: string | null;
   expected_delivery_date?: string | null;
+  works_order_expected_date?: string | null;
+  works_order_actual_date?: string | null;
   total_housing_units?: number | null;
   collective_housing_units?: number | null;
   individual_housing_units?: number | null;
@@ -17,6 +22,7 @@ export interface StatisticsOperation {
   final_budget?: number | null;
   effective_delay_days?: number | null;
   stage?: string | null;
+  operation_budget_lines?: OperationBudgetLine[] | null;
 }
 
 export interface PromoterStat {
@@ -32,6 +38,7 @@ export interface PromoterStat {
   lateOperations: number;
   lateHousing: number;
   doOperations: number;
+  operationIds: string[];
 }
 
 export interface CtxStat {
@@ -42,6 +49,7 @@ export interface CtxStat {
   reservationsPerHousing: number | null;
   averageClearanceDays: number | null;
   previousYearAverageGpa: number | null;
+  operationIds: string[];
 }
 
 function yearOf(date: string | null | undefined): number | null {
@@ -87,6 +95,7 @@ export function aggregatePromoters(operations: StatisticsOperation[], years: num
       lateOperations: late.length,
       lateHousing: sum(late.map((operation) => operation.total_housing_units)),
       doOperations: rows.filter((operation) => operation.stage === '4').length,
+      operationIds: [...new Set(rows.map((operation) => operation.id))],
     };
   });
 }
@@ -106,6 +115,7 @@ export function aggregateCtxStats(operations: StatisticsOperation[], year: numbe
       reservationsPerHousing: divide(reservations, housing),
       averageClearanceDays: average(delivered.map(clearanceDays)),
       previousYearAverageGpa: average(prior.map((operation) => operation.gpa_count)),
+      operationIds: [...new Set(delivered.map((operation) => operation.id))],
     };
   });
 }
@@ -117,6 +127,7 @@ export interface DeliveryMonthStat {
   actual: number;
   expectedCumulative: number;
   actualCumulative: number;
+  operationIds: string[];
 }
 
 export function buildDeliveryStats(operations: StatisticsOperation[], year: number): DeliveryMonthStat[] {
@@ -124,23 +135,64 @@ export function buildDeliveryStats(operations: StatisticsOperation[], year: numb
   let expectedCumulative = 0;
   let actualCumulative = 0;
   return labels.map((label, month) => {
-    const expected = sum(operations.filter((operation) => yearOf(operation.expected_delivery_date) === year && Number(operation.expected_delivery_date?.slice(5, 7)) === month + 1).map((operation) => operation.total_housing_units));
-    const actual = sum(operations.filter((operation) => yearOf(operation.actual_delivery_date) === year && Number(operation.actual_delivery_date?.slice(5, 7)) === month + 1).map((operation) => operation.total_housing_units));
+    const expectedRows = operations.filter((operation) => yearOf(operation.expected_delivery_date) === year && Number(operation.expected_delivery_date?.slice(5, 7)) === month + 1);
+    const actualRows = operations.filter((operation) => yearOf(operation.actual_delivery_date) === year && Number(operation.actual_delivery_date?.slice(5, 7)) === month + 1);
+    const expected = sum(expectedRows.map((operation) => operation.total_housing_units));
+    const actual = sum(actualRows.map((operation) => operation.total_housing_units));
     expectedCumulative += expected; actualCumulative += actual;
-    return { month, label, expected, actual, expectedCumulative, actualCumulative };
+    return { month, label, expected, actual, expectedCumulative, actualCumulative,
+      operationIds: [...new Set([...expectedRows, ...actualRows].map((operation) => operation.id))] };
   });
 }
 
-export function aggregateBudget(operations: StatisticsOperation[], years: number[]) {
-  const selected = operations.filter((operation) => years.includes(yearOf(operation.actual_delivery_date || operation.expected_delivery_date) ?? -1));
-  const initialBudget = sum(selected.map((operation) => operation.initial_budget));
-  const finalBudget = sum(selected.map((operation) => operation.final_budget));
+export function buildWorksOrderStats(operations: StatisticsOperation[], year: number): DeliveryMonthStat[] {
+  const labels = ['Jan', 'Fév', 'Mar', 'Avr', 'Mai', 'Juin', 'Juil', 'Août', 'Sep', 'Oct', 'Nov', 'Déc'];
+  let expectedCumulative = 0;
+  let actualCumulative = 0;
+  return labels.map((label, month) => {
+    const expectedRows = operations.filter((operation) => yearOf(operation.works_order_expected_date) === year
+      && Number(operation.works_order_expected_date?.slice(5, 7)) === month + 1);
+    const actualRows = operations.filter((operation) => yearOf(operation.works_order_actual_date) === year
+      && Number(operation.works_order_actual_date?.slice(5, 7)) === month + 1);
+    const expected = sum(expectedRows.map((operation) => operation.total_housing_units));
+    const actual = sum(actualRows.map((operation) => operation.total_housing_units));
+    expectedCumulative += expected;
+    actualCumulative += actual;
+    return {
+      month, label, expected, actual, expectedCumulative, actualCumulative,
+      operationIds: [...new Set([...expectedRows, ...actualRows].map((operation) => operation.id))],
+    };
+  });
+}
+
+function detailedBudget(operation: StatisticsOperation, phase: 'forecast' | 'final'): number | null {
+  const lines = operation.operation_budget_lines ?? [];
+  const values = lines.map((line) => line[`${phase}_ht`]).filter((value): value is number => value != null);
+  return values.length ? sum(values) : null;
+}
+
+export function aggregateBudget(
+  operations: StatisticsOperation[],
+  years: number[],
+  basis: StatisticsBasis = 'delivery',
+) {
+  const selected = operations.filter((operation) => {
+    const date = basis === 'works_order'
+      ? operation.works_order_actual_date || operation.works_order_expected_date
+      : operation.actual_delivery_date || operation.expected_delivery_date;
+    return years.includes(yearOf(date) ?? -1);
+  });
+  const initialValues = selected.map((operation) => detailedBudget(operation, 'forecast') ?? operation.initial_budget);
+  const finalValues = selected.map((operation) => detailedBudget(operation, 'final') ?? operation.final_budget);
+  const initialBudget = sum(initialValues);
+  const finalBudget = sum(finalValues);
   return {
     operations: selected.length,
     initialBudget,
     finalBudget,
     variance: finalBudget - initialBudget,
-    operationsWithInitialBudget: selected.filter((operation) => operation.initial_budget != null).length,
-    operationsWithFinalBudget: selected.filter((operation) => operation.final_budget != null).length,
+    operationsWithInitialBudget: initialValues.filter((value) => value != null).length,
+    operationsWithFinalBudget: finalValues.filter((value) => value != null).length,
+    operationIds: [...new Set(selected.map((operation) => operation.id))],
   };
 }

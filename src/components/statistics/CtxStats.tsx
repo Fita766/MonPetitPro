@@ -9,9 +9,11 @@ function number(value: number | null, decimals = 0) {
 export default function CtxStats({
   rows,
   year,
+  onDetail,
 }: {
   rows: CtxStat[];
   year: number;
+  onDetail?: (title: string, ids: string[]) => void;
 }) {
   return (
     <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
@@ -34,6 +36,7 @@ export default function CtxStats({
                 {label}
               </th>
             ))}
+            <th className="px-4 py-3 font-medium uppercase tracking-wider">Détail</th>
           </tr>
         </thead>
         <tbody>
@@ -54,6 +57,7 @@ export default function CtxStats({
               <td className="px-4 py-4">
                 {number(row.previousYearAverageGpa, 1)}
               </td>
+              <td className="px-4 py-4"><button type="button" onClick={() => onDetail?.(`CTX · ${row.name}`, row.operationIds)} className="text-teal-700 underline">Voir le détail</button></td>
             </tr>
           ))}
         </tbody>
