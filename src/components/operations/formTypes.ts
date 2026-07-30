@@ -8,4 +8,5 @@ export type OperationFieldChange = <K extends keyof OperationFormData>(
 export interface OperationSectionProps {
   form: OperationFormData;
   onChange: OperationFieldChange;
+  canEditField?: (key: keyof OperationFormData) => boolean;
 }

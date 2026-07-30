@@ -23,7 +23,7 @@ describe('fonction sécurisée de gestion des utilisateurs', () => {
   });
 
   it('permet invitation, création, mise à jour, suspension et transfert', () => {
-    for (const action of ['invite', 'create', 'update', 'suspend', 'reactivate', 'transfer-demo']) {
+    for (const action of ['invite', 'create', 'update', 'reset-password', 'suspend', 'reactivate', 'transfer-demo']) {
       expect(source).toContain(`case "${action}"`);
     }
     expect(source).toContain('inviteUserByEmail');

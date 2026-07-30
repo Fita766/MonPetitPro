@@ -16,6 +16,7 @@ import type { OperationSectionProps } from "./formTypes";
 interface ProgramSectionProps extends OperationSectionProps {
   typologies: OperationTypology[];
   onTypologiesChange: (rows: OperationTypology[]) => void;
+  detailsEditable?: boolean;
 }
 
 const products: HousingProduct[] = [
@@ -82,8 +83,10 @@ function valueFor(
 export default function ProgramSection({
   form,
   onChange,
+  canEditField = () => true,
   typologies,
   onTypologiesChange,
+  detailsEditable = true,
 }: ProgramSectionProps) {
   const updateTypology = (
     typology: HousingTypology,
@@ -129,6 +132,7 @@ export default function ProgramSection({
           <div key={key}>
             <FieldLabel>{label}</FieldLabel>
             <TextInput
+              disabled={!canEditField(key)}
               min="0"
               type="number"
               value={form[key]}
@@ -142,6 +146,7 @@ export default function ProgramSection({
         <div>
           <FieldLabel>Certification</FieldLabel>
           <SelectInput
+            disabled={!canEditField("certification")}
             value={form.certification}
             onChange={(event) => onChange("certification", event.target.value)}
           >
@@ -154,6 +159,7 @@ export default function ProgramSection({
         <div>
           <FieldLabel>Réglementation thermique</FieldLabel>
           <SelectInput
+            disabled={!canEditField("thermal_regulation")}
             value={form.thermal_regulation}
             onChange={(event) =>
               onChange("thermal_regulation", event.target.value)
@@ -168,6 +174,7 @@ export default function ProgramSection({
         <div>
           <FieldLabel>Zonage</FieldLabel>
           <TextInput
+            disabled={!canEditField("zoning")}
             value={form.zoning}
             onChange={(event) => onChange("zoning", event.target.value)}
           />
@@ -175,6 +182,7 @@ export default function ProgramSection({
         <div>
           <FieldLabel>Catégorie</FieldLabel>
           <TextInput
+            disabled={!canEditField("category")}
             value={form.category}
             onChange={(event) => onChange("category", event.target.value)}
           />
@@ -183,24 +191,28 @@ export default function ProgramSection({
 
       <div className="mt-6 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-4">
         <CheckField
+          disabled={!canEditField("clesence_bbca")}
           checked={form.clesence_bbca}
           onChange={(value) => onChange("clesence_bbca", value)}
         >
           Clesence 2030 — BBCA
         </CheckField>
         <CheckField
+          disabled={!canEditField("clesence_reversible")}
           checked={form.clesence_reversible}
           onChange={(value) => onChange("clesence_reversible", value)}
         >
           Réversibilité
         </CheckField>
         <CheckField
+          disabled={!canEditField("clesence_land_sobriety")}
           checked={form.clesence_land_sobriety}
           onChange={(value) => onChange("clesence_land_sobriety", value)}
         >
           Sobriété foncière
         </CheckField>
         <CheckField
+          disabled={!canEditField("clesence_green_space")}
           checked={form.clesence_green_space}
           onChange={(value) => onChange("clesence_green_space", value)}
         >
@@ -217,6 +229,7 @@ export default function ProgramSection({
             <h3 className="font-medium">Typologies par financement</h3>
           </div>
           <button
+            disabled={!detailsEditable}
             type="button"
             onClick={clearTypologies}
             className="inline-flex items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-slate-200 hover:bg-white/10"
@@ -273,6 +286,7 @@ export default function ProgramSection({
                         className="border border-slate-200 p-1"
                       >
                         <input
+                          disabled={!detailsEditable}
                           aria-label={`${typology} ${product} nombre`}
                           min="0"
                           type="number"
@@ -293,6 +307,7 @@ export default function ProgramSection({
                         className="border border-slate-200 p-1"
                       >
                         <input
+                          disabled={!detailsEditable}
                           aria-label={`${typology} ${product} surface moyenne`}
                           min="0"
                           step="0.01"

@@ -27,7 +27,7 @@ export function useProfile(): void {
       const [profileResult, permissionsResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, email, display_name, initials, role, custom_role_id, status, is_owner, last_seen_at, created_at, updated_at, custom_role:custom_roles(id, name, description, color_key, is_active, is_system)')
+          .select('id, email, display_name, initials, role, custom_role_id, status, is_owner, must_change_password, last_seen_at, created_at, updated_at, custom_role:custom_roles(id, name, description, color_key, is_active, is_system)')
           .eq('id', user.id)
           .maybeSingle(),
         supabase.rpc('my_permissions'),

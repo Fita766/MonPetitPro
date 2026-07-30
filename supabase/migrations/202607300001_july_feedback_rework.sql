@@ -524,6 +524,194 @@ create policy platform_migration_journal_read
 on public.platform_migration_journal for select to authenticated
 using (public.has_permission('admin.audit.view'));
 
+-- Autorisations au champ : les droits historiques sont développés sans perte
+-- vers une clé indépendante pour chaque valeur saisissable de la fiche.
+with field_groups(group_key, legacy_permission, fields) as (
+  values
+    ('operation_fields_identity', 'operations.edit_identity', array[
+      'name','stage','of_number','gesprojet_number','department','commune','address',
+      'operation_type','promoter_name'
+    ]::text[]),
+    ('operation_fields_team', 'operations.edit_team', array[
+      'project_manager','operations_manager','assistant_name','gpa_assistant_name',
+      'manager_name','animation_provider'
+    ]::text[]),
+    ('operation_fields_program', 'operations.edit_program', array[
+      'total_housing_units','individual_housing_units','collective_housing_units',
+      'plus_units','plai_units','pls_units','lli_units','lls_units','brs_units',
+      'psla_units','student_units','specific_units','anru_units','acv_units',
+      'commercial_units','other_units','thermal_regulation','certification',
+      'clesence_bbca','clesence_reversible','clesence_land_sobriety',
+      'clesence_green_space','zoning','category'
+    ]::text[]),
+    ('operation_fields_planning', 'operations.edit_planning', array[
+      'co_cpi_date','cei_cef_date','csi_ca_date','development_to_assembly_date',
+      'approvals_submission_date','lls_approval_date','lli_approval_date',
+      'anru_approval_date','permit_number','permit_submission_date',
+      'permit_order_date','tender_date','vefa_cpr_or_sale_agreement_date',
+      'vefa_deed_or_land_purchase_date','works_order_expected_date',
+      'works_order_actual_date','contractual_delivery_date','m8_actual_date',
+      'assembly_to_works_date','m7_actual_date','m4_actual_date',
+      'show_home_actual_date','opl_actual_date','progress_status',
+      'expected_delivery_date','risk_assessment','actual_delivery_date',
+      'delivery_reservations_count','justified_delay_days','penalty_amount',
+      'reservations_clearance_date','daact_date','dpe','management_actual_date',
+      'gpa_count','h2_actual_date'
+    ]::text[]),
+    ('operation_fields_budget', 'operations.edit_budget', array[
+      'initial_budget','final_budget'
+    ]::text[]),
+    ('operation_fields_objectives', 'operations.edit_objectives', array[
+      'is_objective','objective_year'
+    ]::text[]),
+    ('operation_fields_synthesis', 'operations.edit_synthesis', array[
+      'synthesis_description','significant_works'
+    ]::text[])
+), expanded as (
+  select group_key, legacy_permission, field, row_number() over () as sort_order
+  from field_groups
+  cross join lateral unnest(fields) field
+)
+insert into public.permission_definitions(key, group_key, label, description, sort_order)
+select
+  'operations.field.' || field || '.edit',
+  group_key,
+  'Modifier « ' || initcap(replace(field, '_', ' ')) || ' »',
+  'Autorise uniquement la modification de ce champ.',
+  1000 + sort_order
+from expanded
+on conflict (key) do update set
+  group_key = excluded.group_key,
+  label = excluded.label,
+  description = excluded.description,
+  sort_order = excluded.sort_order;
+
+alter table public.custom_role_permissions
+  disable trigger protect_system_role_permissions;
+
+insert into public.custom_role_permissions(role_id, permission_key) values
+  ('10000000-0000-0000-0000-000000000001', 'references.view'),
+  ('10000000-0000-0000-0000-000000000001', 'references.manage'),
+  ('10000000-0000-0000-0000-000000000002', 'references.view'),
+  ('10000000-0000-0000-0000-000000000003', 'references.view'),
+  ('10000000-0000-0000-0000-000000000004', 'references.view')
+on conflict do nothing;
+
+with field_groups(legacy_permission, fields) as (
+  values
+    ('operations.edit_identity', array['name','stage','of_number','gesprojet_number','department','commune','address','operation_type','promoter_name']::text[]),
+    ('operations.edit_team', array['project_manager','operations_manager','assistant_name','gpa_assistant_name','manager_name','animation_provider']::text[]),
+    ('operations.edit_program', array['total_housing_units','individual_housing_units','collective_housing_units','plus_units','plai_units','pls_units','lli_units','lls_units','brs_units','psla_units','student_units','specific_units','anru_units','acv_units','commercial_units','other_units','thermal_regulation','certification','clesence_bbca','clesence_reversible','clesence_land_sobriety','clesence_green_space','zoning','category']::text[]),
+    ('operations.edit_planning', array['co_cpi_date','cei_cef_date','csi_ca_date','development_to_assembly_date','approvals_submission_date','lls_approval_date','lli_approval_date','anru_approval_date','permit_number','permit_submission_date','permit_order_date','tender_date','vefa_cpr_or_sale_agreement_date','vefa_deed_or_land_purchase_date','works_order_expected_date','works_order_actual_date','contractual_delivery_date','m8_actual_date','assembly_to_works_date','m7_actual_date','m4_actual_date','show_home_actual_date','opl_actual_date','progress_status','expected_delivery_date','risk_assessment','actual_delivery_date','delivery_reservations_count','justified_delay_days','penalty_amount','reservations_clearance_date','daact_date','dpe','management_actual_date','gpa_count','h2_actual_date']::text[]),
+    ('operations.edit_budget', array['initial_budget','final_budget']::text[]),
+    ('operations.edit_objectives', array['is_objective','objective_year']::text[]),
+    ('operations.edit_synthesis', array['synthesis_description','significant_works']::text[])
+), expanded as (
+  select legacy_permission, field
+  from field_groups
+  cross join lateral unnest(fields) field
+)
+insert into public.custom_role_permissions(role_id, permission_key)
+select existing.role_id, 'operations.field.' || expanded.field || '.edit'
+from public.custom_role_permissions existing
+join expanded on expanded.legacy_permission = existing.permission_key
+on conflict do nothing;
+
+insert into public.custom_role_permissions(role_id, permission_key)
+select role_permission.role_id, 'operations.field.' || field || '.edit'
+from public.custom_role_permissions role_permission
+cross join unnest(array['is_objective','objective_year']) field
+where role_permission.permission_key = 'objectives.manage'
+on conflict do nothing;
+
+alter table public.custom_role_permissions
+  enable trigger protect_system_role_permissions;
+
+create or replace function public.can_edit_any_operation_field()
+returns boolean language sql stable security definer set search_path = '' as $$
+  select exists (
+    select 1
+    from public.my_permissions()
+    where permission_key like 'operations.field.%.edit'
+  ) or public.has_any_permission(array[
+    'operations.edit_identity','operations.edit_team','operations.edit_program',
+    'operations.edit_planning','operations.edit_budget','operations.edit_conditions',
+    'operations.edit_objectives','operations.edit_synthesis'
+  ]);
+$$;
+
+create or replace function public.enforce_operation_field_permissions()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  old_row jsonb := to_jsonb(old);
+  new_row jsonb := to_jsonb(new);
+  changed_field text;
+  required_permission text;
+begin
+  if coalesce((select auth.role()), '') = 'service_role' then return new; end if;
+
+  for changed_field in
+    select new_value.key
+    from jsonb_each(new_row) new_value
+    where old_row -> new_value.key is distinct from new_row -> new_value.key
+  loop
+    required_permission := 'operations.field.' || changed_field || '.edit';
+    if exists (
+      select 1 from public.permission_definitions
+      where key = required_permission
+    ) and not public.has_permission(required_permission) then
+      raise exception 'permission manquante pour le champ : %', changed_field;
+    end if;
+  end loop;
+  return new;
+end;
+$$;
+
+drop policy if exists operations_permission_update on public.operations;
+create policy operations_permission_update on public.operations
+for update to authenticated
+using (public.can_edit_any_operation_field())
+with check (public.can_edit_any_operation_field());
+
+create or replace function public.complete_password_change()
+returns void language plpgsql security definer set search_path = '' as $$
+begin
+  perform set_config('monpetitpro.password_change_completion', '1', true);
+  update public.profiles
+  set must_change_password = false
+  where id = (select auth.uid()) and status = 'active';
+  if not found then
+    raise exception 'profil actif introuvable';
+  end if;
+end;
+$$;
+revoke all on function public.complete_password_change() from public, anon;
+grant execute on function public.complete_password_change() to authenticated;
+
+create or replace function public.protect_profile_security_fields()
+returns trigger language plpgsql security definer set search_path = '' as $$
+begin
+  if (old.custom_role_id is distinct from new.custom_role_id
+      or old.status is distinct from new.status
+      or old.is_owner is distinct from new.is_owner
+      or old.role is distinct from new.role)
+     and coalesce((select auth.role()), '') <> 'service_role'
+     and session_user not in ('postgres', 'supabase_admin')
+     and not public.has_permission('admin.users.manage') then
+    raise exception 'vous ne pouvez pas modifier vos propres droits ou votre statut';
+  end if;
+
+  if old.must_change_password is distinct from new.must_change_password
+     and coalesce((select auth.role()), '') <> 'service_role'
+     and session_user not in ('postgres', 'supabase_admin')
+     and coalesce(current_setting('monpetitpro.password_change_completion', true), '') <> '1'
+     and not public.has_permission('admin.users.manage') then
+    raise exception 'le changement de mot de passe doit être validé par le parcours sécurisé';
+  end if;
+  return new;
+end;
+$$;
+
 -- Assertions transactionnelles : toute divergence annule la migration.
 do $$
 declare source_count integer;

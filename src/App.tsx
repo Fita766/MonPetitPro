@@ -15,6 +15,7 @@ import AdminReferences from './pages/AdminReferences';
 import { useProfile } from './hooks/useProfile';
 import { accountAccessState, permissionGranted } from './lib/accessControl';
 import Objectives from './pages/Objectives';
+import ChangePassword from './pages/ChangePassword';
 import type { PermissionKey } from './types/domain';
 
 // Protected Route wrapper
@@ -51,8 +52,23 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
       </div>
     );
   }
+
+  if (profile?.must_change_password) {
+    return <Navigate to="/change-password" replace />;
+  }
   
   return <AppLayout>{children}</AppLayout>;
+}
+
+function PasswordChangeRoute() {
+  const { user, profile, isLoadingAuth, isLoadingProfile } = useStore();
+  if (isLoadingAuth || (user && isLoadingProfile)) {
+    return <div className="flex min-h-screen items-center justify-center">Chargement...</div>;
+  }
+  if (!user) return <Navigate to="/login" replace />;
+  if (accountAccessState(profile) !== 'active') return <Navigate to="/" replace />;
+  if (!profile?.must_change_password) return <Navigate to="/" replace />;
+  return <ChangePassword />;
 }
 
 function AdminRoute({ children }: { children: React.ReactNode }) {
@@ -70,6 +86,17 @@ function AdminRoute({ children }: { children: React.ReactNode }) {
 function PermissionRoute({ children, anyOf }: { children: React.ReactNode; anyOf: PermissionKey[] }) {
   const permissions = useStore((state) => state.permissions);
   return <ProtectedRoute>{anyOf.some((key) => permissionGranted(permissions, key)) ? children : <Navigate to="/" replace />}</ProtectedRoute>;
+}
+
+function OperationEditRoute({ children }: { children: React.ReactNode }) {
+  const permissions = useStore((state) => state.permissions);
+  const mayEdit = permissions.some((key) =>
+    key.startsWith('operations.field.') || [
+      'operations.edit_identity', 'operations.edit_team', 'operations.edit_program',
+      'operations.edit_planning', 'operations.edit_budget', 'operations.edit_conditions',
+      'operations.edit_objectives', 'operations.edit_synthesis',
+    ].includes(key));
+  return <ProtectedRoute>{mayEdit ? children : <Navigate to="/" replace />}</ProtectedRoute>;
 }
 
 function App() {
@@ -94,6 +121,7 @@ function App() {
     <BrowserRouter>
       <Routes>
         <Route path="/login" element={<Login />} />
+        <Route path="/change-password" element={<PasswordChangeRoute />} />
         <Route 
           path="/" 
           element={
@@ -125,9 +153,9 @@ function App() {
         <Route 
           path="/operations/:id/edit" 
           element={
-            <PermissionRoute anyOf={['operations.edit_identity','operations.edit_team','operations.edit_program','operations.edit_planning','operations.edit_budget','operations.edit_conditions','operations.edit_objectives','operations.edit_synthesis']}>
+            <OperationEditRoute>
               <OperationForm />
-            </PermissionRoute>
+            </OperationEditRoute>
           } 
         />
         <Route 

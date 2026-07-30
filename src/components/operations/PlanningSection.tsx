@@ -42,6 +42,7 @@ function formatDate(value: string | null): string {
 export default function PlanningSection({
   form,
   onChange,
+  canEditField = () => true,
 }: OperationSectionProps) {
   const schedule = calculateOperationSchedule({
     operationType: form.operation_type,
@@ -128,6 +129,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>N° permis de construire</FieldLabel>
           <TextInput
+            disabled={!canEditField("permit_number")}
             value={form.permit_number}
             onChange={(event) => onChange("permit_number", event.target.value)}
           />
@@ -143,7 +145,7 @@ export default function PlanningSection({
                 {label}
               </FieldLabel>
               <TextInput
-                disabled={disabled}
+                disabled={disabled || !canEditField(key)}
                 type="date"
                 value={disabled ? "" : form[key]}
                 onChange={(event) => onChange(key, event.target.value)}
@@ -154,6 +156,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Avancement (BK)</FieldLabel>
           <TextInput
+            disabled={!canEditField("progress_status")}
             value={form.progress_status}
             onChange={(event) =>
               onChange("progress_status", event.target.value)
@@ -163,6 +166,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Évaluation des risques (BM)</FieldLabel>
           <TextInput
+            disabled={!canEditField("risk_assessment")}
             value={form.risk_assessment}
             onChange={(event) =>
               onChange("risk_assessment", event.target.value)
@@ -172,6 +176,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Réserves de livraison (BO)</FieldLabel>
           <TextInput
+            disabled={!canEditField("delivery_reservations_count")}
             min="0"
             type="number"
             value={form.delivery_reservations_count}
@@ -183,6 +188,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Retard justifié en jours (BR)</FieldLabel>
           <TextInput
+            disabled={!canEditField("justified_delay_days")}
             min="0"
             type="number"
             value={form.justified_delay_days}
@@ -194,6 +200,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Pénalités (BV)</FieldLabel>
           <TextInput
+            disabled={!canEditField("penalty_amount")}
             min="0"
             step="0.01"
             type="number"
@@ -204,6 +211,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>DPE (BY)</FieldLabel>
           <TextInput
+            disabled={!canEditField("dpe")}
             value={form.dpe}
             onChange={(event) => onChange("dpe", event.target.value)}
           />
@@ -211,6 +219,7 @@ export default function PlanningSection({
         <div>
           <FieldLabel>Nombre de GPA (CE)</FieldLabel>
           <TextInput
+            disabled={!canEditField("gpa_count")}
             min="0"
             type="number"
             value={form.gpa_count}

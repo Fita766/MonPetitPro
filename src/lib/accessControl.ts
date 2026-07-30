@@ -1,4 +1,5 @@
 import type { PermissionKey } from '../types/domain';
+import { OPERATION_FIELD_PERMISSION_DEFINITIONS } from './operationFieldPermissions';
 
 export interface PermissionDefinition {
   key: PermissionKey;
@@ -76,6 +77,19 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ['admin.demo_transfer', 'Transférer les données démo', 'Réaffecter les données au compte propriétaire.'],
   ]),
 ];
+
+for (const definition of OPERATION_FIELD_PERMISSION_DEFINITIONS) {
+  let permissionGroup = PERMISSION_GROUPS.find((item) => item.key === definition.groupKey);
+  if (!permissionGroup) {
+    permissionGroup = { key: definition.groupKey, label: definition.groupLabel, permissions: [] };
+    PERMISSION_GROUPS.splice(Math.max(1, PERMISSION_GROUPS.length - 1), 0, permissionGroup);
+  }
+  permissionGroup.permissions.push({
+    key: definition.key,
+    label: definition.label,
+    description: definition.description,
+  });
+}
 
 export const PERMISSION_DEFINITIONS = PERMISSION_GROUPS.flatMap((permissionGroup) => permissionGroup.permissions);
 const KNOWN_KEYS = new Set<string>(PERMISSION_DEFINITIONS.map((permission) => permission.key));

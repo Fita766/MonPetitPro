@@ -51,7 +51,8 @@ export type PermissionKey =
   | 'objectives.view' | 'objectives.manage' | 'objectives.export'
   | 'statistics.view' | 'statistics.export'
   | 'admin.users.view' | 'admin.users.manage' | 'admin.users.invite' | 'admin.users.suspend'
-  | 'admin.roles.view' | 'admin.roles.manage' | 'admin.audit.view' | 'admin.demo_transfer';
+  | 'admin.roles.view' | 'admin.roles.manage' | 'admin.audit.view' | 'admin.demo_transfer'
+  | `operations.field.${string}.edit`;
 
 export interface CustomRole {
   id: string;

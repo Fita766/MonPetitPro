@@ -91,6 +91,7 @@ Deno.serve(async (request) => {
           initials: payload.initials?.trim().toUpperCase() || null,
           custom_role_id: payload.roleId || null,
           status: "active",
+          must_change_password: true,
         }).eq("id", data.user.id);
         if (profileError) {
           await service.auth.admin.deleteUser(data.user.id);
@@ -116,6 +117,22 @@ Deno.serve(async (request) => {
         const { error } = await service.from("profiles").update(profilePatch)
           .eq("id", payload.targetUserId);
         if (error) throw error;
+        return json({ userId: payload.targetUserId });
+      }
+
+      case "reset-password": {
+        await requirePermission("admin.users.manage");
+        if (!payload.targetUserId) throw new Error("Utilisateur cible obligatoire");
+        if (!payload.password || payload.password.length < 12) {
+          throw new Error("Le mot de passe temporaire doit contenir au moins 12 caractères");
+        }
+        const { error: authError } = await service.auth.admin.updateUserById(payload.targetUserId, {
+          password: payload.password,
+        });
+        if (authError) throw authError;
+        const { error: profileError } = await service.from("profiles")
+          .update({ must_change_password: true }).eq("id", payload.targetUserId);
+        if (profileError) throw profileError;
         return json({ userId: payload.targetUserId });
       }
 

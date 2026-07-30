@@ -6,13 +6,16 @@ import type { OperationSectionProps } from "./formTypes";
 interface BudgetSectionProps extends OperationSectionProps {
   subsidies: OperationSubsidy[];
   onSubsidiesChange: (rows: OperationSubsidy[]) => void;
+  detailsEditable?: boolean;
 }
 
 export default function BudgetSection({
   form,
   onChange,
+  canEditField = () => true,
   subsidies,
   onSubsidiesChange,
+  detailsEditable = true,
 }: BudgetSectionProps) {
   const update = (index: number, patch: Partial<OperationSubsidy>) =>
     onSubsidiesChange(
@@ -39,6 +42,7 @@ export default function BudgetSection({
         <div>
           <FieldLabel>Budget initial</FieldLabel>
           <TextInput
+            disabled={!canEditField("initial_budget")}
             min="0"
             step="0.01"
             type="number"
@@ -49,6 +53,7 @@ export default function BudgetSection({
         <div>
           <FieldLabel>Budget final / atterrissage</FieldLabel>
           <TextInput
+            disabled={!canEditField("final_budget")}
             min="0"
             step="0.01"
             type="number"
@@ -67,6 +72,7 @@ export default function BudgetSection({
             <h3 className="font-medium">Qui finance quoi, et combien ?</h3>
           </div>
           <button
+            disabled={!detailsEditable}
             type="button"
             onClick={add}
             className="inline-flex items-center gap-2 rounded-lg bg-teal-700 px-3 py-2 text-xs font-medium text-white hover:bg-teal-800"
@@ -88,6 +94,7 @@ export default function BudgetSection({
               <div>
                 <FieldLabel>Qui</FieldLabel>
                 <TextInput
+                  disabled={!detailsEditable}
                   value={subsidy.provider}
                   onChange={(event) =>
                     update(index, { provider: event.target.value })
@@ -97,6 +104,7 @@ export default function BudgetSection({
               <div>
                 <FieldLabel>Quoi</FieldLabel>
                 <TextInput
+                  disabled={!detailsEditable}
                   value={subsidy.purpose}
                   onChange={(event) =>
                     update(index, { purpose: event.target.value })
@@ -106,6 +114,7 @@ export default function BudgetSection({
               <div>
                 <FieldLabel>Combien</FieldLabel>
                 <TextInput
+                  disabled={!detailsEditable}
                   min="0"
                   step="0.01"
                   type="number"
@@ -121,6 +130,7 @@ export default function BudgetSection({
                 />
               </div>
               <button
+                disabled={!detailsEditable}
                 type="button"
                 onClick={() => remove(index)}
                 aria-label="Supprimer la subvention"

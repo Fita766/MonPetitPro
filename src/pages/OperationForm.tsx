@@ -6,6 +6,10 @@ import { useStore } from '../store/useStore';
 import { triggerSuccessToast } from '../lib/toastUtils';
 import { isSchemaMigrationError, SCHEMA_MIGRATION_MESSAGE } from '../lib/permissions';
 import { permissionGranted } from '../lib/accessControl';
+import {
+  OPERATION_FIELD_PERMISSION_DEFINITIONS,
+  canEditOperationField,
+} from '../lib/operationFieldPermissions';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
 import type { OperationSubsidy, OperationTypology, SuspensiveCondition } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
@@ -53,7 +57,17 @@ export default function OperationForm() {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const tabPermission = {
+  const tabGroupKeys: Record<string, string[]> = {
+    general: ['operation_fields_identity', 'operation_fields_team'],
+    program: ['operation_fields_program'],
+    planning: ['operation_fields_planning'],
+    budget: ['operation_fields_budget'],
+    objectives: ['operation_fields_objectives'],
+    synthesis: ['operation_fields_synthesis'],
+  };
+  const exactTabPermission = OPERATION_FIELD_PERMISSION_DEFINITIONS.some((definition) =>
+    tabGroupKeys[activeTab]?.includes(definition.groupKey) && permissions.includes(definition.key));
+  const tabPermission = exactTabPermission || ({
     general: permissionGranted(permissions, 'operations.edit_identity') || permissionGranted(permissions, 'operations.edit_team'),
     program: permissionGranted(permissions, 'operations.edit_program'),
     planning: permissionGranted(permissions, 'operations.edit_planning'),
@@ -61,8 +75,10 @@ export default function OperationForm() {
     conditions: permissionGranted(permissions, 'operations.edit_conditions'),
     objectives: permissionGranted(permissions, 'operations.edit_objectives') || permissionGranted(permissions, 'objectives.manage'),
     synthesis: permissionGranted(permissions, 'operations.edit_synthesis'),
-  }[activeTab] ?? false;
+  }[activeTab] ?? false);
   const editable = id ? tabPermission : permissionGranted(permissions, 'operations.create');
+  const canEditField = useCallback((field: keyof OperationFormData) =>
+    canEditOperationField(permissions, field, !id), [id, permissions]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -111,9 +127,10 @@ export default function OperationForm() {
     void loadData();
   }, [loadData]);
 
-  const changeField = <K extends keyof OperationFormData>(key: K, value: OperationFormData[K]) => {
+  const changeField = useCallback(<K extends keyof OperationFormData>(key: K, value: OperationFormData[K]) => {
+    if (!canEditField(key)) return;
     setForm((current) => ({ ...current, [key]: value }));
-  };
+  }, [canEditField]);
 
   const syncTypologies = async (operationId: string) => {
     const meaningful = typologies.filter((row) => row.units != null || row.average_surface != null);
@@ -194,9 +211,9 @@ export default function OperationForm() {
       const { data, error: operationError } = await query;
       if (operationError) throw operationError;
       const operationId = data.id as string;
-      await syncTypologies(operationId);
-      await syncSubsidies(operationId);
-      await syncConditions(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_program')) await syncTypologies(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_budget')) await syncSubsidies(operationId);
+      if (!id || permissionGranted(permissions, 'operations.edit_conditions')) await syncConditions(operationId);
       triggerSuccessToast(user?.email, 'Opération et données DMO enregistrées.');
       navigate(`/operations/${operationId}`);
     } catch (caught) {
@@ -208,17 +225,17 @@ export default function OperationForm() {
   };
 
   const activeContent = useMemo(() => {
-    const common = { form, onChange: changeField };
+    const common = { form, onChange: changeField, canEditField };
     switch (activeTab) {
-      case 'program': return <ProgramSection {...common} typologies={typologies} onTypologiesChange={setTypologies} />;
+      case 'program': return <ProgramSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_program')} typologies={typologies} onTypologiesChange={setTypologies} />;
       case 'planning': return <PlanningSection {...common} />;
-      case 'budget': return <BudgetSection {...common} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
+      case 'budget': return <BudgetSection {...common} detailsEditable={!id || permissionGranted(permissions, 'operations.edit_budget')} subsidies={subsidies} onSubsidiesChange={setSubsidies} />;
       case 'conditions': return <ConditionsSection {...common} conditions={conditions} onConditionsChange={setConditions} />;
       case 'objectives': return <ObjectivesSection {...common} />;
       case 'synthesis': return <SynthesisSection {...common} />;
       default: return <GeneralSection {...common} suggestions={suggestions} />;
     }
-  }, [activeTab, conditions, form, subsidies, suggestions, typologies]);
+  }, [activeTab, canEditField, changeField, conditions, form, id, permissions, subsidies, suggestions, typologies]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 
