@@ -1063,8 +1063,15 @@ create policy profiles_read on public.profiles for select to authenticated
 using (
   id = (select auth.uid())
   or public.has_permission('admin.users.view')
+  or public.has_permission('admin.audit.view')
   or public.has_any_permission(array['observations.assign','observations.reassign'])
 );
+
+drop policy if exists audit_admin_read on public.audit_log;
+drop policy if exists audit_permission_read on public.audit_log;
+create policy audit_permission_read on public.audit_log
+for select to authenticated
+using (public.has_permission('admin.audit.view'));
 
 drop policy if exists observations_read on public.observations;
 drop policy if exists observations_insert on public.observations;

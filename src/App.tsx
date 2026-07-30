@@ -12,6 +12,7 @@ import CalendarView from './pages/CalendarView';
 import Statistics from './pages/Statistics';
 import AdminUsers from './pages/AdminUsers';
 import AdminReferences from './pages/AdminReferences';
+import AuditHistory from './pages/AuditHistory';
 import { useProfile } from './hooks/useProfile';
 import { accountAccessState, permissionGranted } from './lib/accessControl';
 import Objectives from './pages/Objectives';
@@ -139,6 +140,14 @@ function App() {
           element={
             <PermissionRoute anyOf={['references.view']}>
               <AdminReferences />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/history"
+          element={
+            <PermissionRoute anyOf={['admin.audit.view']}>
+              <AuditHistory />
             </PermissionRoute>
           }
         />

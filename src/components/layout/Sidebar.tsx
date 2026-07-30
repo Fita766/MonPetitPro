@@ -10,6 +10,7 @@ import {
   UserCog,
   Target,
   BookOpenCheck,
+  History,
 } from "lucide-react";
 import { useStore } from "../../store/useStore";
 import { permissionGranted } from "../../lib/accessControl";
@@ -77,6 +78,12 @@ export default function Sidebar() {
           <NavLink to="/admin/references" className={navItemClass}>
             <BookOpenCheck size={20} />
             <span className="font-medium">Référentiels</span>
+          </NavLink>
+        )}
+        {permissionGranted(permissions, 'admin.audit.view') && (
+          <NavLink to="/admin/history" className={navItemClass}>
+            <History size={20} />
+            <span className="font-medium">Historique</span>
           </NavLink>
         )}
       </nav>
