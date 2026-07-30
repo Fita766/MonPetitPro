@@ -4,6 +4,40 @@ export type UserRole = 'admin' | 'responsable' | 'contributeur' | 'lecteur';
 
 export type ProfileStatus = 'pending' | 'active' | 'suspended';
 
+export type ReferenceKind =
+  | 'ctx'
+  | 'cop'
+  | 'assistant'
+  | 'gpa_assistant'
+  | 'manager'
+  | 'animation_provider'
+  | 'promoter'
+  | 'certification'
+  | 'thermal_regulation'
+  | 'program_nature';
+
+export interface ReferenceValue {
+  id: string;
+  kind: ReferenceKind;
+  label: string;
+  is_active: boolean;
+  sort_order: number;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface CommuneReference {
+  id: string;
+  name: string;
+  insee_code: string;
+  postal_code: string | null;
+  department_code: string;
+  department_name: string;
+  region_name: string | null;
+  housing_zone: string | null;
+  is_active: boolean;
+}
+
 export type PermissionKey =
   | 'operations.view' | 'operations.create' | 'operations.edit_identity' | 'operations.edit_team'
   | 'operations.edit_program' | 'operations.edit_planning' | 'operations.edit_budget'
@@ -40,6 +74,7 @@ export interface Profile {
   custom_role_id?: string | null;
   status?: ProfileStatus;
   is_owner?: boolean;
+  must_change_password?: boolean;
   last_seen_at?: string | null;
   custom_role?: CustomRole | null;
   created_at?: string;
@@ -54,12 +89,14 @@ export interface Operation {
   gesprojet_number: string | null;
   department: string | null;
   commune: string | null;
+  commune_id?: string | null;
   address: string | null;
   project_manager: string;
   operations_manager: string | null;
   assistant_name: string | null;
   manager_name: string | null;
   operation_type: string;
+  program_nature?: string | null;
   promoter_name: string | null;
   contractual_delivery_date: string | null;
   expected_delivery_date: string | null;
@@ -107,6 +144,7 @@ export interface Observation {
   is_dg: boolean;
   status: string | null;
   user_id?: string | null;
+  assignee_user_id: string | null;
 }
 
 export type HousingProduct = 'PLUS' | 'PLAI' | 'PLS' | 'LLI' | 'BRS' | 'PSLA';
@@ -121,12 +159,82 @@ export interface OperationTypology {
   average_surface: number | null;
 }
 
+export type ProgramSectionKind =
+  | 'collective'
+  | 'individual'
+  | 'commercial'
+  | 'custom';
+
+export interface OperationProgramSection {
+  id?: string;
+  operation_id?: string;
+  kind: ProgramSectionKind;
+  label: string;
+  enabled: boolean;
+  sort_order: number;
+}
+
+export interface OperationProgramLine {
+  id?: string;
+  operation_id?: string;
+  section_id: string;
+  label: string;
+  product: HousingProduct | null;
+  units: number | null;
+  average_surface: number | null;
+  sort_order: number;
+  source_typology_id?: string | null;
+}
+
+export type BudgetFamily = 'general' | 'LLS' | 'LLI' | 'managed';
+export type RealizationMode = 'MOD' | 'VEFA';
+
+export interface OperationBudgetLine {
+  id?: string;
+  operation_id?: string;
+  family: BudgetFamily;
+  realization_mode: RealizationMode;
+  forecast_ht: number | null;
+  forecast_ttc: number | null;
+  forecast_equity: number | null;
+  final_ht: number | null;
+  final_ttc: number | null;
+  final_equity: number | null;
+  sort_order: number;
+}
+
+export type ObjectiveKind = 'works_order' | 'management';
+export type ObjectiveCategory = 'initial' | 'supplementary';
+
+export interface OperationObjective {
+  id?: string;
+  operation_id?: string;
+  kind: ObjectiveKind;
+  objective_year: number;
+  category: ObjectiveCategory;
+  snapshot_date: string | null;
+  snapshot_housing_units: number | null;
+  created_by?: string | null;
+}
+
+export interface OperationSignificantWork {
+  id?: string;
+  operation_id?: string;
+  label: string;
+  amount_ht: number | null;
+  comment: string | null;
+  sort_order: number;
+}
+
 export interface OperationSubsidy {
   id?: string;
   operation_id?: string;
   provider: string;
   purpose: string;
   amount: number | null;
+  forecast_amount?: number | null;
+  final_amount?: number | null;
+  comment?: string | null;
 }
 
 export interface SuspensiveCondition {
