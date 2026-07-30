@@ -89,6 +89,7 @@ export const MILESTONE_GROUPS: MilestoneGroupDefinition[] = [
     description: 'Prévision révisée, livraison réelle et clôture des réserves.',
     milestones: [
       { key: 'delivery', label: 'Livraison', code: 'BL / BN', expectedField: 'expected_delivery_date', actualField: 'actual_delivery_date', alertEligible: true },
+      { key: 'authorized_deadline', label: 'Date limite autorisée', code: 'BT', expectedField: 'authorized_deadline_date', expectedCalculated: true, formula: 'Livraison contractuelle + retard justifié' },
       { key: 'reservations_clearance', label: 'Levée des réserves', code: 'BW', actualField: 'reservations_clearance_date' },
       { key: 'daact', label: 'Dépôt DAACT', code: 'BX', actualField: 'daact_date' },
     ],
@@ -130,4 +131,3 @@ export function visibleMilestones(mode: RealizationMode): MilestoneDefinition[] 
   return MILESTONE_GROUPS.flatMap((group) =>
     group.milestones.filter((milestone) => !milestone.appliesTo || milestone.appliesTo.includes(mode)));
 }
-

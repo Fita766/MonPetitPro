@@ -1,4 +1,12 @@
-export type BusinessCalendarView = 'conditions' | 'deliveries' | 'management' | 'key-dates';
+import { MILESTONE_GROUPS } from './planningMilestones';
+
+export type BusinessCalendarView =
+  | 'conditions'
+  | 'program'
+  | 'works'
+  | 'deliveries'
+  | 'management'
+  | 'key-dates';
 
 export interface CalendarOperation {
   id: string;
@@ -7,6 +15,9 @@ export interface CalendarOperation {
   operations_manager?: string | null;
   department?: string | null;
   promoter_name?: string | null;
+  stage?: string | null;
+  operation_type?: string | null;
+  program_nature?: string | null;
   contractual_delivery_date?: string | null;
   expected_delivery_date?: string | null;
   actual_delivery_date?: string | null;
@@ -30,27 +41,17 @@ export interface BusinessCalendarEvent {
   code: string;
   kind: BusinessCalendarView;
   actual: boolean;
+  milestoneType: string;
   operationId: string;
   operationName: string;
   ctx: string | null;
   cop: string | null;
   department: string | null;
   promoter: string | null;
+  stage: string | null;
+  mode: string | null;
+  nature: string | null;
 }
-
-const KEY_DATES = [
-  ['BA', 'm8_expected_date', 'M-8 prévisionnel', false], ['BB', 'm8_actual_date', 'M-8 réalisé', true],
-  ['BC', 'assembly_to_works_date', 'Passation Montage → Travaux', true], ['BD', 'm7_expected_date', 'M-7 prévisionnel', false],
-  ['BE', 'm7_actual_date', 'M-7 réalisé', true], ['BF', 'm4_expected_date', 'M-4 prévisionnel', false],
-  ['BG', 'm4_actual_date', 'M-4 réalisé', true], ['BH', 'show_home_expected_date', 'Logement témoin prévisionnel', false],
-  ['BI', 'show_home_actual_date', 'Logement témoin réel', true], ['BJ', 'opl_actual_date', 'OPL réelle', true],
-  ['BL', 'expected_delivery_date', 'Livraison prévisionnelle', false], ['BN', 'actual_delivery_date', 'Livraison réelle', true],
-  ['BT', 'authorized_deadline_date', 'Date limite autorisée', false], ['BW', 'reservations_clearance_date', 'Levée des réserves', true],
-  ['BX', 'daact_date', 'Dépôt DAACT', true], ['BZ', 'management_expected_date', 'MEG prévisionnelle', false],
-  ['CA', 'management_actual_date', 'MEG réelle', true], ['CB', 'm3_reservations_meeting_date', 'Réunion M+3', false],
-  ['CC', 'm10_date', 'Jalon M+10', false], ['CD', 'gpa_end_date', 'Fin GPA', false],
-  ['CF', 'h2_deadline_date', 'H2 butoir', false], ['CG', 'h2_actual_date', 'H2 réelle', true],
-] as const;
 
 function metadata(operation: CalendarOperation) {
   return {
@@ -60,8 +61,22 @@ function metadata(operation: CalendarOperation) {
     cop: operation.operations_manager ?? null,
     department: operation.department ?? null,
     promoter: operation.promoter_name ?? null,
+    stage: operation.stage ?? null,
+    mode: operation.operation_type ?? null,
+    nature: operation.program_nature ?? null,
   };
 }
+
+function milestoneCodes(code: string | undefined) {
+  const codes = code?.split('/').map((part) => part.trim()) ?? ['—'];
+  return { expected: codes[0] ?? '—', actual: codes[1] ?? codes[0] ?? '—' };
+}
+
+const VIEW_GROUPS: Record<'program' | 'works' | 'key-dates', string[]> = {
+  program: ['committees', 'approvals', 'permits', 'land'],
+  works: ['works', 'delivery_preparation'],
+  'key-dates': MILESTONE_GROUPS.map((group) => group.key),
+};
 
 export function buildCalendarEvents(
   operations: CalendarOperation[],
@@ -74,8 +89,26 @@ export function buildCalendarEvents(
       const operation = byId.get(condition.operation_id);
       if (!operation) return [];
       const events: BusinessCalendarEvent[] = [];
-      if (condition.deadline_date) events.push({ id: `condition-${condition.id}`, date: condition.deadline_date, title: condition.subject, code: 'CS', kind: view, actual: false, ...metadata(operation) });
-      if (condition.completion_date) events.push({ id: `condition-${condition.id}-realisee`, date: condition.completion_date, title: `${condition.subject} — réalisée`, code: 'CS-R', kind: view, actual: true, ...metadata(operation) });
+      if (condition.deadline_date) events.push({
+        id: `condition-${condition.id}`,
+        date: condition.deadline_date,
+        title: condition.subject,
+        code: 'CS',
+        kind: view,
+        actual: false,
+        milestoneType: 'condition_deadline',
+        ...metadata(operation),
+      });
+      if (condition.completion_date) events.push({
+        id: `condition-${condition.id}-realisee`,
+        date: condition.completion_date,
+        title: `${condition.subject} — réalisée`,
+        code: 'CS-R',
+        kind: view,
+        actual: true,
+        milestoneType: 'condition_completion',
+        ...metadata(operation),
+      });
       return events;
     }).sort((left, right) => left.date.localeCompare(right.date));
   }
@@ -86,17 +119,62 @@ export function buildCalendarEvents(
       if (!date) return [];
       const actual = Boolean(operation.actual_delivery_date);
       const code = operation.actual_delivery_date ? 'BN' : operation.expected_delivery_date ? 'BL' : 'AZ';
-      return [{ id: `delivery-${operation.id}`, date, title: actual ? 'Livraison réelle' : 'Livraison prévisionnelle', code, kind: view, actual, ...metadata(operation) }];
+      return [{
+        id: `delivery-${operation.id}`,
+        date,
+        title: actual ? 'Livraison réelle' : 'Livraison prévisionnelle',
+        code,
+        kind: view,
+        actual,
+        milestoneType: 'delivery',
+        ...metadata(operation),
+      }];
     }
     if (view === 'management') {
       const date = operation.management_actual_date || operation.management_expected_date;
       if (!date) return [];
       const actual = Boolean(operation.management_actual_date);
-      return [{ id: `management-${operation.id}`, date, title: actual ? 'Mise en gestion réelle' : 'Mise en gestion prévisionnelle', code: actual ? 'CA' : 'BZ', kind: view, actual, ...metadata(operation) }];
+      return [{
+        id: `management-${operation.id}`,
+        date,
+        title: actual ? 'Mise en gestion réelle' : 'Mise en gestion prévisionnelle',
+        code: actual ? 'CA' : 'BZ',
+        kind: view,
+        actual,
+        milestoneType: 'management',
+        ...metadata(operation),
+      }];
     }
-    return KEY_DATES.flatMap(([code, key, title, actual]) => {
-      const date = operation[key];
-      return typeof date === 'string' && date ? [{ id: `key-${code}-${operation.id}`, date, title, code, kind: view, actual, ...metadata(operation) }] : [];
-    });
+
+    const groups = MILESTONE_GROUPS.filter((group) => VIEW_GROUPS[view].includes(group.key));
+    return groups.flatMap((group) => group.milestones.flatMap((milestone) => {
+      if (milestone.appliesTo && !milestone.appliesTo.includes(operation.operation_type === 'VEFA' ? 'VEFA' : 'MOD')) return [];
+      const codes = milestoneCodes(milestone.code);
+      const events: BusinessCalendarEvent[] = [];
+      const expected = milestone.expectedField ? operation[milestone.expectedField] : null;
+      const actual = milestone.actualField ? operation[milestone.actualField] : null;
+      if (typeof expected === 'string' && expected) events.push({
+        id: `${view}-${milestone.key}-expected-${operation.id}`,
+        date: expected,
+        title: `${milestone.label} — prévisionnel`,
+        code: codes.expected,
+        kind: view,
+        actual: false,
+        milestoneType: milestone.key,
+        ...metadata(operation),
+      });
+      if (typeof actual === 'string' && actual) events.push({
+        id: `${view}-${milestone.key}-actual-${operation.id}`,
+        date: actual,
+        title: `${milestone.label} — réel`,
+        code: codes.actual,
+        kind: view,
+        actual: true,
+        milestoneType: milestone.key,
+        ...metadata(operation),
+      });
+      return events;
+    }));
   }).sort((left, right) => left.date.localeCompare(right.date));
 }
+

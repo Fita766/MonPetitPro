@@ -6,6 +6,7 @@ const baseOperation = {
   contractual_delivery_date: '2026-06-30', expected_delivery_date: '2026-07-31', actual_delivery_date: null,
   management_expected_date: '2026-08-31', management_actual_date: null,
   m8_expected_date: '2025-10-30', m8_actual_date: '2025-11-02', authorized_deadline_date: '2026-07-15',
+  approvals_expected_date: '2025-04-01', approvals_submission_date: '2025-04-03',
 };
 
 describe('buildCalendarEvents', () => {
@@ -31,6 +32,14 @@ describe('buildCalendarEvents', () => {
       expect.objectContaining({ code: 'BA', date: '2025-10-30', actual: false }),
       expect.objectContaining({ code: 'BB', date: '2025-11-02', actual: true }),
       expect.objectContaining({ code: 'BT', date: '2026-07-15' }),
+    ]));
+  });
+
+  it('inclut les jalons programme antérieurs à BA', () => {
+    const events = buildCalendarEvents([baseOperation], [], 'program');
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ code: 'AN', date: '2025-04-01', actual: false }),
+      expect.objectContaining({ code: 'AN', date: '2025-04-03', actual: true }),
     ]));
   });
 });

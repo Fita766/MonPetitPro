@@ -33,6 +33,8 @@ import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import ColumnPicker from "../components/operations/ColumnPicker";
 import type { OperationStage } from "../types/domain";
 import { triggerSuccessToast } from "../lib/toastUtils";
+import { buildAlerts, type AlertOperation } from "../lib/alerts";
+import UpcomingAlerts from "../components/dashboard/UpcomingAlerts";
 
 interface DashboardOperation extends FilterableOperation {
   id: string;
@@ -154,6 +156,12 @@ export default function Dashboard() {
     const column = OPERATION_COLUMNS.find((candidate) => candidate.key === key);
     return column ? [column] : [];
   });
+  const today = new Date();
+  const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+  const alerts = useMemo(
+    () => buildAlerts(operations as unknown as AlertOperation[], todayIso),
+    [operations, todayIso],
+  );
 
   const setFilter = <K extends keyof OperationFilters>(
     key: K,
@@ -259,6 +267,8 @@ export default function Dashboard() {
           {error}
         </div>
       )}
+
+      <UpcomingAlerts alerts={alerts} onOpenOperation={(operationId) => navigate(`/operations/${operationId}`)} />
 
       <div className="mb-6 rounded-2xl border border-slate-200 bg-[#f3f5f1] p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">

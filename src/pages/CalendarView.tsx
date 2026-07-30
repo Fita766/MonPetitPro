@@ -14,6 +14,7 @@ import {
 } from "date-fns";
 import { fr } from "date-fns/locale";
 import {
+  CalendarDays,
   ChevronLeft,
   ChevronRight,
   Download,
@@ -45,6 +46,7 @@ import {
   TextInput,
 } from "../components/operations/FormControls";
 import { triggerSuccessToast } from "../lib/toastUtils";
+import { buildIcs, downloadIcs } from "../lib/ics";
 
 type CalendarViewType = BusinessCalendarView | "agenda";
 type CalendarDisplay = "month" | "year";
@@ -78,6 +80,10 @@ const EMPTY_FILTERS: CalendarFilterState = {
   cops: [],
   departments: [],
   promoters: [],
+  stages: [],
+  modes: [],
+  natures: [],
+  milestoneTypes: [],
 };
 const VIEW_LABELS: {
   id: CalendarViewType;
@@ -90,16 +96,21 @@ const VIEW_LABELS: {
     description: "Butoirs et réalisations",
   },
   {
-    id: "deliveries",
-    label: "Livraisons",
-    description: "Réelle, révisée ou contractuelle",
+    id: "program",
+    label: "Programme et autorisations",
+    description: "Comités, agréments, permis et foncier",
   },
+  {
+    id: "works",
+    label: "Travaux",
+    description: "OS et préparation de livraison",
+  },
+  { id: "deliveries", label: "Livraisons", description: "Réelle, révisée ou contractuelle" },
   {
     id: "management",
     label: "Mises en gestion",
     description: "MEG réelle ou prévisionnelle",
   },
-  { id: "key-dates", label: "Dates clés", description: "Jalons BA à CG" },
   {
     id: "agenda",
     label: "Agenda libre",
@@ -130,7 +141,11 @@ function eventMatches(
       (event.department != null &&
         filters.departments.includes(event.department))) &&
     (!filters.promoters.length ||
-      (event.promoter != null && filters.promoters.includes(event.promoter)))
+      (event.promoter != null && filters.promoters.includes(event.promoter))) &&
+    (!filters.stages.length || (event.stage != null && filters.stages.includes(event.stage))) &&
+    (!filters.modes.length || (event.mode != null && filters.modes.includes(event.mode))) &&
+    (!filters.natures.length || (event.nature != null && filters.natures.includes(event.nature))) &&
+    (!filters.milestoneTypes.length || filters.milestoneTypes.includes(event.milestoneType))
   );
 }
 
@@ -214,12 +229,16 @@ export default function CalendarView() {
           code: "EVT",
           kind: "key-dates",
           actual: true,
+          milestoneType: "agenda",
           operationId: operation?.id ?? "",
           operationName: operation?.name ?? "Sans opération",
           ctx: operation?.project_manager ?? null,
           cop: operation?.operations_manager ?? null,
           department: operation?.department ?? null,
           promoter: operation?.promoter_name ?? null,
+          stage: operation?.stage ?? null,
+          mode: operation?.operation_type ?? null,
+          nature: operation?.program_nature ?? null,
           description: event.description,
           time: event.event_time,
         },
@@ -237,12 +256,16 @@ export default function CalendarView() {
             code: "OBS",
             kind: "key-dates",
             actual: Boolean(observation.completion_date),
+            milestoneType: "observation",
             operationId: operation.id,
             operationName: operation.name,
             ctx: operation.project_manager ?? null,
             cop: operation.operations_manager ?? null,
             department: operation.department ?? null,
             promoter: operation.promoter_name ?? null,
+            stage: operation.stage ?? null,
+            mode: operation.operation_type ?? null,
+            nature: operation.program_nature ?? null,
           },
         ];
       },
@@ -270,8 +293,12 @@ export default function CalendarView() {
       cops: unique(operations.map((operation) => operation.operations_manager)),
       departments: unique(operations.map((operation) => operation.department)),
       promoters: unique(operations.map((operation) => operation.promoter_name)),
+      stages: unique(operations.map((operation) => operation.stage)),
+      modes: unique(operations.map((operation) => operation.operation_type)),
+      natures: unique(operations.map((operation) => operation.program_nature)),
+      milestoneTypes: unique(allEvents.map((event) => event.milestoneType)),
     }),
-    [operations],
+    [allEvents, operations],
   );
 
   const monthStart = startOfMonth(currentDate);
@@ -304,6 +331,15 @@ export default function CalendarView() {
       );
       if (source) setEventForm(source);
     } else if (event.operationId) navigate(`/operations/${event.operationId}`);
+  };
+  const exportOutlook = (events: DisplayEvent[], filename: string) => {
+    const content = buildIcs(events.map((event) => ({
+      uid: event.id,
+      title: `${event.title}${event.operationName && event.operationName !== 'Sans opération' ? ` — ${event.operationName}` : ''}`,
+      date: event.date,
+      description: event.description ?? `Jalon ${event.code} issu de MonPetitPro`,
+    })), 'MonPetitPro');
+    downloadIcs(filename, content);
   };
 
   const saveManualEvent = async (event: React.FormEvent) => {
@@ -458,6 +494,10 @@ export default function CalendarView() {
             className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium"
           >
             <Download size={15} /> PDF {year}
+          </button>
+          <button type="button" onClick={() => exportOutlook(filteredEvents, `monpetitpro-${view}.ics`)}
+            className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-medium text-teal-900">
+            <CalendarDays size={15} /> Outlook
           </button></>}
           {view === "agenda" && permissionGranted(permissions, 'calendar.manage') && (
             <button
@@ -475,7 +515,7 @@ export default function CalendarView() {
           {error}
         </div>
       )}
-      <div className="mb-5 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-5">
+      <div className="mb-5 grid grid-cols-1 gap-2 md:grid-cols-2 xl:grid-cols-6">
         {VIEW_LABELS.map((item) => (
           <button
             key={item.id}
@@ -582,19 +622,20 @@ export default function CalendarView() {
                     </p>
                     <div className="space-y-1">
                       {items.slice(0, 4).map((item) => (
-                        <button
-                          key={item.id}
-                          type="button"
-                          onClick={() => openEvent(item)}
-                          className={`block w-full rounded-lg border-l-4 px-2 py-1.5 text-left text-[10px] font-medium leading-tight ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}
-                        >
-                          <span className="mr-1 font-medium">{item.code}</span>
-                          {item.time && <span>{item.time} · </span>}
-                          {item.operationName !== "Sans opération" && (
-                            <span>{item.operationName} · </span>
-                          )}
-                          {item.title}
-                        </button>
+                        <div key={item.id} className={`flex overflow-hidden rounded-lg border-l-4 ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}>
+                          <button type="button" onClick={() => openEvent(item)}
+                            className="min-w-0 flex-1 px-2 py-1.5 text-left text-[10px] font-medium leading-tight">
+                            <span className="mr-1 font-medium">{item.code}</span>
+                            {item.time && <span>{item.time} · </span>}
+                            {item.operationName !== "Sans opération" && <span>{item.operationName} · </span>}
+                            {item.title}
+                          </button>
+                          {permissionGranted(permissions, 'calendar.export') && <button type="button" title="Ajouter à Outlook" aria-label={`Ajouter ${item.title} à Outlook`}
+                            onClick={() => exportOutlook([item], `monpetitpro-${item.id}.ics`)}
+                            className="border-l border-current/10 px-1.5 hover:bg-white/50">
+                            <CalendarDays size={12} />
+                          </button>}
+                        </div>
                       ))}
                       {items.length > 4 && (
                         <p className="px-2 text-[10px] font-medium text-slate-400">

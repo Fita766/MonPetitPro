@@ -31,6 +31,7 @@ export default function PlanningSection({
     m10_date: schedule.m10Date,
     gpa_end_date: schedule.gpaEndDate,
     h2_deadline_date: schedule.h2DeadlineDate,
+    authorized_deadline_date: schedule.authorizedDeadlineDate,
   };
 
   const valueFor = (field: string | undefined): string | null => {

@@ -1,0 +1,54 @@
+import { AlertTriangle, CalendarClock, ChevronRight } from 'lucide-react';
+import type { OperationAlert } from '../../lib/alerts';
+
+interface UpcomingAlertsProps {
+  alerts: OperationAlert[];
+  onOpenOperation: (operationId: string) => void;
+}
+
+const GROUPS = [
+  { status: 'overdue', label: 'Échéances dépassées', tone: 'border-red-200 bg-red-50', icon: 'text-red-700' },
+  { status: 'within15', label: 'Dans les 15 jours', tone: 'border-amber-200 bg-amber-50', icon: 'text-amber-700' },
+  { status: 'within30', label: 'Dans les 30 jours', tone: 'border-teal-200 bg-teal-50', icon: 'text-teal-700' },
+] as const;
+
+export default function UpcomingAlerts({ alerts, onOpenOperation }: UpcomingAlertsProps) {
+  if (alerts.length === 0) {
+    return <section className="mb-6 flex items-center gap-3 rounded-2xl border border-emerald-200 bg-emerald-50 px-5 py-4 text-sm text-emerald-900">
+      <CalendarClock size={20} /> Aucune échéance non réalisée dans les 30 prochains jours.
+    </section>;
+  }
+  return (
+    <section className="mb-7">
+      <div className="mb-3 flex items-center gap-2">
+        <AlertTriangle size={19} className="text-amber-700" />
+        <h2 className="font-medium text-slate-950">Échéances à surveiller</h2>
+        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs text-slate-600">{alerts.length}</span>
+      </div>
+      <div className="grid gap-3 xl:grid-cols-3">
+        {GROUPS.map((group) => {
+          const items = alerts.filter((alert) => alert.status === group.status);
+          return <article key={group.status} className={`overflow-hidden rounded-2xl border ${group.tone}`}>
+            <header className="flex items-center justify-between px-4 py-3">
+              <h3 className={`text-sm font-medium ${group.icon}`}>{group.label}</h3>
+              <span className="text-xs text-slate-500">{items.length}</span>
+            </header>
+            <div className="divide-y divide-black/5 bg-white/70">
+              {items.length === 0 && <p className="p-4 text-xs text-slate-500">Aucune échéance.</p>}
+              {items.slice(0, 6).map((alert) => <button key={alert.id} type="button"
+                onClick={() => onOpenOperation(alert.operationId)}
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-white">
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-medium text-slate-900">{alert.operationName}</span>
+                  <span className="block truncate text-xs text-slate-500">{alert.label} · {new Date(`${alert.date}T12:00:00`).toLocaleDateString('fr-FR')}</span>
+                </span>
+                <span className="text-xs font-medium text-slate-700">{alert.days < 0 ? `J+${Math.abs(alert.days)}` : `J-${alert.days}`}</span>
+                <ChevronRight size={15} className="text-slate-400" />
+              </button>)}
+            </div>
+          </article>;
+        })}
+      </div>
+    </section>
+  );
+}
