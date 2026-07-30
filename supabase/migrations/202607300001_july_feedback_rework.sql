@@ -68,6 +68,21 @@ set group_key = excluded.group_key,
     description = excluded.description,
     sort_order = excluded.sort_order;
 
+insert into public.permission_definitions(key, group_key, label, description, sort_order) values
+  ('observations.view_assigned','observations','Voir ses observations affectées','Voir uniquement les points confiés à la personne',280),
+  ('observations.view_all','observations','Voir toutes les observations','Voir tous les points, y compris sans affectation',281),
+  ('observations.edit_assigned','observations','Modifier ses points affectés','Modifier le contenu des points confiés',282),
+  ('observations.assign','observations','Affecter à la création','Choisir un responsable lors de la création',283),
+  ('observations.reassign','observations','Réaffecter un point','Changer le responsable après création',284),
+  ('observations.set_completion','observations','Renseigner la réalisation','Modifier uniquement la date de réalisation',285),
+  ('observations.set_status','observations','Modifier le statut','Modifier uniquement le statut métier',286),
+  ('observations.set_dg','observations','Marquer un point DG','Ajouter ou retirer le caractère DG',287)
+on conflict (key) do update set
+  group_key = excluded.group_key,
+  label = excluded.label,
+  description = excluded.description,
+  sort_order = excluded.sort_order;
+
 insert into public.custom_role_permissions (role_id, permission_key)
 select role.id, permission.key
 from public.custom_roles role
@@ -646,6 +661,54 @@ insert into public.custom_role_permissions(role_id, permission_key) values
   ('10000000-0000-0000-0000-000000000004', 'references.view')
 on conflict do nothing;
 
+insert into public.custom_role_permissions(role_id, permission_key)
+select role_id, permission_key
+from (values
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.view_all'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.view_assigned'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.edit_assigned'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.assign'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.reassign'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_completion'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_status'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_dg'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.view_all'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.edit_assigned'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.assign'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.reassign'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_completion'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_status'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_dg'),
+  ('10000000-0000-0000-0000-000000000003'::uuid, 'observations.view_assigned'),
+  ('10000000-0000-0000-0000-000000000003'::uuid, 'observations.edit_assigned'),
+  ('10000000-0000-0000-0000-000000000004'::uuid, 'observations.view_all')
+) seeded(role_id, permission_key)
+on conflict do nothing;
+
+with legacy_map(legacy_permission, permission_key) as (
+  values
+    ('observations.view', 'observations.view_all'),
+    ('observations.edit_own', 'observations.edit_assigned'),
+    ('observations.edit_all', 'observations.view_all'),
+    ('observations.edit_all', 'observations.assign'),
+    ('observations.edit_all', 'observations.reassign'),
+    ('observations.edit_all', 'observations.set_completion'),
+    ('observations.edit_all', 'observations.set_status'),
+    ('observations.edit_all', 'observations.set_dg')
+)
+insert into public.custom_role_permissions(role_id, permission_key)
+select existing.role_id, legacy_map.permission_key
+from public.custom_role_permissions existing
+join legacy_map on legacy_map.legacy_permission = existing.permission_key
+on conflict do nothing;
+
+-- Le rôle contributeur historique reste volontairement limité aux points qui
+-- lui sont affectés. Sans ce retrait, son ancienne permission de lecture
+-- générale serait convertie en observations.view_all par la compatibilité.
+delete from public.custom_role_permissions
+where role_id = '10000000-0000-0000-0000-000000000003'::uuid
+  and permission_key = 'observations.view_all';
+
 with field_groups(legacy_permission, fields) as (
   values
     ('operations.edit_identity', array['name','stage','of_number','gesprojet_number','department','commune','commune_id','address','operation_type','program_nature','promoter_name']::text[]),
@@ -765,6 +828,121 @@ begin
   return new;
 end;
 $$;
+
+-- Observations privées par affectation, avec droits indépendants pour chaque
+-- donnée sensible. Les anciennes policies sont supprimées pour éviter leur OR.
+drop policy if exists profiles_read on public.profiles;
+create policy profiles_read on public.profiles for select to authenticated
+using (
+  id = (select auth.uid())
+  or public.has_permission('admin.users.view')
+  or public.has_any_permission(array['observations.assign','observations.reassign'])
+);
+
+drop policy if exists observations_read on public.observations;
+drop policy if exists observations_insert on public.observations;
+drop policy if exists observations_contributor_update on public.observations;
+drop policy if exists observations_responsible_delete on public.observations;
+drop policy if exists observations_permission_read on public.observations;
+drop policy if exists observations_permission_insert on public.observations;
+drop policy if exists observations_permission_update on public.observations;
+drop policy if exists observations_permission_delete on public.observations;
+
+create policy observations_permission_read on public.observations
+for select to authenticated using (
+  (
+    public.has_permission('observations.view_all')
+    or (
+      assignee_user_id = (select auth.uid())
+      and public.has_permission('observations.view_assigned')
+    )
+  )
+  and (not is_dg or public.has_permission('observations.view_dg'))
+);
+
+create policy observations_permission_insert on public.observations
+for insert to authenticated with check (
+  public.has_permission('observations.create')
+  and (
+    assignee_user_id = (select auth.uid())
+    or public.has_permission('observations.assign')
+  )
+  and (not is_dg or public.has_permission('observations.set_dg'))
+  and user_id = (select auth.uid())
+);
+
+create policy observations_permission_update on public.observations
+for update to authenticated using (
+  public.has_permission('observations.edit_all')
+  or (assignee_user_id = (select auth.uid()) and public.has_permission('observations.edit_assigned'))
+  or public.has_any_permission(array[
+    'observations.reassign','observations.set_completion','observations.set_status',
+    'observations.set_dg','observations.validate'
+  ])
+) with check (
+  public.has_permission('observations.edit_all')
+  or (assignee_user_id = (select auth.uid()) and public.has_permission('observations.edit_assigned'))
+  or public.has_any_permission(array[
+    'observations.reassign','observations.set_completion','observations.set_status',
+    'observations.set_dg','observations.validate'
+  ])
+);
+
+create policy observations_permission_delete on public.observations
+for delete to authenticated using (public.has_permission('observations.delete'));
+
+create or replace function public.enforce_observation_field_permissions()
+returns trigger language plpgsql security definer set search_path = '' as $$
+declare
+  old_row jsonb := to_jsonb(old);
+  new_row jsonb := to_jsonb(new);
+  can_edit_content boolean;
+begin
+  if coalesce((select auth.role()), '') = 'service_role' then return new; end if;
+  can_edit_content := public.has_permission('observations.edit_all')
+    or (
+      old.assignee_user_id = (select auth.uid())
+      and public.has_permission('observations.edit_assigned')
+    );
+
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'operation_id','info_date','description','deadline_date','resolution_date'
+  ]) and not can_edit_content then
+    raise exception 'permission manquante : modifier le contenu de cette observation';
+  end if;
+
+  if public.jsonb_columns_changed(old_row, new_row, array['assignee_user_id','responsible_person'])
+     and not (
+       (old.assignee_user_id is null and public.has_permission('observations.assign'))
+       or public.has_permission('observations.reassign')
+     ) then
+    raise exception 'permission manquante : réaffecter cette observation';
+  end if;
+
+  if old.completion_date is distinct from new.completion_date
+     and not public.has_permission('observations.set_completion') then
+    raise exception 'permission manquante : renseigner la réalisation';
+  end if;
+  if old.status is distinct from new.status
+     and not public.has_permission('observations.set_status') then
+    raise exception 'permission manquante : modifier le statut';
+  end if;
+  if old.is_dg is distinct from new.is_dg
+     and not public.has_permission('observations.set_dg') then
+    raise exception 'permission manquante : modifier le caractère DG';
+  end if;
+  if public.jsonb_columns_changed(old_row, new_row, array[
+    'resolution_validated_at','resolution_validated_by'
+  ]) and not public.has_permission('observations.validate') then
+    raise exception 'permission manquante : valider une résolution';
+  end if;
+  return new;
+end;
+$$;
+
+drop trigger if exists enforce_observation_field_permissions on public.observations;
+create trigger enforce_observation_field_permissions before update on public.observations
+for each row execute function public.enforce_observation_field_permissions();
 
 -- Assertions transactionnelles : toute divergence annule la migration.
 do $$

@@ -16,11 +16,10 @@ import { jsPDF } from "jspdf";
 import autoTable from "jspdf-autotable";
 import { supabase } from "../lib/supabase";
 import { useStore } from "../store/useStore";
-import { broadActionGranted, permissionGranted } from "../lib/accessControl";
+import { permissionGranted } from "../lib/accessControl";
 import {
   buildObservationPayload,
   buildResolutionValidationPayload,
-  EMPTY_OBSERVATION_FORM,
   getObservationStatus,
   normalizeObservation,
   type ObservationDisplayStatus,
@@ -31,6 +30,8 @@ import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import { triggerSuccessToast } from "../lib/toastUtils";
+import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
+import type { Profile } from "../types/domain";
 
 interface ObservationOperation {
   id: string;
@@ -57,6 +58,7 @@ interface ObservationFilters {
   responsibles: string[];
   statuses: string[];
   dg: "all" | "only" | "exclude";
+  assignment: "all" | "unassigned";
   query: string;
 }
 
@@ -69,6 +71,7 @@ const EMPTY_FILTERS: ObservationFilters = {
   responsibles: [],
   statuses: [],
   dg: "all",
+  assignment: "all",
   query: "",
 };
 const STATUS_STYLES: Record<ObservationDisplayStatus, string> = {
@@ -106,6 +109,7 @@ export default function Observations() {
     [],
   );
   const [operations, setOperations] = useState<ObservationOperation[]>([]);
+  const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
   const [filters, setFilters] = useState<ObservationFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<"structured" | "table">("structured");
   const [showEmpty, setShowEmpty] = useState(false);
@@ -115,6 +119,20 @@ export default function Observations() {
   const [editing, setEditing] = useState<ObservationWithOperation | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const editableFields = useMemo(() => editableObservationFields(permissions), [permissions]);
+  const canCreate = permissionGranted(permissions, 'observations.create');
+  const canViewAll = permissionGranted(permissions, 'observations.view_all');
+  const canViewDg = permissionGranted(permissions, 'observations.view_dg');
+  const assigneeOptions = useMemo(() => {
+    const rows = assigneeProfiles.map((item) => ({
+      id: item.id,
+      label: item.display_name?.trim() || item.initials?.trim() || item.email?.split('@')[0] || 'Utilisateur',
+    }));
+    if (form?.assignee_user_id && !rows.some((item) => item.id === form.assignee_user_id)) {
+      rows.push({ id: form.assignee_user_id, label: form.responsible_person || 'Utilisateur affecté' });
+    }
+    return rows;
+  }, [assigneeProfiles, form]);
 
   useEffect(() => {
     let cancelled = false;
@@ -131,7 +149,11 @@ export default function Observations() {
           "id, name, project_manager, operations_manager, promoter_name, operation_type, stage",
         )
         .order("name"),
-    ]).then(([observationResult, operationResult]) => {
+      supabase.from("profiles")
+        .select("id,email,display_name,initials,status")
+        .eq("status", "active")
+        .order("display_name"),
+    ]).then(([observationResult, operationResult, profileResult]) => {
       if (cancelled) return;
       const firstError = observationResult.error || operationResult.error;
       if (firstError) setError(firstError.message);
@@ -144,6 +166,7 @@ export default function Observations() {
         setOperations(
           (operationResult.data as ObservationOperation[] | null) ?? [],
         );
+        if (!profileResult.error) setAssigneeProfiles((profileResult.data as Profile[] | null) ?? []);
       }
       setLoading(false);
     });
@@ -216,6 +239,7 @@ export default function Observations() {
           return false;
         if (filters.dg === "only" && !observation.is_dg) return false;
         if (filters.dg === "exclude" && observation.is_dg) return false;
+        if (filters.assignment === "unassigned" && observation.assignee_user_id) return false;
         const query = filters.query.trim().toLocaleLowerCase("fr");
         return (
           !query ||
@@ -244,7 +268,8 @@ export default function Observations() {
 
   const openCreate = (operationId = "") => {
     setEditing(null);
-    setForm(EMPTY_OBSERVATION_FORM(operationId));
+    if (!profile) return;
+    setForm(buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operationId));
   };
   const openEdit = (observation: ObservationWithOperation) => {
     setEditing(observation);
@@ -253,6 +278,7 @@ export default function Observations() {
       info_date: observation.info_date,
       description: observation.description,
       responsible_person: observation.responsible_person,
+      assignee_user_id: observation.assignee_user_id ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
@@ -263,7 +289,7 @@ export default function Observations() {
 
   const saveObservation = async (event: React.FormEvent) => {
     event.preventDefault();
-    if (!form || !user || !broadActionGranted(permissions, 'contribute')) return;
+    if (!form || !user || (editing ? editableFields.size === 0 : !canCreate)) return;
     setSaving(true);
     setError(null);
     const payload = buildObservationPayload(form, {
@@ -414,6 +440,14 @@ export default function Observations() {
       </span>
     );
   };
+  const canEditObservation = (observation: ObservationWithOperation) =>
+    permissionGranted(permissions, 'observations.edit_all')
+    || (observation.assignee_user_id === user?.id
+      && permissionGranted(permissions, 'observations.edit_assigned'))
+    || permissions.some((key) => [
+      'observations.reassign', 'observations.set_completion',
+      'observations.set_status', 'observations.set_dg',
+    ].includes(key));
 
   if (loading)
     return (
@@ -551,7 +585,7 @@ export default function Observations() {
             values={filters.statuses}
             onChange={(value) => setFilters({ ...filters, statuses: value })}
           />
-          <select
+          {canViewDg && <select
             aria-label="Filtre DG"
             value={filters.dg}
             onChange={(event) =>
@@ -565,7 +599,13 @@ export default function Observations() {
             <option value="all">Toutes infos</option>
             <option value="only">DG uniquement</option>
             <option value="exclude">Hors DG</option>
-          </select>
+          </select>}
+          {canViewAll && <select aria-label="Filtre affectation" value={filters.assignment}
+            onChange={(event) => setFilters({ ...filters, assignment: event.target.value as ObservationFilters["assignment"] })}
+            className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium">
+            <option value="all">Toutes affectations</option>
+            <option value="unassigned">Sans affectation</option>
+          </select>}
           <button
             type="button"
             onClick={() => setFilters(EMPTY_FILTERS)}
@@ -614,7 +654,7 @@ export default function Observations() {
               {items.length === 0 ? (
                 <div className="p-7 text-center text-sm text-slate-400">
                   Aucune observation.
-                  {broadActionGranted(permissions, 'contribute') && (
+                  {canCreate && (
                     <button
                       type="button"
                       onClick={() => openCreate(operation.id)}
@@ -682,7 +722,7 @@ export default function Observations() {
                         </p>
                       </div>
                       <div className="flex items-center justify-end gap-1">
-                        {broadActionGranted(permissions, 'contribute') &&
+                        {canEditObservation(observation) &&
                           (!observation.resolution_validated_at ||
                             permissionGranted(permissions, 'observations.validate')) && (
                             <button
@@ -762,13 +802,13 @@ export default function Observations() {
                   <td className="px-3 py-3">{observation.is_dg ? "DG" : ""}</td>
                   <td className="px-3 py-3">
                     <div className="flex">
-                      <button
+                      {canEditObservation(observation) && <button
                         type="button"
                         onClick={() => openEdit(observation)}
                         className="p-2 text-slate-400"
                       >
                         <Edit3 size={15} />
-                      </button>
+                      </button>}
                       <ResolutionActions
                         observation={observation}
                         canValidate={permissionGranted(permissions, 'observations.validate')}
@@ -809,7 +849,9 @@ export default function Observations() {
               <ObservationForm
                 value={form}
                 operations={operations}
-                responsibles={options.responsibles}
+                assignees={assigneeOptions}
+                editableFields={editableFields}
+                canViewDg={canViewDg}
                 saving={saving}
                 onChange={setForm}
                 onSubmit={saveObservation}

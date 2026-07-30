@@ -169,7 +169,7 @@ function App() {
         <Route 
           path="/observations" 
           element={
-            <PermissionRoute anyOf={['observations.view']}>
+            <PermissionRoute anyOf={['observations.view', 'observations.view_assigned', 'observations.view_all']}>
               <Observations />
             </PermissionRoute>
           } 

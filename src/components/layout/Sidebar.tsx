@@ -51,7 +51,7 @@ export default function Sidebar() {
           <LayoutDashboard size={20} />
           <span className="font-medium">Opérations</span>
         </NavLink>}
-        {permissionGranted(permissions, 'observations.view') && <NavLink to="/observations" className={navItemClass}>
+        {(permissionGranted(permissions, 'observations.view') || permissionGranted(permissions, 'observations.view_assigned') || permissionGranted(permissions, 'observations.view_all')) && <NavLink to="/observations" className={navItemClass}>
           <ListTodo size={20} />
           <span className="font-medium">Toutes les observations</span>
         </NavLink>}

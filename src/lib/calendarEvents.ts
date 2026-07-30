@@ -25,7 +25,6 @@ export interface CalendarOperation {
   management_actual_date?: string | null;
   [key: string]: unknown;
 }
-
 export interface CalendarCondition {
   id: string;
   operation_id: string;
@@ -177,4 +176,3 @@ export function buildCalendarEvents(
     }));
   }).sort((left, right) => left.date.localeCompare(right.date));
 }
-
