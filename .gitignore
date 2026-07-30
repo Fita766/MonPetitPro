@@ -32,3 +32,4 @@ dossiers modifs/
 # Captures générées par les vérifications locales
 artifacts/
 test-results/
+__pycache__/

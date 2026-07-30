@@ -51,7 +51,7 @@ La transcription du 29 juillet est la source fonctionnelle prioritaire. Les cont
 | Historique avant/après lisible et filtrable | `audit.test.ts` + `/admin/history` | validé |
 | Palette claire sans bleu vif ni fond noir | `uiPalette.test.ts` + recette Playwright | validé |
 | Migration sans perte et comptages journalisés | `julyFeedbackMigration.test.ts` + requêtes post-déploiement | à valider sur Supabase |
-| Recette authentifiée des écrans | `scripts/verify_july_feedback_ui.py` avec compte de recette | à valider après accès Supabase |
+| Recette authentifiée des écrans | `MPP_MOCK_AUTH=1` + `scripts/verify_july_feedback_ui.py` | validé localement ; réel à valider après accès Supabase |
 
 ## Commandes locales
 
@@ -60,6 +60,11 @@ npm test -- --run
 npm run build
 npm run lint
 git diff --check
+python C:\Users\Fitanique\.codex\skills\webapp-testing\scripts\with_server.py `
+  --server "npm run preview -- --host 127.0.0.1" --port 4173 `
+  -- python scripts/verify_july_feedback_ui.py
+
+$env:MPP_MOCK_AUTH = "1"
 python C:\Users\Fitanique\.codex\skills\webapp-testing\scripts\with_server.py `
   --server "npm run preview -- --host 127.0.0.1" --port 4173 `
   -- python scripts/verify_july_feedback_ui.py
