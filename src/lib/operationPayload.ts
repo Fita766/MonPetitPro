@@ -47,14 +47,18 @@ export interface OperationFormData {
   cei_cef_date: string;
   csi_ca_date: string;
   development_to_assembly_date: string;
+  approvals_expected_date: string;
   approvals_submission_date: string;
   lls_approval_date: string;
   lli_approval_date: string;
   anru_approval_date: string;
   permit_number: string;
+  permit_expected_date: string;
   permit_submission_date: string;
   permit_order_date: string;
+  tender_expected_date: string;
   tender_date: string;
+  cpr_expected_date: string;
   vefa_cpr_or_sale_agreement_date: string;
   vefa_deed_or_land_purchase_date: string;
   works_order_expected_date: string;
@@ -94,8 +98,8 @@ export const EMPTY_OPERATION_FORM: OperationFormData = {
   plus_units: '0', plai_units: '0', pls_units: '0', lli_units: '0', lls_units: '0', brs_units: '0', psla_units: '0', student_units: '0', specific_units: '0',
   anru_units: '0', acv_units: '0', commercial_units: '0', other_units: '0', thermal_regulation: '', certification: '',
   clesence_bbca: false, clesence_reversible: false, clesence_land_sobriety: false, clesence_green_space: false, zoning: '', category: '',
-  co_cpi_date: '', cei_cef_date: '', csi_ca_date: '', development_to_assembly_date: '', approvals_submission_date: '', lls_approval_date: '',
-  lli_approval_date: '', anru_approval_date: '', permit_number: '', permit_submission_date: '', permit_order_date: '', tender_date: '',
+  co_cpi_date: '', cei_cef_date: '', csi_ca_date: '', development_to_assembly_date: '', approvals_expected_date: '', approvals_submission_date: '', lls_approval_date: '',
+  lli_approval_date: '', anru_approval_date: '', permit_number: '', permit_expected_date: '', permit_submission_date: '', permit_order_date: '', tender_expected_date: '', tender_date: '', cpr_expected_date: '',
   vefa_cpr_or_sale_agreement_date: '', vefa_deed_or_land_purchase_date: '', works_order_expected_date: '', works_order_actual_date: '',
   contractual_delivery_date: '', m8_actual_date: '', assembly_to_works_date: '', m7_actual_date: '', m4_actual_date: '',
   show_home_actual_date: '', opl_actual_date: '', progress_status: '', expected_delivery_date: '', risk_assessment: '', actual_delivery_date: '',
@@ -113,8 +117,8 @@ const INTEGER_FIELDS = [
 const DECIMAL_FIELDS = ['initial_budget', 'final_budget', 'penalty_amount'] as const;
 
 const DATE_FIELDS = [
-  'co_cpi_date', 'cei_cef_date', 'csi_ca_date', 'development_to_assembly_date', 'approvals_submission_date',
-  'lls_approval_date', 'lli_approval_date', 'anru_approval_date', 'permit_submission_date', 'permit_order_date', 'tender_date',
+  'co_cpi_date', 'cei_cef_date', 'csi_ca_date', 'development_to_assembly_date', 'approvals_expected_date', 'approvals_submission_date',
+  'lls_approval_date', 'lli_approval_date', 'anru_approval_date', 'permit_expected_date', 'permit_submission_date', 'permit_order_date', 'tender_expected_date', 'tender_date', 'cpr_expected_date',
   'vefa_cpr_or_sale_agreement_date', 'vefa_deed_or_land_purchase_date', 'works_order_expected_date', 'works_order_actual_date',
   'contractual_delivery_date', 'm8_actual_date', 'assembly_to_works_date', 'm7_actual_date', 'm4_actual_date',
   'show_home_actual_date', 'opl_actual_date', 'expected_delivery_date', 'actual_delivery_date', 'reservations_clearance_date',

@@ -1,43 +1,9 @@
-import { Calculator, LockKeyhole } from "lucide-react";
-import { calculateOperationSchedule } from "../../lib/operationCalculations";
-import { FieldLabel, SectionHeading, TextInput } from "./FormControls";
-import type { OperationSectionProps } from "./formTypes";
-
-const dateFields = [
-  ["co_cpi_date", "Date CO / CPI"],
-  ["cei_cef_date", "Date CEI / CEF"],
-  ["csi_ca_date", "Date CSI / CA"],
-  ["development_to_assembly_date", "Passation Dév. → Montage"],
-  ["approvals_submission_date", "Dépôt des agréments"],
-  ["lls_approval_date", "Obtention agrément LLS"],
-  ["lli_approval_date", "Obtention agrément LLI"],
-  ["anru_approval_date", "Obtention agrément ANRU"],
-  ["permit_submission_date", "Dépôt PC"],
-  ["permit_order_date", "Arrêté PC"],
-  ["tender_date", "Date AO"],
-  ["vefa_cpr_or_sale_agreement_date", "Signature CPR / compromis"],
-  ["vefa_deed_or_land_purchase_date", "Acte VEFA / acquisition terrain (AW)"],
-  ["works_order_expected_date", "OS travaux prévisionnel (AX)"],
-  ["works_order_actual_date", "OS travaux réel (AY)"],
-  ["m8_actual_date", "M-8 réalisé (BB)"],
-  ["assembly_to_works_date", "Passation Montage → Travaux (BC)"],
-  ["m7_actual_date", "M-7 réalisé (BE)"],
-  ["m4_actual_date", "M-4 réalisé (BG)"],
-  ["show_home_actual_date", "Logement témoin réel (BI)"],
-  ["opl_actual_date", "OPL réelle (BJ)"],
-  ["expected_delivery_date", "Livraison prévisionnelle révisée (BL)"],
-  ["actual_delivery_date", "Livraison réelle (BN)"],
-  ["reservations_clearance_date", "PV levée des réserves (BW)"],
-  ["daact_date", "Dépôt DAACT (BX)"],
-  ["management_actual_date", "MEG réelle validée (CA)"],
-  ["h2_actual_date", "H2 réelle (CG)"],
-] as const;
-
-function formatDate(value: string | null): string {
-  return value
-    ? new Date(`${value}T12:00:00`).toLocaleDateString("fr-FR")
-    : "—";
-}
+import { calculateOperationSchedule } from '../../lib/operationCalculations';
+import { MILESTONE_GROUPS } from '../../lib/planningMilestones';
+import type { OperationFormData } from '../../lib/operationPayload';
+import { FieldLabel, SectionHeading, TextInput } from './FormControls';
+import type { OperationSectionProps } from './formTypes';
+import MilestoneGroup from './planning/MilestoneGroup';
 
 export default function PlanningSection({
   form,
@@ -47,184 +13,94 @@ export default function PlanningSection({
   const schedule = calculateOperationSchedule({
     operationType: form.operation_type,
     vefaDeedOrLandPurchaseDate: form.vefa_deed_or_land_purchase_date,
-    worksOrderExpectedDate:
-      form.operation_type === "VEFA" ? null : form.works_order_expected_date,
-    worksOrderActualDate:
-      form.operation_type === "VEFA" ? null : form.works_order_actual_date,
+    worksOrderExpectedDate: form.operation_type === 'VEFA' ? null : form.works_order_expected_date,
+    worksOrderActualDate: form.operation_type === 'VEFA' ? null : form.works_order_actual_date,
     contractualDeliveryDate: form.contractual_delivery_date,
     expectedDeliveryDate: form.expected_delivery_date,
     actualDeliveryDate: form.actual_delivery_date,
-    justifiedDelayDays: form.justified_delay_days
-      ? Number(form.justified_delay_days)
-      : 0,
+    justifiedDelayDays: form.justified_delay_days ? Number(form.justified_delay_days) : 0,
   });
+  const calculatedValues: Record<string, string | null> = {
+    contractual_delivery_date: schedule.contractualDeliveryDate,
+    m8_expected_date: schedule.m8ExpectedDate,
+    m7_expected_date: schedule.m7ExpectedDate,
+    m4_expected_date: schedule.m4ExpectedDate,
+    show_home_expected_date: schedule.showHomeExpectedDate,
+    management_expected_date: schedule.managementExpectedDate,
+    m3_reservations_meeting_date: schedule.m3ReservationsMeetingDate,
+    m10_date: schedule.m10Date,
+    gpa_end_date: schedule.gpaEndDate,
+    h2_deadline_date: schedule.h2DeadlineDate,
+  };
 
-  const calculated = [
-    [
-      "AZ",
-      "Livraison contractuelle",
-      schedule.contractualDeliveryDate,
-      form.operation_type === "VEFA"
-        ? "AW + 24 mois"
-        : "AY + 24 mois, sinon AX",
-    ],
-    ["BA", "M-8 prévisionnel", schedule.m8ExpectedDate, "AZ − 8 mois"],
-    ["BD", "M-7 prévisionnel", schedule.m7ExpectedDate, "AZ − 7 mois"],
-    ["BF", "M-4 prévisionnel", schedule.m4ExpectedDate, "AZ − 4 mois"],
-    [
-      "BH",
-      "Logement témoin prévisionnel",
-      schedule.showHomeExpectedDate,
-      "AZ − 6 mois",
-    ],
-    [
-      "BZ",
-      "MEG prévisionnelle",
-      schedule.managementExpectedDate,
-      "BL + 1 mois",
-    ],
-    [
-      "CB",
-      "Réunion levée réserves",
-      schedule.m3ReservationsMeetingDate,
-      "BN + 3 mois",
-    ],
-    ["CC", "Jalon M+10", schedule.m10Date, "BN + 10 mois"],
-    ["CD", "Fin GPA", schedule.gpaEndDate, "BN + 12 mois"],
-    ["CF", "H2 butoir", schedule.h2DeadlineDate, "BN + 3 mois"],
+  const valueFor = (field: string | undefined): string | null => {
+    if (!field) return null;
+    if (field in calculatedValues) return calculatedValues[field];
+    if (field in form) {
+      const value = form[field as keyof OperationFormData];
+      return typeof value === 'string' ? value || null : null;
+    }
+    return null;
+  };
+  const canEdit = (field: string | undefined, calculated = false) =>
+    Boolean(field && !calculated && field in form && canEditField(field as keyof OperationFormData));
+  const setDate = (field: string, value: string) => {
+    if (field in form) onChange(field as keyof OperationFormData, value);
+  };
+
+  const delaySummary = [
+    ['Retard brut', schedule.deliveryGapDays, 'jours'],
+    ['Retard effectif', schedule.effectiveDelayDays, 'jours'],
+    ['Date limite autorisée', schedule.authorizedDeadlineDate
+      ? new Date(`${schedule.authorizedDeadlineDate}T12:00:00`).toLocaleDateString('fr-FR') : '—', ''],
+    ['Situation', schedule.deadlineStatus ?? 'Non calculée', ''],
   ] as const;
 
   return (
     <section>
-      <SectionHeading
-        eyebrow="AJ → CG"
-        title="Planning et jalons"
-        description="Les dates saisies alimentent automatiquement les jalons contractuels. Les cartes sombres sont calculées et ne demandent aucune ressaisie."
-      />
+      <SectionHeading eyebrow="Planning métier" title="Jalons prévisionnels et réels"
+        description="Les dates sont regroupées par étape. Chaque écart positif signale un retard, chaque écart négatif une avance." />
 
-      <div className="mb-8 grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
-        {calculated.map(([code, label, value, formula]) => (
-          <div
-            key={code}
-            className="relative overflow-hidden rounded-2xl border border-teal-200 bg-teal-50 p-4 text-slate-900 shadow-sm"
-          >
-            <div className="absolute right-3 top-3 text-teal-600/60">
-              <LockKeyhole size={14} />
-            </div>
-            <p className="text-[10px] font-medium uppercase tracking-[0.2em] text-teal-700">
-              {code}
-            </p>
-            <p className="mt-1 min-h-8 text-xs font-medium text-slate-300">
-              {label}
-            </p>
-            <p className="mt-2 text-lg font-medium">{formatDate(value)}</p>
-            <p className="mt-2 flex items-center gap-1 text-[10px] text-slate-400">
-              <Calculator size={11} /> {formula}
-            </p>
-          </div>
-        ))}
+      <div className="mb-6 grid gap-4 md:grid-cols-2">
+        <div>
+          <FieldLabel>Numéro de permis de construire</FieldLabel>
+          <TextInput disabled={!canEditField('permit_number')} value={form.permit_number}
+            onChange={(event) => onChange('permit_number', event.target.value)} />
+        </div>
+        <div>
+          <FieldLabel>Avancement général</FieldLabel>
+          <TextInput disabled={!canEditField('progress_status')} value={form.progress_status}
+            onChange={(event) => onChange('progress_status', event.target.value)} />
+        </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-5 md:grid-cols-2 xl:grid-cols-3">
-        <div>
-          <FieldLabel>N° permis de construire</FieldLabel>
-          <TextInput
-            disabled={!canEditField("permit_number")}
-            value={form.permit_number}
-            onChange={(event) => onChange("permit_number", event.target.value)}
-          />
-        </div>
-        {dateFields.map(([key, label]) => {
-          const disabled =
-            form.operation_type === "VEFA" &&
-            (key === "works_order_expected_date" ||
-              key === "works_order_actual_date");
-          return (
-            <div key={key}>
-              <FieldLabel hint={disabled ? "VEFA" : undefined}>
-                {label}
-              </FieldLabel>
-              <TextInput
-                disabled={disabled || !canEditField(key)}
-                type="date"
-                value={disabled ? "" : form[key]}
-                onChange={(event) => onChange(key, event.target.value)}
-              />
-            </div>
-          );
+      <div className="space-y-5">
+        {MILESTONE_GROUPS.map((group) => {
+          const milestones = group.milestones.filter((milestone) =>
+            !milestone.appliesTo || milestone.appliesTo.includes(form.operation_type as 'MOD' | 'VEFA'));
+          const note = group.key === 'works' && form.operation_type === 'VEFA'
+            ? 'En VEFA, l’acte remplace l’ordre de service manuel pour les calculs contractuels.'
+            : undefined;
+          return <MilestoneGroup key={group.key} group={group} milestones={milestones}
+            valueFor={valueFor} canEdit={canEdit} onChange={setDate} note={note} />;
         })}
-        <div>
-          <FieldLabel>Avancement (BK)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("progress_status")}
-            value={form.progress_status}
-            onChange={(event) =>
-              onChange("progress_status", event.target.value)
-            }
-          />
+      </div>
+
+      <div className="mt-8 rounded-2xl border border-amber-200 bg-amber-50/60 p-5">
+        <h3 className="font-medium text-slate-900">Délais de livraison</h3>
+        <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {delaySummary.map(([label, value, suffix]) => <div key={label} className="rounded-xl border border-amber-100 bg-white p-3">
+            <p className="text-xs text-slate-500">{label}</p>
+            <p className="mt-1 font-medium text-slate-900">{value ?? '—'} {value !== '—' ? suffix : ''}</p>
+          </div>)}
         </div>
-        <div>
-          <FieldLabel>Évaluation des risques (BM)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("risk_assessment")}
-            value={form.risk_assessment}
-            onChange={(event) =>
-              onChange("risk_assessment", event.target.value)
-            }
-          />
-        </div>
-        <div>
-          <FieldLabel>Réserves de livraison (BO)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("delivery_reservations_count")}
-            min="0"
-            type="number"
-            value={form.delivery_reservations_count}
-            onChange={(event) =>
-              onChange("delivery_reservations_count", event.target.value)
-            }
-          />
-        </div>
-        <div>
-          <FieldLabel>Retard justifié en jours (BR)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("justified_delay_days")}
-            min="0"
-            type="number"
-            value={form.justified_delay_days}
-            onChange={(event) =>
-              onChange("justified_delay_days", event.target.value)
-            }
-          />
-        </div>
-        <div>
-          <FieldLabel>Pénalités (BV)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("penalty_amount")}
-            min="0"
-            step="0.01"
-            type="number"
-            value={form.penalty_amount}
-            onChange={(event) => onChange("penalty_amount", event.target.value)}
-          />
-        </div>
-        <div>
-          <FieldLabel>DPE (BY)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("dpe")}
-            value={form.dpe}
-            onChange={(event) => onChange("dpe", event.target.value)}
-          />
-        </div>
-        <div>
-          <FieldLabel>Nombre de GPA (CE)</FieldLabel>
-          <TextInput
-            disabled={!canEditField("gpa_count")}
-            min="0"
-            type="number"
-            value={form.gpa_count}
-            onChange={(event) => onChange("gpa_count", event.target.value)}
-          />
+        <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div><FieldLabel>Retard justifié en jours</FieldLabel><TextInput disabled={!canEditField('justified_delay_days')} min="0" type="number" value={form.justified_delay_days} onChange={(event) => onChange('justified_delay_days', event.target.value)} /></div>
+          <div><FieldLabel>Pénalités</FieldLabel><TextInput disabled={!canEditField('penalty_amount')} min="0" step="0.01" type="number" value={form.penalty_amount} onChange={(event) => onChange('penalty_amount', event.target.value)} /></div>
+          <div><FieldLabel>Réserves à la livraison</FieldLabel><TextInput disabled={!canEditField('delivery_reservations_count')} min="0" type="number" value={form.delivery_reservations_count} onChange={(event) => onChange('delivery_reservations_count', event.target.value)} /></div>
+          <div><FieldLabel>Nombre de GPA</FieldLabel><TextInput disabled={!canEditField('gpa_count')} min="0" type="number" value={form.gpa_count} onChange={(event) => onChange('gpa_count', event.target.value)} /></div>
+          <div className="md:col-span-2"><FieldLabel>Évaluation des risques</FieldLabel><TextInput disabled={!canEditField('risk_assessment')} value={form.risk_assessment} onChange={(event) => onChange('risk_assessment', event.target.value)} /></div>
+          <div><FieldLabel>DPE</FieldLabel><TextInput disabled={!canEditField('dpe')} value={form.dpe} onChange={(event) => onChange('dpe', event.target.value)} /></div>
         </div>
       </div>
     </section>

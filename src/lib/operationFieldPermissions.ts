@@ -30,9 +30,9 @@ const OBJECTIVE_FIELDS = new Set<OperationField>(['is_objective', 'objective_yea
 const SYNTHESIS_FIELDS = new Set<OperationField>(['synthesis_description', 'significant_works']);
 const PLANNING_FIELDS = new Set<OperationField>([
   'co_cpi_date', 'cei_cef_date', 'csi_ca_date', 'development_to_assembly_date',
-  'approvals_submission_date', 'lls_approval_date', 'lli_approval_date',
-  'anru_approval_date', 'permit_number', 'permit_submission_date',
-  'permit_order_date', 'tender_date', 'vefa_cpr_or_sale_agreement_date',
+  'approvals_expected_date', 'approvals_submission_date', 'lls_approval_date', 'lli_approval_date',
+  'anru_approval_date', 'permit_number', 'permit_expected_date', 'permit_submission_date',
+  'permit_order_date', 'tender_expected_date', 'tender_date', 'cpr_expected_date', 'vefa_cpr_or_sale_agreement_date',
   'vefa_deed_or_land_purchase_date', 'works_order_expected_date',
   'works_order_actual_date', 'contractual_delivery_date', 'm8_actual_date',
   'assembly_to_works_date', 'm7_actual_date', 'm4_actual_date',
@@ -76,6 +76,10 @@ const LABELS: Partial<Record<OperationField, string>> = {
   zoning: 'Zonage',
   category: 'Catégorie',
   permit_number: 'Numéro de permis',
+  approvals_expected_date: 'Dépôt des agréments prévisionnel',
+  permit_expected_date: 'Dépôt du permis prévisionnel',
+  tender_expected_date: 'Appel d’offres prévisionnel',
+  cpr_expected_date: 'Signature CPR prévisionnelle',
   progress_status: 'Avancement',
   risk_assessment: 'Évaluation des risques',
   delivery_reservations_count: 'Réserves de livraison',
