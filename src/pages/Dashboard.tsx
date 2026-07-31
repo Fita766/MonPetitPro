@@ -36,6 +36,7 @@ import { triggerSuccessToast } from "../lib/toastUtils";
 import { buildAlerts, type AlertOperation } from "../lib/alerts";
 import UpcomingAlerts from "../components/dashboard/UpcomingAlerts";
 import ExportColumnDialog from "../components/exports/ExportColumnDialog";
+import { alertToIcsEvent, buildIcs, downloadIcs } from "../lib/ics";
 
 interface DashboardOperation extends FilterableOperation {
   id: string;
@@ -167,6 +168,14 @@ export default function Dashboard() {
     () => buildAlerts(operations as unknown as AlertOperation[], todayIso),
     [operations, todayIso],
   );
+  const exportAlertsToOutlook = (items: typeof alerts, filename: string) => {
+    if (items.length === 0) return;
+    downloadIcs(filename, buildIcs(items.map(alertToIcsEvent), 'Échéances MonPetitPro'));
+    triggerSuccessToast(
+      user?.email,
+      `${items.length} échéance${items.length > 1 ? 's' : ''} exportée${items.length > 1 ? 's' : ''} vers Outlook. Rappels J-30 et J-15 inclus.`,
+    );
+  };
 
   const setFilter = <K extends keyof OperationFilters>(
     key: K,
@@ -266,7 +275,16 @@ export default function Dashboard() {
         </div>
       )}
 
-      <UpcomingAlerts alerts={alerts} onOpenOperation={(operationId) => navigate(`/operations/${operationId}`)} />
+      <UpcomingAlerts
+        alerts={alerts}
+        onOpenOperation={(operationId) => navigate(`/operations/${operationId}`)}
+        onExportAlert={permissionGranted(permissions, 'calendar.export')
+          ? (alert) => exportAlertsToOutlook([alert], `monpetitpro-${alert.id}.ics`)
+          : undefined}
+        onExportAll={permissionGranted(permissions, 'calendar.export')
+          ? (items) => exportAlertsToOutlook(items, 'monpetitpro-echeances.ics')
+          : undefined}
+      />
 
       <div className="mb-6 rounded-2xl border border-slate-200 bg-[#f3f5f1] p-4 shadow-sm">
         <div className="flex flex-wrap items-center gap-2">
