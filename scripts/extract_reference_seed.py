@@ -204,6 +204,25 @@ def value_batches(rows: list[str], size: int = 400) -> Iterable[list[str]]:
         yield rows[index : index + size]
 
 
+def canonical_reference_labels(labels: Iterable[str]) -> list[str]:
+    """Return one deterministic display label per case-insensitive value."""
+    grouped: dict[str, list[str]] = defaultdict(list)
+    for label in labels:
+        grouped[clean(label).casefold()].append(clean(label))
+
+    def display_rank(label: str) -> tuple[int, str]:
+        compact = len(label) <= 5 and " " not in label and "/" not in label
+        # Short business initials stay uppercase; longer names favour readable
+        # title/mixed casing over workbook duplicates written in capitals.
+        preferred = label.isupper() if compact else not label.isupper()
+        return (0 if preferred else 1, label)
+
+    return [
+        min(candidates, key=display_rank)
+        for _, candidates in sorted(grouped.items())
+    ]
+
+
 def render_seed(
     references: dict[str, set[str]],
     communes: list[dict[str, str | None]],
@@ -217,7 +236,8 @@ def render_seed(
 
     reference_rows: list[str] = []
     for kind in sorted(references):
-        for order, label in enumerate(sorted(references[kind], key=str.casefold), start=1):
+        labels = canonical_reference_labels(references[kind])
+        for order, label in enumerate(labels, start=1):
             reference_rows.append(
                 f"({sql_text(kind)}, {sql_text(label)}, {order})"
             )
