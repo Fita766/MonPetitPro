@@ -321,7 +321,12 @@ with sync_playwright() as playwright:
         expect(authenticated.get_by_label("Filtre DG").locator("option[value='only']")).to_have_text("DG uniquement")
         expect(authenticated.get_by_role("button", name=re.compile("Exporter"))).to_be_visible()
         authenticated.goto(f"{BASE_URL}/calendar", wait_until="networkidle")
-        expect(authenticated.get_by_role("button", name="Outlook")).to_be_visible()
+        expect(
+            authenticated.get_by_role(
+                "button", name="Exporter les échéances vers Outlook (.ics)"
+            )
+        ).to_be_visible()
+        expect(authenticated.get_by_text("Rappels J-30 et J-15 inclus")).to_be_visible()
         authenticated.goto(f"{BASE_URL}/statistics", wait_until="networkidle")
         expect(authenticated.get_by_text(re.compile("détail", re.IGNORECASE)).first).to_be_visible()
         authenticated.goto(f"{BASE_URL}/objectives", wait_until="networkidle")

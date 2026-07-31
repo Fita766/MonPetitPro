@@ -1,9 +1,20 @@
+import type { OperationAlert } from './alerts';
+
 export interface IcsEvent {
   uid: string;
   title: string;
   date: string;
   description?: string | null;
   location?: string | null;
+}
+
+export function alertToIcsEvent(alert: OperationAlert): IcsEvent {
+  return {
+    uid: alert.id,
+    title: `${alert.label} — ${alert.operationName}`,
+    date: alert.date,
+    description: `Échéance MonPetitPro pour l’opération ${alert.operationName}. Ouvrir la fiche : /operations/${alert.operationId}`,
+  };
 }
 
 function escapeIcs(value: string): string {
@@ -70,4 +81,3 @@ export function downloadIcs(filename: string, content: string): void {
   anchor.click();
   URL.revokeObjectURL(url);
 }
-

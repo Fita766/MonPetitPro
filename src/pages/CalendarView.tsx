@@ -333,6 +333,7 @@ export default function CalendarView() {
     } else if (event.operationId) navigate(`/operations/${event.operationId}`);
   };
   const exportOutlook = (events: DisplayEvent[], filename: string) => {
+    if (events.length === 0) return;
     const content = buildIcs(events.map((event) => ({
       uid: event.id,
       title: `${event.title}${event.operationName && event.operationName !== 'Sans opération' ? ` — ${event.operationName}` : ''}`,
@@ -340,6 +341,10 @@ export default function CalendarView() {
       description: event.description ?? `Jalon ${event.code} issu de MonPetitPro`,
     })), 'MonPetitPro');
     downloadIcs(filename, content);
+    triggerSuccessToast(
+      user?.email,
+      `${events.length} échéance${events.length > 1 ? 's' : ''} exportée${events.length > 1 ? 's' : ''} vers Outlook. Rappels J-30 et J-15 inclus.`,
+    );
   };
 
   const saveManualEvent = async (event: React.FormEvent) => {
@@ -411,7 +416,7 @@ export default function CalendarView() {
     sheet.getRow(1).fill = {
       type: "pattern",
       pattern: "solid",
-      fgColor: { argb: "FF0F766E" },
+      fgColor: { argb: "FF8F4938" },
     };
     const buffer = await workbook.xlsx.writeBuffer();
     const url = URL.createObjectURL(new Blob([buffer]));
@@ -454,7 +459,7 @@ export default function CalendarView() {
         item.actual ? "Réel" : "Prévisionnel",
       ]),
       styles: { fontSize: 7 },
-      headStyles: { fillColor: [15, 118, 110] },
+      headStyles: { fillColor: [143, 73, 56] },
     });
     document.save(`calendrier-${view}-${year}.pdf`);
   };
@@ -495,10 +500,17 @@ export default function CalendarView() {
           >
             <Download size={15} /> PDF {year}
           </button>
-          <button type="button" onClick={() => exportOutlook(filteredEvents, `monpetitpro-${view}.ics`)}
-            className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-medium text-teal-900">
-            <CalendarDays size={15} /> Outlook
-          </button></>}
+          <div className="flex flex-col items-start gap-1">
+            <button
+              type="button"
+              disabled={filteredEvents.length === 0}
+              onClick={() => exportOutlook(filteredEvents, `monpetitpro-${view}.ics`)}
+              className="inline-flex items-center gap-2 rounded-xl border border-teal-200 bg-teal-50 px-3 py-2 text-xs font-medium text-teal-900 disabled:cursor-not-allowed disabled:opacity-45"
+            >
+              <CalendarDays size={15} /> Exporter les échéances vers Outlook (.ics)
+            </button>
+            <span className="px-1 text-[10px] text-slate-500">Rappels J-30 et J-15 inclus</span>
+          </div></>}
           {view === "agenda" && permissionGranted(permissions, 'calendar.manage') && (
             <button
               type="button"
@@ -622,9 +634,9 @@ export default function CalendarView() {
                     </p>
                     <div className="space-y-1">
                       {items.slice(0, 4).map((item) => (
-                        <div key={item.id} className={`flex overflow-hidden rounded-lg border-l-4 ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}>
+                        <div key={item.id} className={`overflow-hidden rounded-lg border-l-4 ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}>
                           <button type="button" onClick={() => openEvent(item)}
-                            className="min-w-0 flex-1 px-2 py-1.5 text-left text-[10px] font-medium leading-tight">
+                            className="block w-full min-w-0 px-2 py-1.5 text-left text-[10px] font-medium leading-tight">
                             <span className="mr-1 font-medium">{item.code}</span>
                             {item.time && <span>{item.time} · </span>}
                             {item.operationName !== "Sans opération" && <span>{item.operationName} · </span>}
@@ -632,8 +644,8 @@ export default function CalendarView() {
                           </button>
                           {permissionGranted(permissions, 'calendar.export') && <button type="button" title="Ajouter à Outlook" aria-label={`Ajouter ${item.title} à Outlook`}
                             onClick={() => exportOutlook([item], `monpetitpro-${item.id}.ics`)}
-                            className="border-l border-current/10 px-1.5 hover:bg-white/50">
-                            <CalendarDays size={12} />
+                            className="flex w-full items-center gap-1 border-t border-current/10 px-2 py-1 text-left text-[9px] font-medium hover:bg-white/50">
+                            <CalendarDays size={11} /> Ajouter à Outlook
                           </button>}
                         </div>
                       ))}
