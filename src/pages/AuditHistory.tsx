@@ -72,8 +72,8 @@ export default function AuditHistory() {
   );
 
   return <div className="mx-auto max-w-[1500px] pb-12">
-    <header className="mb-7"><p className="text-[10px] uppercase tracking-[0.28em] text-teal-700">Administration</p>
-      <h1 className="mt-1 flex items-center gap-3 text-4xl font-semibold tracking-tight text-slate-950"><History className="text-teal-700" /> Historique des modifications</h1>
+    <header className="mb-7">
+      <h1 className="flex items-center gap-3 text-4xl font-semibold tracking-tight text-slate-950"><History className="text-teal-700" /> Historique des modifications</h1>
       <p className="mt-2 text-sm text-slate-500">Qui a créé, modifié ou supprimé chaque donnée métier.</p>
     </header>
     <div className="mb-5 grid grid-cols-2 gap-3 rounded-2xl border border-slate-200 bg-white p-4 lg:grid-cols-5">

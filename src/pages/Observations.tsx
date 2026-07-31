@@ -507,10 +507,7 @@ export default function Observations() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
-            Suivi collectif
-          </p>
-          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
             Observations
           </h1>
           <p className="mt-2 text-sm text-slate-500">

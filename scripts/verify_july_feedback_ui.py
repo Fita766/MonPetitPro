@@ -45,6 +45,21 @@ def assert_mineral_palette(page, primary_button=None):
         )
 
 
+def assert_ics_download(page, button, expected_events=None):
+    with page.expect_download() as download_info:
+        button.click()
+    download = download_info.value
+    assert download.suggested_filename.endswith(".ics"), download.suggested_filename
+    content = Path(download.path()).read_text(encoding="utf-8")
+    assert "BEGIN:VCALENDAR" in content
+    assert "END:VCALENDAR" in content
+    assert "TRIGGER:-P30D" in content
+    assert "TRIGGER:-P15D" in content
+    if expected_events is not None:
+        assert content.count("BEGIN:VEVENT") == expected_events, content
+    return content
+
+
 def encode_part(value):
     return base64.urlsafe_b64encode(json.dumps(value).encode()).decode().rstrip("=")
 
@@ -288,6 +303,18 @@ with sync_playwright() as playwright:
         expect(authenticated.get_by_role("heading", name="Opérations")).to_be_visible()
         expect(authenticated.get_by_text("Clairoix — opération recette").first).to_be_visible()
         assert_mineral_palette(authenticated)
+        expect(authenticated.get_by_role("heading", name="Échéances à surveiller")).to_be_visible()
+        assert_ics_download(
+            authenticated,
+            authenticated.get_by_role("button", name="Exporter toutes vers Outlook"),
+            expected_events=1,
+        )
+        assert_ics_download(
+            authenticated,
+            authenticated.get_by_role("button", name=re.compile("Ajouter .* à Outlook")).first,
+            expected_events=1,
+        )
+        authenticated.screenshot(path=str(ARTIFACTS / "dashboard-desktop.png"), full_page=True)
 
         authenticated.goto(f"{BASE_URL}/operations/new", wait_until="networkidle")
         expect(authenticated.get_by_role("heading", name="Créer une opération complète")).to_be_visible()
@@ -321,12 +348,20 @@ with sync_playwright() as playwright:
         expect(authenticated.get_by_label("Filtre DG").locator("option[value='only']")).to_have_text("DG uniquement")
         expect(authenticated.get_by_role("button", name=re.compile("Exporter"))).to_be_visible()
         authenticated.goto(f"{BASE_URL}/calendar", wait_until="networkidle")
-        expect(
-            authenticated.get_by_role(
-                "button", name="Exporter les échéances vers Outlook (.ics)"
-            )
-        ).to_be_visible()
+        calendar_export = authenticated.get_by_role(
+            "button", name="Exporter les échéances vers Outlook (.ics)"
+        )
+        expect(calendar_export).to_be_visible()
         expect(authenticated.get_by_text("Rappels J-30 et J-15 inclus")).to_be_visible()
+        assert_ics_download(authenticated, calendar_export)
+        authenticated.get_by_role("button", name="Programme et autorisations").click()
+        authenticated.get_by_role("button", name="Mois suivant").click()
+        per_event_export = authenticated.get_by_role(
+            "button", name=re.compile("Ajouter .* à Outlook")
+        ).first
+        expect(per_event_export).to_be_visible()
+        assert_ics_download(authenticated, per_event_export, expected_events=1)
+        authenticated.screenshot(path=str(ARTIFACTS / "calendar-desktop.png"), full_page=True)
         authenticated.goto(f"{BASE_URL}/statistics", wait_until="networkidle")
         expect(authenticated.get_by_text(re.compile("détail", re.IGNORECASE)).first).to_be_visible()
         authenticated.goto(f"{BASE_URL}/objectives", wait_until="networkidle")
@@ -335,6 +370,19 @@ with sync_playwright() as playwright:
         expect(authenticated.get_by_role("heading", name="Ajouter une personne")).to_be_visible()
         authenticated.screenshot(path=str(ARTIFACTS / "mock-authenticated-overview.png"), full_page=True)
         auth_context.close()
+
+        auth_mobile_context = browser.new_context(viewport={"width": 390, "height": 844})
+        install_mock_backend(auth_mobile_context)
+        auth_mobile = auth_mobile_context.new_page()
+        auth_mobile.goto(f"{BASE_URL}/", wait_until="networkidle")
+        expect(auth_mobile.get_by_role("heading", name="Opérations")).to_be_visible()
+        expect(auth_mobile.get_by_role("button", name="Exporter toutes vers Outlook")).to_be_visible()
+        assert_mineral_palette(auth_mobile)
+        auth_mobile.screenshot(path=str(ARTIFACTS / "dashboard-mobile.png"), full_page=True)
+        auth_mobile.goto(f"{BASE_URL}/calendar", wait_until="networkidle")
+        expect(auth_mobile.get_by_role("button", name="Exporter les échéances vers Outlook (.ics)")).to_be_visible()
+        auth_mobile.screenshot(path=str(ARTIFACTS / "calendar-mobile.png"), full_page=True)
+        auth_mobile_context.close()
 
         first_login_context = browser.new_context(viewport={"width": 1280, "height": 900})
         install_mock_backend(first_login_context, must_change_password=True)

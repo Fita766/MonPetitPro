@@ -475,10 +475,7 @@ export default function CalendarView() {
     <div className="mx-auto max-w-[1700px] pb-12">
       <header className="mb-7 flex flex-col justify-between gap-5 xl:flex-row xl:items-end">
         <div>
-          <p className="text-[10px] font-medium uppercase tracking-[0.28em] text-teal-700">
-            Pilotage temporel
-          </p>
-          <h1 className="mt-1 text-4xl font-semibold tracking-tight text-slate-950">
+          <h1 className="text-4xl font-semibold tracking-tight text-slate-950">
             Calendriers
           </h1>
           <p className="mt-2 text-sm text-slate-500">
@@ -565,6 +562,7 @@ export default function CalendarView() {
           <div className="flex items-center gap-2">
             <button
               type="button"
+              aria-label="Mois précédent"
               onClick={() => setCurrentDate(subMonths(currentDate, 1))}
               className="rounded-xl border border-slate-200 p-2 text-slate-600"
             >
@@ -579,6 +577,7 @@ export default function CalendarView() {
             </button>
             <button
               type="button"
+              aria-label="Mois suivant"
               onClick={() => setCurrentDate(addMonths(currentDate, 1))}
               className="rounded-xl border border-slate-200 p-2 text-slate-600"
             >
@@ -634,7 +633,7 @@ export default function CalendarView() {
                     </p>
                     <div className="space-y-1">
                       {items.slice(0, 4).map((item) => (
-                        <div key={item.id} className={`overflow-hidden rounded-lg border-l-4 ${item.actual ? "border-emerald-500 bg-emerald-50 text-emerald-900" : "border-teal-400 bg-teal-50 text-teal-900"}`}>
+                        <div key={item.id} className={`overflow-hidden rounded-lg border ${item.actual ? "border-emerald-300 bg-emerald-50 text-emerald-900" : "border-teal-300 bg-teal-50 text-teal-900"}`}>
                           <button type="button" onClick={() => openEvent(item)}
                             className="block w-full min-w-0 px-2 py-1.5 text-left text-[10px] font-medium leading-tight">
                             <span className="mr-1 font-medium">{item.code}</span>

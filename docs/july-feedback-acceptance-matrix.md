@@ -9,7 +9,7 @@ La transcription du 29 juillet est la source fonctionnelle prioritaire. Les cont
 | Référentiels CTX, COP, gestionnaires, promoteurs, labels administrables | `adminReferencesUi.test.ts` + `referenceSeed.test.ts` | validé |
 | Type d’opération limité à MOD/VEFA | `operationPayload.test.ts` + `GeneralSection.tsx` | validé |
 | Programme collectif, individuel, commerce et sections personnalisées | `program.test.ts` | validé |
-| Lignes programme ajoutables librement | `ProgramLineEditor.tsx` | validé |
+| Lignes programme ajoutables librement | interaction Playwright « Ajouter une ligne » + `program.test.ts` | validé |
 | Lignes et sections programme réordonnables | `program.test.ts` + boutons accessibles | validé |
 | Totaux logements et produits calculés depuis les lignes | `program.test.ts` | validé |
 | Planning regroupé par thèmes | `planningMilestones.test.ts` | validé |
@@ -17,9 +17,9 @@ La transcription du 29 juillet est la source fonctionnelle prioritaire. Les cont
 | Champs MOD/VEFA conditionnels | `planningMilestones.test.ts` + `PlanningSection.tsx` | validé |
 | Alertes J-30, J-15 et retard | `alerts.test.ts` | validé |
 | Calendriers Programme et Travaux | `calendarEvents.test.ts` | validé |
-| Export Outlook global et par événement | `ics.test.ts` | validé |
+| Export Outlook global et par événement | `ics.test.ts` + téléchargements Playwright réels depuis le dashboard et le calendrier | validé |
 | Comptes individuels et mot de passe temporaire | `adminUsersUi.test.ts` + `admin-users/index.ts` | validé |
-| Changement obligatoire à la première connexion | `changePasswordUi.test.ts` + migration SQL | validé |
+| Changement obligatoire à la première connexion | scénario Playwright `must_change_password` + migration SQL | validé |
 | Rôles personnalisés persistants avec couleurs prédéfinies | `accessControl.test.ts` | validé |
 | Rôle système duplicable avant personnalisation | `adminUsersUi.test.ts` | validé |
 | Ancien transfert démo absent de l’administration | `adminUsersUi.test.ts` | validé |
@@ -49,7 +49,7 @@ La transcription du 29 juillet est la source fonctionnelle prioritaire. Les cont
 | Colonnes budget/DG retirées sans autorisation | `exportRegistry.test.ts` | validé |
 | Export DG dédié | `Observations.tsx` | validé |
 | Historique avant/après lisible et filtrable | `audit.test.ts` + `/admin/history` | validé |
-| Palette claire sans bleu vif ni fond noir | `uiPalette.test.ts` + recette Playwright | validé |
+| Palette minérale claire, sans mode sombre ni couleur fluorescente | styles calculés + captures desktop/mobile dans la recette Playwright | validé |
 | Migration sans perte et comptages journalisés | `julyFeedbackMigration.test.ts` + requêtes post-déploiement | validé sur MonPetitPro le 31/07/2026 |
 | Anciennes politiques de démo supprimées | `legacyPolicyCleanupMigration.test.ts` + inspection `pg_policies` | validé sur MonPetitPro le 31/07/2026 |
 | Cloisonnement réel entre deux utilisateurs | requêtes Auth/PostgREST avec deux comptes temporaires | validé : lecture, modification, DG et opération protégées |
