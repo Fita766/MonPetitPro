@@ -416,7 +416,7 @@ export default function OperationForm() {
         <div className="fixed bottom-0 left-64 right-0 z-30 border-t border-slate-200 bg-white/95 px-8 py-4 shadow-[0_-12px_30px_rgba(15,23,42,0.08)] backdrop-blur">
           <div className="mx-auto flex max-w-[1500px] items-center justify-between gap-4">
             <p className="hidden text-xs font-medium text-slate-500 md:block">Les champs calculés seront mis à jour à l’enregistrement.</p>
-            <button disabled={!editable || saving} type="submit" className="ml-auto inline-flex items-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-medium text-white shadow-lg shadow-teal-900/15 transition hover:-translate-y-0.5 hover:bg-teal-900 disabled:translate-y-0 disabled:opacity-50"><Save size={18} /> {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
+            <button disabled={!editable || saving} type="submit" className="ml-auto inline-flex items-center gap-2 rounded-xl bg-teal-800 px-5 py-3 text-sm font-medium text-white shadow-sm transition hover:bg-teal-900 disabled:opacity-50"><Save size={18} /> {saving ? 'Enregistrement…' : 'Enregistrer la fiche'}</button>
           </div>
         </div>
       </form>

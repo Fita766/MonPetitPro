@@ -27,12 +27,12 @@ export default function Sidebar() {
   const navItemClass = ({ isActive }: { isActive: boolean }) =>
     `flex min-w-12 items-center justify-center gap-3 rounded-lg px-3 py-3 transition-colors lg:justify-start lg:px-4 ${
       isActive
-        ? "bg-primary text-white"
+        ? "bg-teal-50 text-teal-900 ring-1 ring-inset ring-teal-200"
         : "text-slate-600 hover:bg-slate-100 hover:text-slate-900"
     }`;
 
   return (
-    <aside className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-200 bg-white shadow-2xl lg:inset-y-0 lg:left-0 lg:right-auto lg:h-screen lg:w-64 lg:flex-col lg:border-r lg:border-t-0 lg:shadow-none">
+    <aside className="fixed inset-x-0 bottom-0 z-50 flex border-t border-slate-200 bg-[#fffefb] shadow-lg lg:inset-y-0 lg:left-0 lg:right-auto lg:h-screen lg:w-64 lg:flex-col lg:border-r lg:border-t-0 lg:shadow-none">
       <div className="hidden items-center space-x-3 border-b border-slate-200 p-6 lg:flex">
         <div className="flex items-center justify-center h-16 border-b border-slate-200 gap-3 px-4 py-6">
           <div className="bg-primary text-white p-2 rounded-lg">

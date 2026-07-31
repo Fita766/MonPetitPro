@@ -139,7 +139,7 @@ export default function AdminUsers() {
 
   return (
     <div className="mx-auto max-w-7xl pb-16">
-      <header className="mb-7 overflow-hidden rounded-3xl border border-teal-200 bg-[linear-gradient(120deg,#f0fdfa_0%,#ffffff_55%,#fefce8_100%)] p-7 shadow-sm">
+      <header className="mb-7 overflow-hidden rounded-3xl border border-teal-200 bg-[#fffaf7] p-7 shadow-sm">
         <div className="flex flex-wrap items-center justify-between gap-5">
           <div className="flex items-center gap-4">
             <div className="rounded-2xl bg-teal-700 p-3 text-white"><ShieldCheck size={28} /></div>

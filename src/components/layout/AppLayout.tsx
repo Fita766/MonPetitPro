@@ -15,7 +15,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
   }, [toastMessage, setToastMessage]);
 
   return (
-    <div className="flex min-h-screen bg-slate-50">
+    <div className="flex min-h-screen bg-[#f6f4ef]">
       <Sidebar />
       <main className="relative min-h-screen flex-1 overflow-y-auto p-4 pb-24 sm:p-6 sm:pb-24 lg:ml-64 lg:h-screen lg:p-8">
         {schemaMessage && (

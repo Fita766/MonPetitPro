@@ -22,9 +22,27 @@ OPERATION_ID = "22222222-2222-4222-8222-222222222222"
 ROLE_ID = "33333333-3333-4333-8333-333333333333"
 
 
-def assert_light_palette(page):
-    forbidden = page.locator('[class*="bg-black"], [class*="bg-slate-950"][class*="min-h-screen"], [class*="bg-sky-"]')
-    assert forbidden.count() == 0, "Un fond sombre ou un accent bleu vif est encore visible"
+def assert_mineral_palette(page, primary_button=None):
+    body_background = page.locator("body").evaluate(
+        "element => getComputedStyle(element).backgroundColor"
+    )
+    color_scheme = page.locator("html").evaluate(
+        "element => getComputedStyle(element).colorScheme"
+    )
+    assert body_background == "rgb(246, 244, 239)", (
+        f"Fond attendu ivoire minéral, reçu {body_background}"
+    )
+    assert color_scheme == "light", f"Le thème doit rester clair, reçu {color_scheme}"
+    expect(
+        page.get_by_role("button", name=re.compile("thème|mode sombre", re.IGNORECASE))
+    ).to_have_count(0)
+    if primary_button is not None:
+        primary_background = primary_button.evaluate(
+            "element => getComputedStyle(element).backgroundColor"
+        )
+        assert primary_background == "rgb(143, 73, 56)", (
+            f"Action principale attendue terre cuite, reçue {primary_background}"
+        )
 
 
 def encode_part(value):
@@ -228,7 +246,7 @@ with sync_playwright() as playwright:
     expect(page.get_by_label("Adresse e-mail")).to_be_visible()
     expect(page.get_by_label("Mot de passe")).to_be_visible()
     expect(page.get_by_text("Les comptes sont créés par un administrateur avec un mot de passe temporaire.")).to_be_visible()
-    assert_light_palette(page)
+    assert_mineral_palette(page, page.get_by_role("button", name="Se connecter"))
     page.screenshot(path=str(ARTIFACTS / "login-desktop.png"), full_page=True)
 
     mobile_context = browser.new_context(viewport={"width": 390, "height": 844})
@@ -255,7 +273,7 @@ with sync_playwright() as playwright:
         for route, heading in routes:
             page.goto(f"{BASE_URL}{route}", wait_until="networkidle")
             expect(page.get_by_role("heading", name=heading)).to_be_visible()
-            assert_light_palette(page)
+        assert_mineral_palette(page)
         page.screenshot(path=str(ARTIFACTS / "authenticated-overview.png"), full_page=True)
 
     relevant_errors = [error for error in console_errors if "favicon" not in error.lower()]
@@ -269,7 +287,7 @@ with sync_playwright() as playwright:
         authenticated.goto(f"{BASE_URL}/", wait_until="networkidle")
         expect(authenticated.get_by_role("heading", name="Opérations")).to_be_visible()
         expect(authenticated.get_by_text("Clairoix — opération recette").first).to_be_visible()
-        assert_light_palette(authenticated)
+        assert_mineral_palette(authenticated)
 
         authenticated.goto(f"{BASE_URL}/operations/new", wait_until="networkidle")
         expect(authenticated.get_by_role("heading", name="Créer une opération complète")).to_be_visible()
@@ -297,7 +315,7 @@ with sync_playwright() as playwright:
         ]:
             authenticated.goto(f"{BASE_URL}{route}", wait_until="networkidle")
             expect(authenticated.get_by_role("heading", name=heading)).to_be_visible()
-            assert_light_palette(authenticated)
+            assert_mineral_palette(authenticated)
         authenticated.goto(f"{BASE_URL}/observations", wait_until="networkidle")
         expect(authenticated.get_by_label("Filtre DG")).to_be_visible()
         expect(authenticated.get_by_label("Filtre DG").locator("option[value='only']")).to_have_text("DG uniquement")

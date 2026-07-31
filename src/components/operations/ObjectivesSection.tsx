@@ -65,7 +65,7 @@ export default function ObjectivesSection({
           const kindRows = objectives.filter((row) => row.kind === config.kind);
           const expectedDate = config.kind === 'works_order' ? form.works_order_expected_date : schedule.managementExpectedDate;
           return (
-            <div key={config.kind} className="rounded-3xl border border-teal-200 bg-gradient-to-br from-teal-50 to-white p-6">
+            <div key={config.kind} className="rounded-3xl border border-teal-200 bg-teal-50/60 p-6">
               <div className="mb-5 flex items-start gap-3">
                 <span className="rounded-xl bg-white p-2.5 text-teal-700 shadow-sm"><Flag size={19} /></span>
                 <div>

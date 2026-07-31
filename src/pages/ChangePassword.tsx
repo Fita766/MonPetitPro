@@ -44,7 +44,7 @@ export default function ChangePassword() {
   };
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-[linear-gradient(135deg,#f0fdfa_0%,#f8fafc_48%,#fffbeb_100%)] p-5">
+    <main className="flex min-h-screen items-center justify-center bg-[#f6f4ef] p-5">
       <section className="w-full max-w-lg rounded-3xl border border-slate-200 bg-white p-7 shadow-xl shadow-slate-900/10 md:p-10">
         <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-teal-700 text-white">
           <ShieldCheck size={28} />

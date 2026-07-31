@@ -249,7 +249,7 @@ export default function Dashboard() {
             <button
               type="button"
               onClick={() => navigate("/operations/new")}
-              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-medium text-white shadow-lg shadow-teal-950/15 hover:bg-teal-900"
+              className="inline-flex items-center gap-2 rounded-xl bg-teal-800 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-teal-900"
             >
               <Plus size={17} /> Nouvelle opération
             </button>

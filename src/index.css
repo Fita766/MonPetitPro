@@ -1,17 +1,60 @@
 @import "tailwindcss";
 
 @theme {
-  --color-primary: #0f766e;
-  --color-secondary: #0ea5e9;
-  --color-danger: #ef4444;
-  --color-warning: #f59e0b;
-  --color-success: #10b981;
+  --color-primary: #8f4938;
+  --color-secondary: #69716c;
+  --color-danger: #a13f39;
+  --color-warning: #94651f;
+  --color-success: #5d745a;
+
+  /* Neutres minéraux chauds. */
+  --color-slate-50: #f6f4ef;
+  --color-slate-100: #f0ece4;
+  --color-slate-200: #d8d2c7;
+  --color-slate-300: #c3baad;
+  --color-slate-400: #918b82;
+  --color-slate-500: #69716c;
+  --color-slate-600: #515b56;
+  --color-slate-700: #3e4743;
+  --color-slate-800: #2d3331;
+  --color-slate-900: #242a27;
+  --color-slate-950: #191d1b;
+
+  /* L'ancien axe turquoise devient une terre cuite calme. */
+  --color-teal-50: #f7e9e3;
+  --color-teal-100: #efd3c8;
+  --color-teal-200: #dfb2a2;
+  --color-teal-300: #cb8a75;
+  --color-teal-400: #b86751;
+  --color-teal-500: #a25540;
+  --color-teal-600: #984b39;
+  --color-teal-700: #8f4938;
+  --color-teal-800: #743a2e;
+  --color-teal-900: #5b2e25;
+  --color-teal-950: #351b16;
+
+  /* Le vert reste réservé aux états réussis ou réalisés. */
+  --color-emerald-50: #edf3ea;
+  --color-emerald-100: #dce8d7;
+  --color-emerald-200: #bed2b7;
+  --color-emerald-300: #9ab593;
+  --color-emerald-400: #789473;
+  --color-emerald-500: #667f62;
+  --color-emerald-600: #5d745a;
+  --color-emerald-700: #50634d;
+  --color-emerald-800: #42513f;
+  --color-emerald-900: #354132;
+  --color-emerald-950: #1c241b;
 }
 
-/* Global Styles */
+:root {
+  color-scheme: light;
+  background: #f6f4ef;
+}
+
 body {
-  background-color: #f8fafc; /* slate-50 */
-  color: #0f172a; /* slate-900 */
+  background-color: #f6f4ef;
+  color: #2d3331;
   font-family: ui-sans-serif, system-ui, sans-serif;
   margin: 0;
   padding: 0;
