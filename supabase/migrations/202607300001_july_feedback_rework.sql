@@ -6,7 +6,7 @@ begin;
 create extension if not exists "uuid-ossp";
 
 create table if not exists public.reference_values (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   kind text not null check (kind in (
     'ctx', 'cop', 'assistant', 'gpa_assistant', 'manager',
     'animation_provider', 'promoter', 'certification',
@@ -27,7 +27,7 @@ create index if not exists reference_values_kind_active_idx
   on public.reference_values(kind, is_active, sort_order, label);
 
 create table if not exists public.communes (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   name text not null,
   insee_code text not null unique,
   postal_code text,
@@ -138,7 +138,7 @@ create index if not exists operations_commune_id_idx
   on public.operations(commune_id);
 
 create table if not exists public.operation_program_sections (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.operations(id) on delete cascade,
   kind text not null check (kind in ('collective', 'individual', 'commercial', 'custom')),
   label text not null,
@@ -153,7 +153,7 @@ create index if not exists operation_program_sections_operation_idx
   on public.operation_program_sections(operation_id, sort_order);
 
 create table if not exists public.operation_program_lines (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.operations(id) on delete cascade,
   section_id uuid not null references public.operation_program_sections(id) on delete cascade,
   label text not null,
@@ -172,7 +172,7 @@ create index if not exists operation_program_lines_section_idx
   on public.operation_program_lines(section_id);
 
 create table if not exists public.operation_budget_lines (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.operations(id) on delete cascade,
   family text not null check (family in ('general', 'LLS', 'LLI', 'managed')),
   realization_mode text not null check (realization_mode in ('MOD', 'VEFA')),
@@ -199,7 +199,7 @@ alter table public.operation_subsidies
   add column if not exists comment text;
 
 create table if not exists public.operation_objectives (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.operations(id) on delete cascade,
   kind text not null check (kind in ('works_order', 'management')),
   objective_year integer not null check (objective_year between 2000 and 2200),
@@ -286,7 +286,7 @@ before delete on public.operation_objectives
 for each row execute function public.protect_initial_objective_deletion();
 
 create table if not exists public.operation_significant_works (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   operation_id uuid not null references public.operations(id) on delete cascade,
   label text not null,
   amount_ht numeric check (amount_ht is null or amount_ht >= 0),
@@ -300,7 +300,7 @@ create index if not exists operation_significant_works_operation_idx
   on public.operation_significant_works(operation_id, sort_order);
 
 create table if not exists public.platform_migration_journal (
-  id uuid primary key default uuid_generate_v4(),
+  id uuid primary key default gen_random_uuid(),
   migration_key text not null unique,
   source_count integer not null check (source_count >= 0),
   migrated_count integer not null check (migrated_count >= 0),

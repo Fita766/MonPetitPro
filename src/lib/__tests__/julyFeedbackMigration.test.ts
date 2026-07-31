@@ -24,6 +24,8 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).not.toMatch(
       /drop table\s+(?:if exists\s+)?public\.(operations|observations|profiles)/i,
     );
+    expect(sql).not.toContain("uuid_generate_v4()");
+    expect(sql).toContain("gen_random_uuid()");
   });
 
   it("ajoute l'affectation utilisateur et le changement de mot de passe", () => {
