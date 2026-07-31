@@ -28,27 +28,29 @@
 - Modify: `src/components/layout/AppLayout.tsx`
 - Modify: `src/pages/AdminUsers.tsx`
 - Modify: `src/pages/ChangePassword.tsx`
-- Test: `src/lib/__tests__/uiPalette.test.ts`
+- Modify: `scripts/verify_july_feedback_ui.py`
 
 **Interfaces:**
 - Consumes: existing Tailwind utilities and `@theme`.
-- Produces: shared light-only mineral tokens and a regression test rejecting the discarded visual world.
+- Produces: shared light-only mineral tokens and a browser regression that rejects the discarded visual world from computed styles.
 
-- [ ] **Step 1: Write the failing palette test**
+- [ ] **Step 1: Write the failing browser palette assertions**
 
-Create `uiPalette.test.ts` and assert the mineral primary/olive tokens, `color-scheme: light`, absence of dark-mode declarations, structural gradients, black surfaces, and teal glows.
+Extend `verify_july_feedback_ui.py` to inspect computed styles on the rendered application. The body must resolve to `rgb(246, 244, 239)`, `color-scheme` must be `light`, the primary login button must resolve to `rgb(143, 73, 56)`, and no button or accessible label may expose a theme switcher.
 
-```ts
-expect(css).toContain('--color-primary: #8f4938');
-expect(css).toContain('--color-teal-700: #8f4938');
-expect(css).toContain('--color-emerald-700: #5d745a');
-expect(css).not.toMatch(/prefers-color-scheme\s*:\s*dark|\.dark\b/);
-expect(uiSource).not.toMatch(/bg-\[linear-gradient|shadow-teal|bg-black|bg-slate-950/);
+```py
+body = page.locator("body").evaluate("el => getComputedStyle(el).backgroundColor")
+scheme = page.locator("html").evaluate("el => getComputedStyle(el).colorScheme")
+primary = page.get_by_role("button", name="Se connecter").evaluate("el => getComputedStyle(el).backgroundColor")
+assert body == "rgb(246, 244, 239)"
+assert scheme == "light"
+assert primary == "rgb(143, 73, 56)"
+expect(page.get_by_role("button", name=re.compile("thème|mode sombre", re.I))).to_have_count(0)
 ```
 
 - [ ] **Step 2: Run it and observe the expected failure**
 
-Run: `npm test -- --run src/lib/__tests__/uiPalette.test.ts`
+Run the current build with `MPP_MOCK_AUTH=1` through `with_server.py` and the verifier.
 
 - [ ] **Step 3: Implement the mineral scales**
 
@@ -58,11 +60,13 @@ Define warm slate, terracotta-mapped teal, muted olive-mapped emerald, surface a
 
 Use warm solid surfaces in administration and first-login pages. Make the active sidebar argile-on-terracotta rather than white-on-saturated color. Preserve mobile navigation and permissions.
 
-- [ ] **Step 5: Run the palette test and commit**
+- [ ] **Step 5: Build, run the browser palette assertions, and commit**
 
 ```powershell
-npm test -- --run src/lib/__tests__/uiPalette.test.ts
-git add src/index.css src/components/layout/Sidebar.tsx src/components/layout/AppLayout.tsx src/pages/AdminUsers.tsx src/pages/ChangePassword.tsx src/lib/__tests__/uiPalette.test.ts
+npm run build
+$env:MPP_MOCK_AUTH='1'
+python C:\Users\Fitanique\.codex\skills\webapp-testing\scripts\with_server.py --server "npm run preview -- --host 127.0.0.1" --port 4173 -- python scripts\verify_july_feedback_ui.py
+git add src/index.css src/components/layout/Sidebar.tsx src/components/layout/AppLayout.tsx src/pages/AdminUsers.tsx src/pages/ChangePassword.tsx scripts/verify_july_feedback_ui.py
 git commit -m "style: replace fluorescent palette with mineral light theme"
 ```
 
@@ -79,9 +83,9 @@ git commit -m "style: replace fluorescent palette with mineral light theme"
 - Consumes: `IcsEvent`, `OperationAlert`, `buildIcs`, `downloadIcs`.
 - Produces: `alertToIcsEvent(alert: OperationAlert): IcsEvent`, explicit calendar actions, disabled empty export, and export-count feedback.
 
-- [ ] **Step 1: Write failing adapter and copy tests**
+- [ ] **Step 1: Write a failing adapter test**
 
-Assert that `alertToIcsEvent` returns a stable UID, operation-aware title, correct date and direct-operation description. Assert exact UI text `Exporter les échéances vers Outlook (.ics)` and `Rappels J-30 et J-15 inclus`.
+Assert that `alertToIcsEvent` returns a stable UID, operation-aware title, correct date and direct-operation description. The browser verifier added before the UI implementation asserts the exact accessible names `Exporter les échéances vers Outlook (.ics)`, `Rappels J-30 et J-15 inclus`, and `Ajouter à Outlook`.
 
 - [ ] **Step 2: Run targeted tests and observe failure**
 
@@ -108,24 +112,25 @@ git commit -m "feat: expose explicit Outlook deadline exports"
 **Files:**
 - Modify: `src/components/dashboard/UpcomingAlerts.tsx`
 - Modify: `src/pages/Dashboard.tsx`
-- Test: `src/lib/__tests__/dashboardOutlookUi.test.ts`
+- Test: `src/components/dashboard/UpcomingAlerts.test.tsx`
 
 **Interfaces:**
 - Consumes: `alertToIcsEvent`, `buildIcs`, `downloadIcs`, `OperationAlert`.
 - Produces: `onExportAlert(alert)` and `onExportAll(alerts)` callbacks, one per-alert text action, and one global export.
 
-- [ ] **Step 1: Write the failing dashboard test**
+- [ ] **Step 1: Write the failing dashboard interaction test**
 
 ```ts
-expect(component).toContain('Ajouter à Outlook');
-expect(component).toContain('Exporter toutes vers Outlook');
-expect(page).toContain('alertToIcsEvent');
-expect(page).toContain('buildIcs');
+render(<UpcomingAlerts alerts={[alert]} onOpenOperation={onOpen} onExportAlert={onExportOne} onExportAll={onExportAll} />);
+await user.click(screen.getByRole('button', { name: /ajouter .* à outlook/i }));
+expect(onExportOne).toHaveBeenCalledWith(alert);
+await user.click(screen.getByRole('button', { name: /exporter toutes vers outlook/i }));
+expect(onExportAll).toHaveBeenCalledWith([alert]);
 ```
 
 - [ ] **Step 2: Run it and observe failure**
 
-Run: `npm test -- --run src/lib/__tests__/dashboardOutlookUi.test.ts`
+Run: `npm test -- --run src/components/dashboard/UpcomingAlerts.test.tsx`
 
 - [ ] **Step 3: Split navigation from export actions and wire downloads**
 
@@ -134,8 +139,8 @@ Keep operation navigation, add a secondary visible Outlook action per row and a 
 - [ ] **Step 4: Run and commit**
 
 ```powershell
-npm test -- --run src/lib/__tests__/dashboardOutlookUi.test.ts
-git add src/components/dashboard/UpcomingAlerts.tsx src/pages/Dashboard.tsx src/lib/__tests__/dashboardOutlookUi.test.ts
+npm test -- --run src/components/dashboard/UpcomingAlerts.test.tsx
+git add src/components/dashboard/UpcomingAlerts.tsx src/components/dashboard/UpcomingAlerts.test.tsx src/pages/Dashboard.tsx
 git commit -m "feat: export dashboard deadlines to Outlook"
 ```
 
