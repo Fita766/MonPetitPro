@@ -5,6 +5,11 @@ begin;
 
 create extension if not exists "uuid-ossp";
 
+-- Les normalisations ci-dessous sont exécutées par le rôle de migration,
+-- hors session applicative. Les garde-fous sont recréés avant le commit.
+drop trigger if exists enforce_operation_field_permissions on public.operations;
+drop trigger if exists enforce_observation_field_permissions on public.observations;
+
 create table if not exists public.reference_values (
   id uuid primary key default gen_random_uuid(),
   kind text not null check (kind in (
@@ -1173,6 +1178,10 @@ begin
   return new;
 end;
 $$;
+
+drop trigger if exists enforce_operation_field_permissions on public.operations;
+create trigger enforce_operation_field_permissions before update on public.operations
+for each row execute function public.enforce_operation_field_permissions();
 
 drop trigger if exists enforce_observation_field_permissions on public.observations;
 create trigger enforce_observation_field_permissions before update on public.observations

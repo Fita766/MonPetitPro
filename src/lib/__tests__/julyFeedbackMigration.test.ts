@@ -50,6 +50,28 @@ describe("migration des retours du 29 juillet", () => {
     }
   });
 
+  it("suspend puis restaure les garde-fous pendant les normalisations historiques", () => {
+    const operationDrop = sql.indexOf(
+      "drop trigger if exists enforce_operation_field_permissions on public.operations",
+    );
+    const operationMigration = sql.indexOf("update public.operations");
+    const operationRestore = sql.lastIndexOf(
+      "create trigger enforce_operation_field_permissions",
+    );
+    const observationDrop = sql.indexOf(
+      "drop trigger if exists enforce_observation_field_permissions on public.observations",
+    );
+    const observationMigration = sql.indexOf("update public.observations");
+    const observationRestore = sql.lastIndexOf(
+      "create trigger enforce_observation_field_permissions",
+    );
+    expect(operationDrop).toBeGreaterThan(-1);
+    expect(operationDrop).toBeLessThan(operationMigration);
+    expect(operationRestore).toBeGreaterThan(operationMigration);
+    expect(observationDrop).toBeLessThan(observationMigration);
+    expect(observationRestore).toBeGreaterThan(observationMigration);
+  });
+
   it("prépare les nouveaux jalons prévisionnels demandés", () => {
     for (const column of [
       "approvals_expected_date",
