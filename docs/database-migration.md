@@ -13,6 +13,7 @@ et annule toute la transaction si un comptage de contrôle échoue.
    - `202607200001_dmo_extension.sql`
    - `202607210001_custom_access_control.sql`
    - `202607300001_july_feedback_rework.sql`
+   - `202607310001_remove_legacy_broad_policies.sql`
 
 4. Charger `supabase/seed/july_feedback_references.sql`.
 5. Déployer la fonction Edge `admin-users`.
@@ -53,10 +54,19 @@ order by tablename, policyname;
 select count(*) as observations_sans_affectation
 from public.observations
 where assignee_user_id is null;
+
+select tablename, policyname
+from pg_policies
+where schemaname = 'public'
+  and tablename in ('operations', 'observations')
+  and cmd = 'ALL'
+  and 'authenticated' = any(roles)
+  and coalesce(trim(qual), '') in ('true', '(true)');
 ```
 
 Vérifier aussi que le bucket privé `operation-documents` existe, puis se reconnecter
 à l’application afin de recharger le profil et ses autorisations.
+La dernière requête ne doit retourner aucune ligne.
 
 ## Compatibilité
 

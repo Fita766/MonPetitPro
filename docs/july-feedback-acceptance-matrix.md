@@ -50,8 +50,22 @@ La transcription du 29 juillet est la source fonctionnelle prioritaire. Les cont
 | Export DG dédié | `Observations.tsx` | validé |
 | Historique avant/après lisible et filtrable | `audit.test.ts` + `/admin/history` | validé |
 | Palette claire sans bleu vif ni fond noir | `uiPalette.test.ts` + recette Playwright | validé |
-| Migration sans perte et comptages journalisés | `julyFeedbackMigration.test.ts` + requêtes post-déploiement | à valider sur Supabase |
-| Recette authentifiée des écrans | `MPP_MOCK_AUTH=1` + `scripts/verify_july_feedback_ui.py` | validé localement ; réel à valider après accès Supabase |
+| Migration sans perte et comptages journalisés | `julyFeedbackMigration.test.ts` + requêtes post-déploiement | validé sur MonPetitPro le 31/07/2026 |
+| Anciennes politiques de démo supprimées | `legacyPolicyCleanupMigration.test.ts` + inspection `pg_policies` | validé sur MonPetitPro le 31/07/2026 |
+| Cloisonnement réel entre deux utilisateurs | requêtes Auth/PostgREST avec deux comptes temporaires | validé : lecture, modification, DG et opération protégées |
+| Recette authentifiée des écrans | `MPP_MOCK_AUTH=1` + `scripts/verify_july_feedback_ui.py` | validé localement et avec le compte propriétaire réel |
+
+## Déploiement Supabase du 31 juillet 2026
+
+- Projet contrôlé : `MonPetitPro` (`vtzpkupnpinqtptrgbus`).
+- Migrations appliquées jusqu’à `202607310001`.
+- Fonction Edge `admin-users` déployée.
+- Inscriptions publiques désactivées ; les comptes sont créés par un administrateur.
+- Référentiels chargés : 4 558 communes, toutes avec une zone logement, et 226 valeurs métier.
+- Données historiques conservées : 191 opérations, 289 observations et 3 profils.
+- Affectations reprises automatiquement : 53 observations ; 236 restent sans affectation faute de correspondance certaine.
+- Test du premier mot de passe effectué avec un compte temporaire puis nettoyé.
+- Test RLS à deux utilisateurs effectué puis nettoyé : aucune lecture ou modification croisée, aucune observation DG exposée sans le droit correspondant.
 
 ## Commandes locales
 

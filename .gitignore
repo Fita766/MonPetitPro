@@ -33,3 +33,6 @@ dossiers modifs/
 artifacts/
 test-results/
 __pycache__/
+
+# État local du CLI Supabase (référence liée, versions et URL du pooler)
+supabase/.temp/

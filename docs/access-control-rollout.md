@@ -7,7 +7,8 @@ Cette procédure ne supprime aucune donnée métier. Il n’existe plus de parco
 
 1. Sauvegarder la base Supabase.
 2. Appliquer toutes les migrations décrites dans `docs/database-migration.md`.
-3. Dans Supabase Auth, désactiver **Allow new users to sign up**.
+3. Dans Supabase Auth, désactiver **Allow new users to sign up**. Cette option est
+   désactivée sur le projet MonPetitPro depuis le 31 juillet 2026.
 4. Déployer la fonction `admin-users`.
 
 ```bash
