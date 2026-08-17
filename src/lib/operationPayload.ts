@@ -18,6 +18,11 @@ export interface OperationFormData {
   animation_provider: string;
   operation_type: string;
   program_nature: string;
+  so_csi_ca: boolean;
+  so_lli_approval: boolean;
+  terrain: boolean;
+  cop_user_id: string | null;
+  ctx_user_id: string | null;
   promoter_name: string;
   total_housing_units: string;
   individual_housing_units: string;
@@ -94,7 +99,7 @@ export interface OperationFormData {
 export const EMPTY_OPERATION_FORM: OperationFormData = {
   name: '', stage: '', of_number: '', gesprojet_number: '', department: '', commune: '', commune_id: '', address: '',
   project_manager: '', operations_manager: '', assistant_name: '', gpa_assistant_name: '', manager_name: '', animation_provider: '',
-  operation_type: 'MOD', program_nature: '', promoter_name: '', total_housing_units: '0', individual_housing_units: '0', collective_housing_units: '0',
+  operation_type: 'MOD', program_nature: '', so_csi_ca: false, so_lli_approval: false, terrain: false, cop_user_id: null, ctx_user_id: null, promoter_name: '', total_housing_units: '0', individual_housing_units: '0', collective_housing_units: '0',
   plus_units: '0', plai_units: '0', pls_units: '0', lli_units: '0', lls_units: '0', brs_units: '0', psla_units: '0', student_units: '0', specific_units: '0',
   anru_units: '0', acv_units: '0', commercial_units: '0', other_units: '0', thermal_regulation: '', certification: '',
   clesence_bbca: false, clesence_reversible: false, clesence_land_sobriety: false, clesence_green_space: false, zoning: '', category: '',
@@ -152,6 +157,8 @@ export function toOperationPayload(form: OperationFormData, userId?: string): Op
   payload.promoter_name = form.promoter_name || null;
   payload.commune_id = form.commune_id || null;
   payload.program_nature = form.program_nature || null;
+  payload.cop_user_id = form.cop_user_id || null;
+  payload.ctx_user_id = form.ctx_user_id || null;
   payload.objective_year = form.is_objective ? integerOrNull(form.objective_year) : null;
 
   if (form.operation_type.toUpperCase() === 'VEFA') {

@@ -102,6 +102,11 @@ export interface Operation {
   manager_name: string | null;
   operation_type: string;
   program_nature?: string | null;
+  so_csi_ca: boolean;
+  so_lli_approval: boolean;
+  terrain: boolean;
+  cop_user_id: string | null;
+  ctx_user_id: string | null;
   promoter_name: string | null;
   contractual_delivery_date: string | null;
   expected_delivery_date: string | null;

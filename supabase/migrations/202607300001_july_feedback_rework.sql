@@ -124,7 +124,15 @@ alter table public.operations
   add column if not exists approvals_expected_date date,
   add column if not exists permit_expected_date date,
   add column if not exists tender_expected_date date,
-  add column if not exists cpr_expected_date date;
+  add column if not exists cpr_expected_date date,
+  -- A1 (17/08) : cases SO, case terrain et comptes COP/CTX. Les colonnes texte
+  -- historiques project_manager (CTX) et operations_manager (COP) sont conservées :
+  -- elles restent la source d'affichage et de migration vers ces comptes.
+  add column if not exists so_csi_ca boolean not null default false,
+  add column if not exists so_lli_approval boolean not null default false,
+  add column if not exists terrain boolean not null default false,
+  add column if not exists cop_user_id uuid references auth.users(id),
+  add column if not exists ctx_user_id uuid references auth.users(id);
 
 -- Les anciennes valeurs mélangeaient le mode de réalisation et la nature métier.
 update public.operations
@@ -141,6 +149,11 @@ end $$;
 
 create index if not exists operations_commune_id_idx
   on public.operations(commune_id);
+
+create index if not exists operations_cop_user_idx
+  on public.operations(cop_user_id);
+create index if not exists operations_ctx_user_idx
+  on public.operations(ctx_user_id);
 
 create table if not exists public.operation_program_sections (
   id uuid primary key default gen_random_uuid(),

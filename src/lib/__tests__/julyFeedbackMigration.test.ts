@@ -32,6 +32,23 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("must_change_password");
     expect(sql).toContain("assignee_user_id");
     expect(sql).toContain("references auth.users(id)");
+
+    // A1 (17/08) : cases SO, case terrain et comptes COP/CTX, sans perdre
+    // les colonnes texte historiques project_manager / operations_manager.
+    for (const column of [
+      "so_csi_ca",
+      "so_lli_approval",
+      "terrain",
+      "cop_user_id",
+      "ctx_user_id",
+    ]) {
+      expect(sql).toContain(column);
+    }
+    expect(sql).toContain("operations_cop_user_idx");
+    expect(sql).toContain("operations_ctx_user_idx");
+    expect(sql).not.toMatch(
+      /drop column\s+if exists\s+(project_manager|operations_manager)/i,
+    );
   });
 
   it("journalise et contrôle les migrations de données", () => {
