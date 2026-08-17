@@ -102,3 +102,23 @@ describe('fromOperationRow', () => {
     expect(form.is_objective).toBe(false);
   });
 });
+
+describe('drapeaux SO et terrain', () => {
+  it('sérialise so_csi_ca, so_lli_approval et terrain dans le payload', () => {
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'MOD',
+      so_csi_ca: true,
+      so_lli_approval: true,
+      terrain: true,
+    });
+    expect(payload).toMatchObject({ so_csi_ca: true, so_lli_approval: true, terrain: true });
+  });
+
+  it('relit les drapeaux depuis une ligne de base', () => {
+    const form = fromOperationRow({ so_csi_ca: true, so_lli_approval: false, terrain: true });
+    expect(form.so_csi_ca).toBe(true);
+    expect(form.so_lli_approval).toBe(false);
+    expect(form.terrain).toBe(true);
+  });
+});

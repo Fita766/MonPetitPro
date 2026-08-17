@@ -1,3 +1,5 @@
+import { addMonths, format, parseISO } from 'date-fns';
+
 export type RealizationMode = 'MOD' | 'VEFA';
 
 export interface MilestoneDefinition {
@@ -130,4 +132,9 @@ export function calculateDateVariance(
 export function visibleMilestones(mode: RealizationMode): MilestoneDefinition[] {
   return MILESTONE_GROUPS.flatMap((group) =>
     group.milestones.filter((milestone) => !milestone.appliesTo || milestone.appliesTo.includes(mode)));
+}
+
+export function proposedPermitOrderDate(submission: string | null): string | null {
+  if (!submission || !/^\d{4}-\d{2}-\d{2}$/.test(submission)) return null;
+  return format(addMonths(parseISO(submission), 4), 'yyyy-MM-dd');
 }

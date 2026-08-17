@@ -137,6 +137,13 @@ export default function ProgramSection({
         <CheckField disabled={!canEditField('clesence_green_space')} checked={form.clesence_green_space}
           onChange={(value) => onChange('clesence_green_space', value)}>Espace vert</CheckField>
       </div>
+      <div className="mt-3">
+        <CheckField disabled={!canEditField('terrain')} checked={Boolean(form.terrain)}
+          onChange={(value) => onChange('terrain', value)}>
+          Terrain
+          <span className="ml-1 font-normal text-slate-400">— opération avec acquisition / acte foncier (révèle le jalon « Acte VEFA / acquisition terrain » du planning)</span>
+        </CheckField>
+      </div>
     </section>
   );
 }

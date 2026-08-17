@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MILESTONE_GROUPS,
   calculateDateVariance,
+  proposedPermitOrderDate,
   visibleMilestones,
 } from '../planningMilestones';
 
@@ -23,5 +24,13 @@ describe('planning milestones', () => {
     expect(vefa.some((milestone) => milestone.key === 'works_order')).toBe(false);
     expect(vefa.some((milestone) => milestone.key === 'vefa_deed')).toBe(true);
     expect(visibleMilestones('MOD').some((milestone) => milestone.key === 'works_order')).toBe(true);
+  });
+
+  it('propose l’arrêté 4 mois après le dépôt en préservant la fin de mois', () => {
+    expect(proposedPermitOrderDate('2026-01-31')).toBe('2026-05-31');
+    expect(proposedPermitOrderDate('2026-08-31')).toBe('2026-12-31');
+    expect(proposedPermitOrderDate('2025-11-30')).toBe('2026-03-30');
+    expect(proposedPermitOrderDate(null)).toBeNull();
+    expect(proposedPermitOrderDate('2026-04-20')).toBe('2026-08-20');
   });
 });

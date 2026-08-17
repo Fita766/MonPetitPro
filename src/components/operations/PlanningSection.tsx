@@ -1,9 +1,9 @@
 import { calculateOperationSchedule } from '../../lib/operationCalculations';
-import { MILESTONE_GROUPS } from '../../lib/planningMilestones';
+import { MILESTONE_GROUPS, proposedPermitOrderDate, type MilestoneDefinition } from '../../lib/planningMilestones';
 import type { OperationFormData } from '../../lib/operationPayload';
 import { FieldLabel, SectionHeading, TextInput } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
-import MilestoneGroup from './planning/MilestoneGroup';
+import MilestoneGroup, { type MilestoneRowExtra } from './planning/MilestoneGroup';
 
 export default function PlanningSection({
   form,
@@ -48,6 +48,23 @@ export default function PlanningSection({
   const setDate = (field: string, value: string) => {
     if (field in form) onChange(field as keyof OperationFormData, value);
   };
+  const rowExtra = (milestone: MilestoneDefinition): MilestoneRowExtra | undefined => {
+    if (milestone.key === 'csi_ca') {
+      return { so: { checked: Boolean(form.so_csi_ca), editable: canEditField('so_csi_ca'), onChange: (checked) => onChange('so_csi_ca', checked) } };
+    }
+    if (milestone.key === 'lli_approval') {
+      return { so: { checked: Boolean(form.so_lli_approval), editable: canEditField('so_lli_approval'), onChange: (checked) => onChange('so_lli_approval', checked) } };
+    }
+    if (milestone.key === 'vefa_deed') {
+      return { emphasized: Boolean(form.terrain) };
+    }
+    if (milestone.key === 'permit_order') {
+      const proposed = proposedPermitOrderDate(form.permit_submission_date);
+      if (!proposed || form.permit_order_date) return undefined;
+      return { hint: `Proposition : ${proposed} (dépôt + 4 mois)` };
+    }
+    return undefined;
+  };
 
   const delaySummary = [
     ['Retard brut', schedule.deliveryGapDays, 'jours'],
@@ -78,12 +95,13 @@ export default function PlanningSection({
       <div className="space-y-5">
         {MILESTONE_GROUPS.map((group) => {
           const milestones = group.milestones.filter((milestone) =>
-            !milestone.appliesTo || milestone.appliesTo.includes(form.operation_type as 'MOD' | 'VEFA'));
+            (!milestone.appliesTo || milestone.appliesTo.includes(form.operation_type as 'MOD' | 'VEFA')) &&
+            (milestone.key !== 'vefa_deed' || form.terrain));
           const note = group.key === 'works' && form.operation_type === 'VEFA'
             ? 'En VEFA, l’acte remplace l’ordre de service manuel pour les calculs contractuels.'
             : undefined;
           return <MilestoneGroup key={group.key} group={group} milestones={milestones}
-            valueFor={valueFor} canEdit={canEdit} onChange={setDate} note={note} />;
+            valueFor={valueFor} canEdit={canEdit} onChange={setDate} note={note} rowExtra={rowExtra} />;
         })}
       </div>
 

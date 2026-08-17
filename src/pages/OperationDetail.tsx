@@ -275,14 +275,16 @@ export default function OperationDetail() {
       </div>
     );
 
-  const planning: [string, unknown][] = [
-    ["Contractuelle", operation.contractual_delivery_date],
-    ["Prévisionnelle", operation.expected_delivery_date],
-    ["Réelle", operation.actual_delivery_date],
-    ["MEG prévisionnelle", operation.management_expected_date],
-    ["MEG réelle", operation.management_actual_date],
-    ["Fin GPA", operation.gpa_end_date],
+  const planning: [string, unknown, boolean][] = [
+    ["Contractuelle", operation.contractual_delivery_date, false],
+    ["Prévisionnelle", operation.expected_delivery_date, false],
+    ["Réelle", operation.actual_delivery_date, false],
+    ["MEG prévisionnelle", operation.management_expected_date, false],
+    ["MEG réelle", operation.management_actual_date, false],
+    ["Fin GPA", operation.gpa_end_date, false],
   ];
+  if (operation.csi_ca_date || operation.so_csi_ca) planning.push(["CSI / CA", operation.csi_ca_date, Boolean(operation.so_csi_ca)]);
+  if (operation.lli_approval_date || operation.so_lli_approval) planning.push(["Agrément LLI", operation.lli_approval_date, Boolean(operation.so_lli_approval)]);
 
   return (
     <div className="mx-auto max-w-[1500px] pb-16">
@@ -441,7 +443,7 @@ export default function OperationDetail() {
           synthétique
         </h2>
         <div className="mt-4 grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-6">
-          {planning.map(([label, value]) => (
+          {planning.map(([label, value, so]) => (
             <div
               key={String(label)}
               className="rounded-xl border border-teal-200 bg-teal-50 p-4 text-slate-900"
@@ -450,6 +452,7 @@ export default function OperationDetail() {
                 {label}
               </p>
               <p className="mt-2 text-sm font-medium">{displayDate(value)}</p>
+              {so && <p className="mt-1 inline-flex items-center gap-1 rounded-full bg-teal-700 px-2 py-0.5 text-[10px] font-semibold text-white">SO</p>}
             </div>
           ))}
         </div>

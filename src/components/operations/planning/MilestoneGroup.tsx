@@ -1,5 +1,11 @@
 import type { MilestoneDefinition, MilestoneGroupDefinition } from '../../../lib/planningMilestones';
-import MilestoneRow from './MilestoneRow';
+import MilestoneRow, { type SoControl } from './MilestoneRow';
+
+export interface MilestoneRowExtra {
+  so?: SoControl;
+  hint?: string;
+  emphasized?: boolean;
+}
 
 interface MilestoneGroupProps {
   group: MilestoneGroupDefinition;
@@ -8,6 +14,7 @@ interface MilestoneGroupProps {
   canEdit: (field: string | undefined, calculated?: boolean) => boolean;
   onChange: (field: string, value: string) => void;
   note?: string;
+  rowExtra?: (milestone: MilestoneDefinition) => MilestoneRowExtra | undefined;
 }
 
 export default function MilestoneGroup({
@@ -17,6 +24,7 @@ export default function MilestoneGroup({
   canEdit,
   onChange,
   note,
+  rowExtra,
 }: MilestoneGroupProps) {
   if (milestones.length === 0) return null;
   return (
@@ -33,7 +41,8 @@ export default function MilestoneGroup({
         expectedEditable={canEdit(milestone.expectedField, milestone.expectedCalculated)}
         actualEditable={canEdit(milestone.actualField)}
         onExpectedChange={milestone.expectedField ? (value) => onChange(milestone.expectedField as string, value) : undefined}
-        onActualChange={milestone.actualField ? (value) => onChange(milestone.actualField as string, value) : undefined} />)}</div>
+        onActualChange={milestone.actualField ? (value) => onChange(milestone.actualField as string, value) : undefined}
+        {...rowExtra?.(milestone)} />)}</div>
     </article>
   );
 }

@@ -9,7 +9,7 @@ import { projectExportRows, selectedExportColumns, type ExportColumn } from './e
 export interface OperationColumn {
   key: string;
   label: string;
-  type?: 'text' | 'date' | 'number' | 'currency' | 'stage';
+  type?: 'text' | 'date' | 'number' | 'currency' | 'stage' | 'boolean';
   group?: string;
   requiredPermission?: PermissionKey;
 }
@@ -25,6 +25,8 @@ export const OPERATION_COLUMNS: OperationColumn[] = [
   { key: 'actual_delivery_date', label: 'Livraison réelle', type: 'date', group: 'Planning' },
   { key: 'management_expected_date', label: 'MEG prévisionnelle', type: 'date', group: 'Planning' },
   { key: 'management_actual_date', label: 'MEG réelle', type: 'date', group: 'Planning' },
+  { key: 'so_csi_ca', label: 'SO CSI/CA', type: 'boolean', group: 'Planning' },
+  { key: 'so_lli_approval', label: 'SO LLI', type: 'boolean', group: 'Planning' },
   { key: 'initial_budget', label: 'Budget initial', type: 'currency', group: 'Budget', requiredPermission: 'operations.edit_budget' },
   { key: 'final_budget', label: 'Budget final', type: 'currency', group: 'Budget', requiredPermission: 'operations.edit_budget' },
   { key: 'objective_year', label: 'Année objectif', type: 'number' },
@@ -37,6 +39,7 @@ export function formatOperationValue(operation: FilterableOperation, column: Ope
   if (column.type === 'date') return new Date(`${String(value)}T12:00:00`).toLocaleDateString('fr-FR');
   if (column.type === 'currency') return Number(value).toLocaleString('fr-FR', { style: 'currency', currency: 'EUR' });
   if (column.type === 'number') return Number(value).toLocaleString('fr-FR');
+  if (column.type === 'boolean') return value === true ? 'SO' : '';
   return String(value);
 }
 
