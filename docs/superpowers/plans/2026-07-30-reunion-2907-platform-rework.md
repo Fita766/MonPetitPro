@@ -11,7 +11,7 @@
 ## Global Constraints
 
 - Do not commit the pre-existing local changes to `package.json` or `package-lock.json`.
-- Do not import Excel operation rows; use the workbook only to seed reference values.
+- Do not import Excel operation rows automatically; use the workbook only to seed reference values. (Exception: the admin-only previewed import tool in Task 16 of the 2026-08-17 addendum may create new operations without ever overwriting existing ones.)
 - Preserve every existing operation, observation, event, document, typology, subsidy, condition, objective, profile, and audit row.
 - Use additive, transaction-safe SQL with count assertions and a migration journal.
 - No e-mail provider is required: administrators create users with a temporary password.
