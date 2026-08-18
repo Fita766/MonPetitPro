@@ -17,7 +17,7 @@ const operation = {
 
 describe('planning alerts', () => {
   it('classifies J-30, J-15 and overdue milestones', () => {
-    const alerts = buildAlerts([operation], '2026-07-30');
+    const alerts = buildAlerts([operation], [], '2026-07-30');
     expect(alerts).toEqual(expect.arrayContaining([
       expect.objectContaining({ milestoneKey: 'approvals_submission', status: 'within30', days: 30 }),
       expect.objectContaining({ milestoneKey: 'permit_submission', status: 'within15', days: 15 }),
@@ -29,8 +29,68 @@ describe('planning alerts', () => {
     const alerts = buildAlerts([{
       ...operation,
       approvals_submission_date: '2026-07-28',
-    }], '2026-07-30');
+    }], [], '2026-07-30');
     expect(alerts.some((alert) => alert.milestoneKey === 'approvals_submission')).toBe(false);
     expect(alerts.some((alert) => alert.milestoneKey === 'cpr')).toBe(false);
+  });
+});
+
+describe('PC périmé (permit_expired)', () => {
+  it('alerte quand l’arrêté a plus de 3 ans sans ordre de service travaux', () => {
+    const alerts = buildAlerts([{ ...operation, permit_order_date: '2022-01-15' }], [], '2026-08-18');
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ milestoneKey: 'permit_expired', status: 'overdue', operationId: 'op-1', operationName: 'Clairoix' }),
+    ]));
+  });
+
+  it('n’alerte pas dans les 3 ans suivant l’arrêté', () => {
+    const alerts = buildAlerts([{ ...operation, permit_order_date: '2024-01-15' }], [], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
+  });
+
+  it('n’alerte pas quand un ordre de service travaux est engagé', () => {
+    const alerts = buildAlerts([
+      { ...operation, permit_order_date: '2022-01-15', works_order_actual_date: '2026-03-10' },
+    ], [], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
+  });
+
+  it('n’alerte pas quand la date d’arrêté est absente', () => {
+    const alerts = buildAlerts([operation], [], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
+  });
+});
+
+describe('butoirs CS dépassés (condition_overdue)', () => {
+  const condition = {
+    id: 'c-1',
+    operation_id: 'op-1',
+    subject: 'Sondage pollution',
+    deadline_date: '2025-09-30',
+    completion_date: null,
+  };
+
+  it('alerte quand le butoir est dépassé sans réalisation', () => {
+    const alerts = buildAlerts([operation], [condition], '2026-08-18');
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        milestoneKey: 'condition_overdue',
+        status: 'overdue',
+        operationId: 'op-1',
+        operationName: 'Clairoix',
+        label: 'Sondage pollution',
+        date: '2025-09-30',
+      }),
+    ]));
+  });
+
+  it('n’alerte pas quand la condition est réalisée', () => {
+    const alerts = buildAlerts([operation], [{ ...condition, completion_date: '2025-08-01' }], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'condition_overdue')).toBe(false);
+  });
+
+  it('n’alerte pas quand le butoir est dans le futur', () => {
+    const alerts = buildAlerts([operation], [{ ...condition, deadline_date: '2027-09-30' }], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'condition_overdue')).toBe(false);
   });
 });

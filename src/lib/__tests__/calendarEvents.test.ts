@@ -42,4 +42,24 @@ describe('buildCalendarEvents', () => {
       expect.objectContaining({ code: 'AN', date: '2025-04-03', actual: true }),
     ]));
   });
+
+  it('inclut les lignes fixes Dépôt PC et Arrêté PC dans la vue programme', () => {
+    const events = buildCalendarEvents([{
+      ...baseOperation,
+      permit_submission_date: '2025-06-10',
+      permit_order_date: '2025-10-12',
+    }], [], 'program');
+    expect(events).toEqual(expect.arrayContaining([
+      expect.objectContaining({ title: 'Dépôt PC', date: '2025-06-10', code: 'AR', actual: true, operationName: 'Clairoix' }),
+      expect.objectContaining({ title: 'Arrêté PC', date: '2025-10-12', code: 'AS', actual: true, operationName: 'Clairoix' }),
+    ]));
+    // les lignes fixes remplacent l’événement « réel » généré par le registre de jalons
+    expect(events.some((event) => event.title === 'Dépôt du permis — réel')).toBe(false);
+    expect(events.some((event) => event.title === 'Arrêté du permis — réel')).toBe(false);
+  });
+
+  it('n’inclut pas les lignes fixes PC quand les dates sont absentes', () => {
+    const events = buildCalendarEvents([baseOperation], [], 'program');
+    expect(events.filter((event) => event.title === 'Dépôt PC' || event.title === 'Arrêté PC')).toEqual([]);
+  });
 });

@@ -33,7 +33,7 @@ import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import ColumnPicker from "../components/operations/ColumnPicker";
 import type { OperationStage } from "../types/domain";
 import { triggerSuccessToast } from "../lib/toastUtils";
-import { buildAlerts, type AlertOperation } from "../lib/alerts";
+import { buildAlerts, type AlertCondition, type AlertOperation } from "../lib/alerts";
 import UpcomingAlerts from "../components/dashboard/UpcomingAlerts";
 import ExportColumnDialog from "../components/exports/ExportColumnDialog";
 import { alertToIcsEvent, buildIcs, downloadIcs } from "../lib/ics";
@@ -94,6 +94,7 @@ export default function Dashboard() {
   const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
   const [operations, setOperations] = useState<DashboardOperation[]>([]);
+  const [conditions, setConditions] = useState<AlertCondition[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [filters, setFilters] = useState<OperationFilters>(EMPTY_FILTERS);
@@ -111,6 +112,10 @@ export default function Dashboard() {
       .order("name");
     if (fetchError) setError(fetchError.message);
     else setOperations((data as DashboardOperation[] | null) ?? []);
+    const { data: conditionData, error: conditionError } = await supabase
+      .from("suspensive_conditions")
+      .select("*");
+    if (!conditionError) setConditions((conditionData as AlertCondition[] | null) ?? []);
     setLoading(false);
   };
 
@@ -123,6 +128,12 @@ export default function Dashboard() {
         if (fetchError) setError(fetchError.message);
         else setOperations((data as DashboardOperation[] | null) ?? []);
         setLoading(false);
+      });
+    void supabase
+      .from("suspensive_conditions")
+      .select("*")
+      .then(({ data: conditionData, error: conditionError }) => {
+        if (!conditionError) setConditions((conditionData as AlertCondition[] | null) ?? []);
       });
   }, []);
 
@@ -165,8 +176,8 @@ export default function Dashboard() {
   const today = new Date();
   const todayIso = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
   const alerts = useMemo(
-    () => buildAlerts(operations as unknown as AlertOperation[], todayIso),
-    [operations, todayIso],
+    () => buildAlerts(operations as unknown as AlertOperation[], conditions, todayIso),
+    [operations, conditions, todayIso],
   );
   const exportAlertsToOutlook = (items: typeof alerts, filename: string) => {
     if (items.length === 0) return;

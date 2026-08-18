@@ -77,6 +77,38 @@ const VIEW_GROUPS: Record<'program' | 'works' | 'key-dates', string[]> = {
   'key-dates': MILESTONE_GROUPS.map((group) => group.key),
 };
 
+// jalons « permis » représentés par des lignes fixes dédiées dans la vue programme
+const PROGRAM_FIXED_PERMIT_KEYS = new Set(['permit_submission', 'permit_order']);
+
+function fixedPermitEvents(operation: CalendarOperation, view: 'program'): BusinessCalendarEvent[] {
+  const events: BusinessCalendarEvent[] = [];
+  if (typeof operation.permit_submission_date === 'string' && operation.permit_submission_date) {
+    events.push({
+      id: `program-permit_submission-fixed-${operation.id}`,
+      date: operation.permit_submission_date,
+      title: 'Dépôt PC',
+      code: 'AR',
+      kind: view,
+      actual: true,
+      milestoneType: 'permit_submission',
+      ...metadata(operation),
+    });
+  }
+  if (typeof operation.permit_order_date === 'string' && operation.permit_order_date) {
+    events.push({
+      id: `program-permit_order-fixed-${operation.id}`,
+      date: operation.permit_order_date,
+      title: 'Arrêté PC',
+      code: 'AS',
+      kind: view,
+      actual: true,
+      milestoneType: 'permit_order',
+      ...metadata(operation),
+    });
+  }
+  return events;
+}
+
 export function buildCalendarEvents(
   operations: CalendarOperation[],
   conditions: CalendarCondition[],
@@ -146,7 +178,7 @@ export function buildCalendarEvents(
     }
 
     const groups = MILESTONE_GROUPS.filter((group) => VIEW_GROUPS[view].includes(group.key));
-    return groups.flatMap((group) => group.milestones.flatMap((milestone) => {
+    const milestoneEvents = groups.flatMap((group) => group.milestones.flatMap((milestone) => {
       if (milestone.appliesTo && !milestone.appliesTo.includes(operation.operation_type === 'VEFA' ? 'VEFA' : 'MOD')) return [];
       const codes = milestoneCodes(milestone.code);
       const events: BusinessCalendarEvent[] = [];
@@ -162,7 +194,7 @@ export function buildCalendarEvents(
         milestoneType: milestone.key,
         ...metadata(operation),
       });
-      if (typeof actual === 'string' && actual) events.push({
+      if (typeof actual === 'string' && actual && !(view === 'program' && PROGRAM_FIXED_PERMIT_KEYS.has(milestone.key))) events.push({
         id: `${view}-${milestone.key}-actual-${operation.id}`,
         date: actual,
         title: `${milestone.label} — réel`,
@@ -174,5 +206,7 @@ export function buildCalendarEvents(
       });
       return events;
     }));
+    const fixedEvents = view === 'program' ? fixedPermitEvents(operation, 'program') : [];
+    return [...fixedEvents, ...milestoneEvents];
   }).sort((left, right) => left.date.localeCompare(right.date));
 }

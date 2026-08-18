@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
+  AlertTriangle,
   ArrowLeft,
   BadgeEuro,
   Building2,
@@ -39,6 +40,7 @@ import ResolutionActions from "../components/observations/ResolutionActions";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import DocumentsSection from "../components/operations/DocumentsSection";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
+import { isPermitLapsed } from "../lib/alerts";
 
 type DetailOperation = Partial<Operation> & Pick<Operation, "id" | "name">;
 type DetailObservation = ObservationRow & { status: string; is_dg: boolean };
@@ -286,6 +288,8 @@ export default function OperationDetail() {
   if (operation.csi_ca_date || operation.so_csi_ca) planning.push(["CSI / CA", operation.csi_ca_date, Boolean(operation.so_csi_ca)]);
   if (operation.lli_approval_date || operation.so_lli_approval) planning.push(["Agrément LLI", operation.lli_approval_date, Boolean(operation.so_lli_approval)]);
 
+  const todayIso = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
+  const permitLapsed = isPermitLapsed(operation.permit_order_date, operation.works_order_actual_date, todayIso);
   return (
     <div className="mx-auto max-w-[1500px] pb-16">
       <button
@@ -456,6 +460,16 @@ export default function OperationDetail() {
             </div>
           ))}
         </div>
+        {permitLapsed && (
+          <div role="alert" className="mt-4 flex items-start gap-2 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-900">
+            <AlertTriangle size={17} className="mt-0.5 shrink-0 text-red-700" />
+            <span>
+              PC périmé — permis de construire délivré le{' '}
+              {displayDate(operation.permit_order_date)}, non suivi d’un{' '}
+              ordre de service travaux.
+            </span>
+          </div>
+        )}
       </section>
 
       {(operation.is_objective ||
