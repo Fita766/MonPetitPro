@@ -13,6 +13,7 @@ interface ReferenceSelectProps {
   options: ReferenceSelectOption[];
   disabled?: boolean;
   placeholder?: string;
+  fallbackLabel?: string;
   onSelect: (option: ReferenceSelectOption) => void;
 }
 
@@ -21,9 +22,11 @@ export default function ReferenceSelect({
   options,
   disabled = false,
   placeholder = 'Rechercher et sélectionner…',
+  fallbackLabel = '',
   onSelect,
 }: ReferenceSelectProps) {
   const selected = options.find((option) => option.id === valueId);
+  const displayValue = selected?.label ?? fallbackLabel;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
@@ -48,7 +51,7 @@ export default function ReferenceSelect({
       <div className="relative">
         <Search aria-hidden size={16} className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
         <input role="combobox" aria-expanded={open} aria-autocomplete="list"
-          disabled={disabled} value={open ? query : selected?.label ?? ''}
+          disabled={disabled} value={open ? query : displayValue}
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setQuery(''); setActiveIndex(0); }}
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}

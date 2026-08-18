@@ -122,3 +122,47 @@ describe('drapeaux SO et terrain', () => {
     expect(form.terrain).toBe(true);
   });
 });
+
+describe('comptes COP/CTX liés', () => {
+  it('sérialise cop_user_id et ctx_user_id avec les noms historiques', () => {
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'MOD',
+      operations_manager: 'MC',
+      cop_user_id: 'cop-1',
+      project_manager: 'EB',
+      ctx_user_id: 'ctx-1',
+    });
+    expect(payload).toMatchObject({
+      operations_manager: 'MC',
+      cop_user_id: 'cop-1',
+      project_manager: 'EB',
+      ctx_user_id: 'ctx-1',
+    });
+  });
+
+  it('conserve un nom historique même sans compte lié', () => {
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'MOD',
+      project_manager: 'CTX',
+      operations_manager: 'COP',
+    });
+    expect(payload).toMatchObject({ project_manager: 'CTX', operations_manager: 'COP' });
+    expect(payload.cop_user_id).toBeNull();
+    expect(payload.ctx_user_id).toBeNull();
+  });
+
+  it('relit le compte lié et son nom historique depuis une ligne de base', () => {
+    const form = fromOperationRow({
+      operations_manager: 'MC',
+      cop_user_id: 'cop-1',
+      project_manager: 'EB',
+      ctx_user_id: 'ctx-1',
+    });
+    expect(form.operations_manager).toBe('MC');
+    expect(form.cop_user_id).toBe('cop-1');
+    expect(form.project_manager).toBe('EB');
+    expect(form.ctx_user_id).toBe('ctx-1');
+  });
+});

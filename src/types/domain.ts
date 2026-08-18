@@ -50,7 +50,7 @@ export type PermissionKey =
   | 'observations.set_status' | 'observations.set_dg'
   | 'documents.view' | 'documents.upload' | 'documents.review' | 'documents.delete'
   | 'references.view' | 'references.manage'
-  | 'calendar.view' | 'calendar.manage' | 'calendar.export'
+  | 'calendar.view' | 'calendar.view_all' | 'calendar.manage' | 'calendar.export'
   | 'objectives.view' | 'objectives.manage' | 'objectives.delete_initial' | 'objectives.export'
   | 'statistics.view' | 'statistics.export'
   | 'admin.users.view' | 'admin.users.manage' | 'admin.users.invite' | 'admin.users.suspend'
@@ -84,6 +84,12 @@ export interface Profile {
   custom_role?: CustomRole | null;
   created_at?: string;
   updated_at?: string;
+}
+
+export interface UserReferenceOption {
+  id: string;
+  displayName: string | null;
+  initials: string | null;
 }
 
 export interface Operation {

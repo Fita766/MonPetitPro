@@ -64,6 +64,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
   ]),
   group('calendar', 'Calendriers', [
     ['calendar.view', 'Consulter les calendriers', 'Voir les jalons et agendas.'],
+    ['calendar.view_all', 'Voir tous les calendriers', 'Voir les jalons de toutes les opérations, sans restriction d’équipe.'],
     ['calendar.manage', 'Gérer l’agenda libre', 'Créer, modifier et supprimer les événements libres.'],
     ['calendar.export', 'Exporter les calendriers', 'Créer les exports PDF et Excel.'],
   ]),

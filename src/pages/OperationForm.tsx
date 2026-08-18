@@ -14,7 +14,7 @@ import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
 import { hasObjectivesMissingYear } from '../lib/objectiveRecords';
 import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
-import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSignificantWork, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
+import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSignificantWork, OperationSubsidy, ReferenceValue, SuspensiveCondition, UserReferenceOption } from '../types/domain';
 import OperationTabs, { type OperationTab } from '../components/operations/OperationTabs';
 import GeneralSection from '../components/operations/GeneralSection';
 import ProgramSection from '../components/operations/ProgramSection';
@@ -57,6 +57,7 @@ export default function OperationForm() {
   });
   const [references, setReferences] = useState<ReferenceValue[]>([]);
   const [communes, setCommunes] = useState<CommuneReference[]>([]);
+  const [activeProfiles, setActiveProfiles] = useState<UserReferenceOption[]>([]);
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -81,8 +82,11 @@ export default function OperationForm() {
     synthesis: permissionGranted(permissions, 'operations.edit_synthesis'),
   }[activeTab] ?? false);
   const editable = id ? tabPermission : permissionGranted(permissions, 'operations.create');
-  const canEditField = useCallback((field: keyof OperationFormData) =>
-    canEditOperationField(permissions, field, !id), [id, permissions]);
+  const canEditField = useCallback((field: keyof OperationFormData) => {
+    if (field === 'cop_user_id') return canEditOperationField(permissions, 'operations_manager', !id);
+    if (field === 'ctx_user_id') return canEditOperationField(permissions, 'project_manager', !id);
+    return canEditOperationField(permissions, field, !id);
+  }, [id, permissions]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -92,6 +96,7 @@ export default function OperationForm() {
     const communeRequest = supabase.from('communes')
       .select('id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active')
       .order('name');
+    const activeProfilesRequest = supabase.rpc('list_active_profiles');
     const requests = id ? [
       supabase.from('operations').select('*').eq('id', id).single(),
       supabase.from('operation_program_sections').select('*').eq('operation_id', id).order('sort_order'),
@@ -103,13 +108,18 @@ export default function OperationForm() {
       supabase.from('suspensive_conditions').select('*').eq('operation_id', id).order('deadline_date'),
     ] : [];
 
-    const [referenceResult, communeResult, results] = await Promise.all([
+    const [referenceResult, communeResult, profileResult, results] = await Promise.all([
       referenceRequest,
       communeRequest,
+      activeProfilesRequest,
       Promise.all(requests),
     ]);
     if (referenceResult.data) setReferences(referenceResult.data as ReferenceValue[]);
     if (communeResult.data) setCommunes(communeResult.data as CommuneReference[]);
+    if (profileResult.data) {
+      setActiveProfiles((profileResult.data as Array<{ id: string; display_name: string | null; initials: string | null }>)
+        .map((row) => ({ id: row.id, displayName: row.display_name, initials: row.initials })));
+    }
     const referenceError = referenceResult.error ?? communeResult.error;
     if (referenceError) setError(referenceError.message);
 
@@ -391,9 +401,9 @@ export default function OperationForm() {
       case 'synthesis': return <SynthesisSection {...common}
         detailsEditable={!id || permissionGranted(permissions, 'operations.edit_synthesis')}
         significantWorks={significantWorks} onSignificantWorksChange={setSignificantWorks} />;
-      default: return <GeneralSection {...common} references={references} communes={communes} onCommuneSelect={chooseCommune} />;
+      default: return <GeneralSection {...common} references={references} communes={communes} activeProfiles={activeProfiles} onCommuneSelect={chooseCommune} />;
     }
-  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, significantWorks, subsidies]);
+  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, significantWorks, subsidies, activeProfiles]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

@@ -1,5 +1,5 @@
 import { STAGE_CONFIG } from '../../lib/stage';
-import type { CommuneReference, OperationStage, ReferenceKind, ReferenceValue } from '../../types/domain';
+import type { CommuneReference, OperationStage, ReferenceKind, ReferenceValue, UserReferenceOption } from '../../types/domain';
 import { FieldLabel, SectionHeading, SelectInput, TextInput } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
 import ReferenceSelect, { type ReferenceSelectOption } from './ReferenceSelect';
@@ -7,6 +7,7 @@ import ReferenceSelect, { type ReferenceSelectOption } from './ReferenceSelect';
 interface GeneralSectionProps extends OperationSectionProps {
   references: ReferenceValue[];
   communes: CommuneReference[];
+  activeProfiles: UserReferenceOption[];
   onCommuneSelect: (commune: CommuneReference) => void;
 }
 
@@ -16,6 +17,7 @@ export default function GeneralSection({
   canEditField = () => true,
   references,
   communes,
+  activeProfiles,
   onCommuneSelect,
 }: GeneralSectionProps) {
   const referenceOptions = (kind: ReferenceKind): ReferenceSelectOption[] =>
@@ -30,6 +32,28 @@ export default function GeneralSection({
     secondary: `${commune.department_code} — ${commune.department_name}${commune.housing_zone ? ` · zone ${commune.housing_zone}` : ''}`,
     isActive: commune.is_active,
   }));
+
+  const userOptions: ReferenceSelectOption[] = activeProfiles.map((profile) => ({
+    id: profile.id,
+    label: profile.displayName ?? '',
+    secondary: profile.initials ?? undefined,
+    isActive: true,
+  }));
+
+  const teamUserField = (
+    label: string,
+    nameField: 'project_manager' | 'operations_manager',
+    userIdField: 'ctx_user_id' | 'cop_user_id',
+  ) => <div>
+    <FieldLabel>{label}</FieldLabel>
+    <ReferenceSelect disabled={!canEditField(nameField)} valueId={form[userIdField] ?? ''}
+      fallbackLabel={form[nameField]}
+      options={userOptions} placeholder="Rechercher une personne…"
+      onSelect={(option) => {
+        onChange(nameField, option.label);
+        onChange(userIdField, option.id);
+      }} />
+  </div>;
 
   const referenceField = (
     label: string,
@@ -87,8 +111,8 @@ export default function GeneralSection({
           </SelectInput>
         </div>
         {referenceField('Nature du programme', 'program_nature', 'program_nature')}
-        {referenceField('CTX / conducteur de travaux *', 'ctx', 'project_manager')}
-        {referenceField('COP / conducteur d’opération', 'cop', 'operations_manager')}
+        {teamUserField('CTX / conducteur de travaux *', 'project_manager', 'ctx_user_id')}
+        {teamUserField('COP / conducteur d’opération', 'operations_manager', 'cop_user_id')}
         {referenceField('Assistante', 'assistant', 'assistant_name')}
         {referenceField('Assistante GPA', 'gpa_assistant', 'gpa_assistant_name')}
         {referenceField('Gestionnaire', 'manager', 'manager_name')}

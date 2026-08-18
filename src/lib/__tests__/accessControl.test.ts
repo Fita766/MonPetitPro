@@ -19,6 +19,7 @@ describe('catalogue des permissions', () => {
     expect(keys).toContain('observations.validate');
     expect(keys).toContain('references.view');
     expect(keys).toContain('references.manage');
+    expect(keys).toContain('calendar.view_all');
     expect(keys).toContain('admin.roles.manage');
     expect(keys).not.toContain('admin.demo_transfer');
   });

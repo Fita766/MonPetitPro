@@ -96,6 +96,14 @@ on conflict (key) do update set
   description = excluded.description,
   sort_order = excluded.sort_order;
 
+insert into public.permission_definitions(key, group_key, label, description, sort_order) values
+  ('calendar.view_all','calendar','Voir tous les calendriers','Voir les jalons et agendas de toutes les opérations, sans restriction d’équipe',405)
+on conflict (key) do update set
+  group_key = excluded.group_key,
+  label = excluded.label,
+  description = excluded.description,
+  sort_order = excluded.sort_order;
+
 insert into public.custom_role_permissions (role_id, permission_key)
 select role.id, permission.key
 from public.custom_roles role
@@ -815,6 +823,7 @@ from (values
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_status'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.set_dg'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'objectives.delete_initial'),
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'calendar.view_all'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.view_all'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.edit_assigned'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.assign'),
@@ -822,6 +831,7 @@ from (values
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_completion'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_status'),
   ('10000000-0000-0000-0000-000000000002'::uuid, 'observations.set_dg'),
+  ('10000000-0000-0000-0000-000000000002'::uuid, 'calendar.view_all'),
   ('10000000-0000-0000-0000-000000000003'::uuid, 'observations.view_assigned'),
   ('10000000-0000-0000-0000-000000000003'::uuid, 'observations.edit_assigned'),
   ('10000000-0000-0000-0000-000000000004'::uuid, 'observations.view_all')
@@ -1084,6 +1094,30 @@ using (
   or public.has_permission('admin.audit.view')
   or public.has_any_permission(array['observations.assign','observations.reassign'])
 );
+
+-- A6a : sélecteurs COP/CTX. La lecture directe de profiles est restreinte par RLS
+-- aux administrateurs ; ce point d'entrée ne renvoie que les noms et initiales des
+-- comptes actifs, sans e-mail, aux personnes habilitées à renseigner l'équipe.
+create or replace function public.list_active_profiles()
+returns table(
+  id uuid,
+  display_name text,
+  initials text
+)
+language sql stable security definer set search_path = '' as $$
+  select p.id, p.display_name, p.initials
+  from public.profiles p
+  where p.status = 'active'
+    and public.has_any_permission(array[
+      'operations.create',
+      'operations.edit_team',
+      'operations.field.project_manager.edit',
+      'operations.field.operations_manager.edit'
+    ])
+  order by lower(coalesce(p.display_name, '')) asc, p.display_name asc nulls last
+$$;
+revoke all on function public.list_active_profiles() from public, anon;
+grant execute on function public.list_active_profiles() to authenticated;
 
 drop policy if exists audit_admin_read on public.audit_log;
 drop policy if exists audit_permission_read on public.audit_log;

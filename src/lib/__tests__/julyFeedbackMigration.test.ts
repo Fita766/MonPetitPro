@@ -161,4 +161,20 @@ describe("migration des retours du 29 juillet", () => {
     expect(occurrences("'h2_actual_date','so_csi_ca','so_lli_approval'")).toBe(2);
     expect(occurrences("'category','terrain'")).toBe(2);
   });
+  it("déclare calendar.view_all pour admin et responsable uniquement", () => {
+    expect(sql).toContain("('calendar.view_all','calendar'");
+    expect(sql).toContain("'10000000-0000-0000-0000-000000000001'::uuid, 'calendar.view_all'");
+    expect(sql).toContain("'10000000-0000-0000-0000-000000000002'::uuid, 'calendar.view_all'");
+    expect(sql).not.toMatch(/'10000000-0000-0000-0000-000000000003'::uuid, 'calendar.view_all'/);
+    expect(sql).not.toMatch(/'10000000-0000-0000-0000-000000000004'::uuid, 'calendar.view_all'/);
+  });
+
+  it("liste les profils actifs sans e-mail pour les sélecteurs COP/CTX", () => {
+    expect(sql).toContain("function public.list_active_profiles");
+    expect(sql).toMatch(/select p\.id, p\.display_name, p\.initials\s+from public\.profiles p/i);
+    expect(sql).toContain("operations.edit_team");
+    expect(sql).toContain("operations.field.project_manager.edit");
+    expect(sql).toContain("operations.field.operations_manager.edit");
+    expect(sql).toContain("grant execute on function public.list_active_profiles() to authenticated");
+  });
 });
