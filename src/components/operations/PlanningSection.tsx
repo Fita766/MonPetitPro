@@ -52,6 +52,7 @@ export default function PlanningSection({
     mode: form.operation_type as 'MOD' | 'VEFA',
     terrain: Boolean(form.terrain),
     vefaDeedOrLandPurchaseDate: form.vefa_deed_or_land_purchase_date || null,
+    vefaDeedExpectedDate: form.vefa_deed_expected_date || null,
   });
   const rowExtra = (milestone: MilestoneDefinition): MilestoneRowExtra | undefined => {
     if (milestone.key === 'csi_ca') {

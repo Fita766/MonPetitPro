@@ -143,13 +143,14 @@ export interface MilestoneVisibilityInput {
   mode: RealizationMode;
   terrain: boolean;
   vefaDeedOrLandPurchaseDate?: string | null;
+  vefaDeedExpectedDate?: string | null;
 }
 
 /**
  * Décide si un jalon est affiché dans le planning et s'il doit être mis en
  * avant. Le mode est filtré (MOD/VEFA), puis le jalon « Acte VEFA / acquisition
  * du terrain » n'est visible que si l'opération est « avec terrain » ou si une
- * date est déjà renseignée (elle pilote le calcul de livraison) ; il n'est mis
+ * date du jalon (prévisionnelle ou réelle) est déjà renseignée ; il n'est mis
  * en avant que lorsque la case « Terrain » est cochée.
  */
 export function milestoneVisibility(
@@ -160,7 +161,9 @@ export function milestoneVisibility(
     return { shown: false, emphasized: false };
   }
   if (milestone.key === 'vefa_deed') {
-    const shown = input.terrain || Boolean(input.vefaDeedOrLandPurchaseDate);
+    const shown = input.terrain
+      || Boolean(input.vefaDeedOrLandPurchaseDate)
+      || Boolean(input.vefaDeedExpectedDate);
     return { shown, emphasized: input.terrain };
   }
   return { shown: true, emphasized: false };

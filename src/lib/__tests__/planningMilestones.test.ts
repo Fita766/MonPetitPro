@@ -49,6 +49,12 @@ describe('planning milestones', () => {
       .toEqual({ shown: true, emphasized: true });
     expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: '2026-04-20' }))
       .toEqual({ shown: true, emphasized: false });
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: false, vefaDeedExpectedDate: '2026-09-15' }))
+      .toEqual({ shown: true, emphasized: false });
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: true, vefaDeedExpectedDate: '2026-09-15' }))
+      .toEqual({ shown: true, emphasized: true });
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: null, vefaDeedExpectedDate: null }))
+      .toEqual({ shown: false, emphasized: false });
     expect(milestoneVisibility(csi, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: null }))
       .toEqual({ shown: true, emphasized: false });
     expect(milestoneVisibility(worksOrder, { mode: 'VEFA', terrain: true }))

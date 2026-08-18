@@ -12,7 +12,7 @@ drop trigger if exists enforce_observation_field_permissions on public.observati
 
 create table if not exists public.reference_values (
   id uuid primary key default gen_random_uuid(),
-  kind text not null check (kind in (
+  kind text not null constraint reference_values_kind_check check (kind in (
     'ctx', 'cop', 'assistant', 'gpa_assistant', 'manager',
     'animation_provider', 'promoter', 'certification',
     'thermal_regulation', 'program_nature', 'category'
@@ -38,6 +38,10 @@ do $$ begin
   alter table public.reference_values drop constraint reference_values_kind_check;
 exception when undefined_object then null;
 end $$;
+-- La contrainte historique non nommée du create table pouvait être générée
+-- automatiquement sous un autre nom (<table>_check) : on la retire aussi pour
+-- qu'aucun check étroit survivant ne bloque l'insertion des catégories.
+alter table public.reference_values drop constraint if exists reference_values_check;
 alter table public.reference_values
   add constraint reference_values_kind_check
   check (kind in (
