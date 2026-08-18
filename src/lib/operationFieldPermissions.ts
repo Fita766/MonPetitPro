@@ -23,7 +23,7 @@ const PROGRAM_FIELDS = new Set<OperationField>([
   'psla_units', 'student_units', 'specific_units', 'anru_units', 'acv_units',
   'commercial_units', 'other_units', 'thermal_regulation', 'certification',
   'clesence_bbca', 'clesence_reversible', 'clesence_land_sobriety',
-  'clesence_green_space', 'zoning', 'category',
+  'clesence_green_space', 'zoning', 'category', 'terrain',
 ]);
 const BUDGET_FIELDS = new Set<OperationField>(['initial_budget', 'final_budget']);
 const OBJECTIVE_FIELDS = new Set<OperationField>(['is_objective', 'objective_year']);
@@ -40,7 +40,7 @@ const PLANNING_FIELDS = new Set<OperationField>([
   'expected_delivery_date', 'risk_assessment', 'actual_delivery_date',
   'delivery_reservations_count', 'justified_delay_days', 'penalty_amount',
   'reservations_clearance_date', 'daact_date', 'dpe', 'management_actual_date',
-  'gpa_count', 'h2_actual_date',
+  'gpa_count', 'h2_actual_date', 'so_csi_ca', 'so_lli_approval',
 ]);
 
 const LABELS: Partial<Record<OperationField, string>> = {

@@ -1,4 +1,4 @@
-import { addMonths, format, parseISO } from 'date-fns';
+import { addMonths, format } from 'date-fns';
 
 export type RealizationMode = 'MOD' | 'VEFA';
 
@@ -134,7 +134,42 @@ export function visibleMilestones(mode: RealizationMode): MilestoneDefinition[] 
     group.milestones.filter((milestone) => !milestone.appliesTo || milestone.appliesTo.includes(mode)));
 }
 
+export interface MilestoneVisibility {
+  shown: boolean;
+  emphasized: boolean;
+}
+
+export interface MilestoneVisibilityInput {
+  mode: RealizationMode;
+  terrain: boolean;
+  vefaDeedOrLandPurchaseDate?: string | null;
+}
+
+/**
+ * Décide si un jalon est affiché dans le planning et s'il doit être mis en
+ * avant. Le mode est filtré (MOD/VEFA), puis le jalon « Acte VEFA / acquisition
+ * du terrain » n'est visible que si l'opération est « avec terrain » ou si une
+ * date est déjà renseignée (elle pilote le calcul de livraison) ; il n'est mis
+ * en avant que lorsque la case « Terrain » est cochée.
+ */
+export function milestoneVisibility(
+  milestone: MilestoneDefinition,
+  input: MilestoneVisibilityInput,
+): MilestoneVisibility {
+  if (milestone.appliesTo && !milestone.appliesTo.includes(input.mode)) {
+    return { shown: false, emphasized: false };
+  }
+  if (milestone.key === 'vefa_deed') {
+    const shown = input.terrain || Boolean(input.vefaDeedOrLandPurchaseDate);
+    return { shown, emphasized: input.terrain };
+  }
+  return { shown: true, emphasized: false };
+}
+
 export function proposedPermitOrderDate(submission: string | null): string | null {
-  if (!submission || !/^\d{4}-\d{2}-\d{2}$/.test(submission)) return null;
-  return format(addMonths(parseISO(submission), 4), 'yyyy-MM-dd');
+  if (!submission) return null;
+  const timestamp = parseIsoDate(submission);
+  if (timestamp === null) return null;
+  const [year, month, day] = submission.split('-').map(Number);
+  return format(addMonths(new Date(year, month - 1, day), 4), 'yyyy-MM-dd');
 }

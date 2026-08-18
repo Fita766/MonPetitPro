@@ -1,5 +1,5 @@
 import { calculateOperationSchedule } from '../../lib/operationCalculations';
-import { MILESTONE_GROUPS, proposedPermitOrderDate, type MilestoneDefinition } from '../../lib/planningMilestones';
+import { MILESTONE_GROUPS, milestoneVisibility, proposedPermitOrderDate, type MilestoneDefinition } from '../../lib/planningMilestones';
 import type { OperationFormData } from '../../lib/operationPayload';
 import { FieldLabel, SectionHeading, TextInput } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
@@ -48,6 +48,11 @@ export default function PlanningSection({
   const setDate = (field: string, value: string) => {
     if (field in form) onChange(field as keyof OperationFormData, value);
   };
+  const visibilityFor = (milestone: MilestoneDefinition) => milestoneVisibility(milestone, {
+    mode: form.operation_type as 'MOD' | 'VEFA',
+    terrain: Boolean(form.terrain),
+    vefaDeedOrLandPurchaseDate: form.vefa_deed_or_land_purchase_date || null,
+  });
   const rowExtra = (milestone: MilestoneDefinition): MilestoneRowExtra | undefined => {
     if (milestone.key === 'csi_ca') {
       return { so: { checked: Boolean(form.so_csi_ca), editable: canEditField('so_csi_ca'), onChange: (checked) => onChange('so_csi_ca', checked) } };
@@ -56,12 +61,13 @@ export default function PlanningSection({
       return { so: { checked: Boolean(form.so_lli_approval), editable: canEditField('so_lli_approval'), onChange: (checked) => onChange('so_lli_approval', checked) } };
     }
     if (milestone.key === 'vefa_deed') {
-      return { emphasized: Boolean(form.terrain) };
+      return { emphasized: visibilityFor(milestone).emphasized };
     }
     if (milestone.key === 'permit_order') {
       const proposed = proposedPermitOrderDate(form.permit_submission_date);
       if (!proposed || form.permit_order_date) return undefined;
-      return { hint: `Proposition : ${proposed} (dépôt + 4 mois)` };
+      const label = new Date(`${proposed}T12:00:00`).toLocaleDateString('fr-FR');
+      return { hint: `Proposition : ${label} (dépôt + 4 mois)` };
     }
     return undefined;
   };
@@ -94,9 +100,7 @@ export default function PlanningSection({
 
       <div className="space-y-5">
         {MILESTONE_GROUPS.map((group) => {
-          const milestones = group.milestones.filter((milestone) =>
-            (!milestone.appliesTo || milestone.appliesTo.includes(form.operation_type as 'MOD' | 'VEFA')) &&
-            (milestone.key !== 'vefa_deed' || form.terrain));
+          const milestones = group.milestones.filter((milestone) => visibilityFor(milestone).shown);
           const note = group.key === 'works' && form.operation_type === 'VEFA'
             ? 'En VEFA, l’acte remplace l’ordre de service manuel pour les calculs contractuels.'
             : undefined;

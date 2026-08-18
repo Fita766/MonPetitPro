@@ -154,4 +154,11 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("objectives.delete_initial");
     expect(sql).toContain("function public.protect_initial_objective_deletion");
   });
+
+  it("déclare les clés SO et Terrain dans les deux CTE des permissions de champ", () => {
+    const occurrences = (needle: string) => sql.split(needle).length - 1;
+    // CTE permission_definitions + CTE de dotation des rôles : planning puis programme.
+    expect(occurrences("'h2_actual_date','so_csi_ca','so_lli_approval'")).toBe(2);
+    expect(occurrences("'category','terrain'")).toBe(2);
+  });
 });

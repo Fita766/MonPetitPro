@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   MILESTONE_GROUPS,
   calculateDateVariance,
+  milestoneVisibility,
   proposedPermitOrderDate,
   visibleMilestones,
 } from '../planningMilestones';
@@ -32,5 +33,25 @@ describe('planning milestones', () => {
     expect(proposedPermitOrderDate('2025-11-30')).toBe('2026-03-30');
     expect(proposedPermitOrderDate(null)).toBeNull();
     expect(proposedPermitOrderDate('2026-04-20')).toBe('2026-08-20');
+    expect(proposedPermitOrderDate('2026-02-31')).toBeNull();
+    expect(proposedPermitOrderDate('pas une date')).toBeNull();
+  });
+
+  it('affiche l’acte VEFA / acquisition terrain seulement avec terrain ou date renseignée', () => {
+    const byKey = (key: string) => MILESTONE_GROUPS.flatMap((group) => group.milestones).find((milestone) => milestone.key === key)!;
+    const vefaDeed = byKey('vefa_deed');
+    const csi = byKey('csi_ca');
+    const worksOrder = byKey('works_order');
+
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: null }))
+      .toEqual({ shown: false, emphasized: false });
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: true }))
+      .toEqual({ shown: true, emphasized: true });
+    expect(milestoneVisibility(vefaDeed, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: '2026-04-20' }))
+      .toEqual({ shown: true, emphasized: false });
+    expect(milestoneVisibility(csi, { mode: 'MOD', terrain: false, vefaDeedOrLandPurchaseDate: null }))
+      .toEqual({ shown: true, emphasized: false });
+    expect(milestoneVisibility(worksOrder, { mode: 'VEFA', terrain: true }))
+      .toEqual({ shown: false, emphasized: false });
   });
 });

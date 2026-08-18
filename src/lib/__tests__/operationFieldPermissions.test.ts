@@ -35,4 +35,12 @@ describe('operation field permissions', () => {
     expect(canEditOperationField(['operations.create'], 'name', true)).toBe(true);
     expect(canEditOperationField(['operations.create'], 'name', false)).toBe(false);
   });
+
+  it('rattache les drapeaux SO et terrain aux bons groupes de champs', () => {
+    const definitionFor = (field: string) => OPERATION_FIELD_PERMISSION_DEFINITIONS.find((definition) => definition.field === field)!;
+
+    expect(definitionFor('so_csi_ca').groupKey).toBe('operation_fields_planning');
+    expect(definitionFor('so_lli_approval').groupKey).toBe('operation_fields_planning');
+    expect(definitionFor('terrain').groupKey).toBe('operation_fields_program');
+  });
 });
