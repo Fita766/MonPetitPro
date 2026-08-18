@@ -49,6 +49,11 @@ const REFERENCE_TABS: Array<{
     label: "Natures de programme",
     description: "Neuf, réhabilitation, mixte et catégories métier",
   },
+  {
+    kind: "category",
+    label: "Catégories",
+    description: "Catégories métier des opérations",
+  },
 ];
 
 type Tab = ReferenceKind | "communes";

@@ -13,6 +13,11 @@ describe("administration des référentiels", () => {
     expect(page).toContain("program_nature");
   });
 
+  it("propose l'onglet des catégories administrable", () => {
+    expect(page).toContain('kind: "category"');
+    expect(page).toContain("Catégories");
+  });
+
   it("permet la création et l'activation sans suppression destructive", () => {
     expect(page).toContain(".insert(");
     expect(page).toContain("is_active");

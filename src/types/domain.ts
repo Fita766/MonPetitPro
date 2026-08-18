@@ -14,7 +14,8 @@ export type ReferenceKind =
   | 'promoter'
   | 'certification'
   | 'thermal_regulation'
-  | 'program_nature';
+  | 'program_nature'
+  | 'category';
 
 export interface ReferenceValue {
   id: string;

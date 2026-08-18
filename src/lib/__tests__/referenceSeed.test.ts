@@ -23,4 +23,11 @@ describe('seed des référentiels du 29 juillet', () => {
     expect(seed).toContain("on conflict (insee_code) do update");
     expect(seed).toContain("référentiel communes incomplet");
   });
+
+  it('amorce le référentiel Catégories depuis les opérations sans les importer', () => {
+    expect(seed).toMatch(/insert into public\.reference_values[\s\S]*select[\s\S]*btrim\(operation\.category\)/i);
+    expect(seed).toContain("nullif(btrim(operation.category), '') is not null");
+    expect(seed).toContain("on conflict (kind, normalized_label) do nothing");
+    expect(seed).not.toContain("insert into public.operations");
+  });
 });

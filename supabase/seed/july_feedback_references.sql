@@ -235,6 +235,18 @@ set label = excluded.label,
     is_active = true,
     sort_order = excluded.sort_order;
 
+-- Item #12 (17/08) : amorçage du référentiel « Catégories » depuis les valeurs
+-- distinctes déjà saisies sur les opérations. Les doublons normalisés sont inertes.
+insert into public.reference_values (kind, label, is_active, sort_order)
+select
+  'category',
+  btrim(operation.category),
+  true,
+  row_number() over (order by lower(btrim(operation.category)))
+from public.operations operation
+where nullif(btrim(operation.category), '') is not null
+on conflict (kind, normalized_label) do nothing;
+
 insert into public.communes (
   name, insee_code, postal_code, department_code,
   department_name, region_name, housing_zone

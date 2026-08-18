@@ -15,7 +15,7 @@ create table if not exists public.reference_values (
   kind text not null check (kind in (
     'ctx', 'cop', 'assistant', 'gpa_assistant', 'manager',
     'animation_provider', 'promoter', 'certification',
-    'thermal_regulation', 'program_nature'
+    'thermal_regulation', 'program_nature', 'category'
   )),
   label text not null,
   normalized_label text generated always as (
@@ -30,6 +30,31 @@ create table if not exists public.reference_values (
 
 create index if not exists reference_values_kind_active_idx
   on public.reference_values(kind, is_active, sort_order, label);
+
+-- Item #12 (17/08) : le référentiel des « Catégories » devient administrable.
+-- Le check de kind est étendu de façon additive (les lignes existantes restent
+-- valides), puis amorcé depuis les catégories déjà saisies sur les opérations.
+do $$ begin
+  alter table public.reference_values drop constraint reference_values_kind_check;
+exception when undefined_object then null;
+end $$;
+alter table public.reference_values
+  add constraint reference_values_kind_check
+  check (kind in (
+    'ctx', 'cop', 'assistant', 'gpa_assistant', 'manager',
+    'animation_provider', 'promoter', 'certification',
+    'thermal_regulation', 'program_nature', 'category'
+  ));
+
+insert into public.reference_values (kind, label, is_active, sort_order)
+select
+  'category',
+  btrim(operation.category),
+  true,
+  row_number() over (order by lower(btrim(operation.category)))
+from public.operations operation
+where nullif(btrim(operation.category), '') is not null
+on conflict (kind, normalized_label) do nothing;
 
 create table if not exists public.communes (
   id uuid primary key default gen_random_uuid(),

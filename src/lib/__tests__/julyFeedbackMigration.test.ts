@@ -169,6 +169,15 @@ describe("migration des retours du 29 juillet", () => {
     expect(occurrences("'vefa_deed_or_land_purchase_date','vefa_deed_expected_date'")).toBe(2);
   });
 
+  it("rend le référentiel des catégories administrable et l'amorce depuis les opérations", () => {
+    expect(sql).toContain("'program_nature', 'category'");
+    expect(sql).toContain("drop constraint reference_values_kind_check");
+    expect(sql).toContain("add constraint reference_values_kind_check");
+    expect(sql).toMatch(/insert into public\.reference_values[\s\S]*select[\s\S]*btrim\(operation\.category\)/i);
+    expect(sql).toMatch(/where nullif\(btrim\(operation\.category\), ''\) is not null/i);
+    expect(sql).toMatch(/on conflict \(kind, normalized_label\) do nothing/);
+  });
+
   it("déclare les comptes COP/CTX dans les deux CTE des permissions de champ", () => {
     const occurrences = (needle: string) => sql.split(needle).length - 1;
     // CTE permission_definitions + CTE de dotation des rôles : équipe.
