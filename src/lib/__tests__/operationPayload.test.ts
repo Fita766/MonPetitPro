@@ -166,3 +166,30 @@ describe('comptes COP/CTX liés', () => {
     expect(form.ctx_user_id).toBe('ctx-1');
   });
 });
+
+describe('date prévisionnelle de l’acte VEFA (Item #5)', () => {
+  it('sérialise vefa_deed_expected_date dans le payload', () => {
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-09-15',
+    });
+    expect(payload.vefa_deed_expected_date).toBe('2026-09-15');
+  });
+
+  it('relit vefa_deed_expected_date depuis une ligne de base', () => {
+    const form = fromOperationRow({ vefa_deed_expected_date: '2026-09-15' });
+    expect(form.vefa_deed_expected_date).toBe('2026-09-15');
+  });
+
+  it('neutralise une date prévisionnelle vide', () => {
+    const form = fromOperationRow({ vefa_deed_expected_date: null });
+    expect(form.vefa_deed_expected_date).toBe('');
+    const payload = toOperationPayload({
+      ...EMPTY_OPERATION_FORM,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '',
+    });
+    expect(payload.vefa_deed_expected_date).toBeNull();
+  });
+});

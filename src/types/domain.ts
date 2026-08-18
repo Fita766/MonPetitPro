@@ -114,6 +114,7 @@ export interface Operation {
   cop_user_id: string | null;
   ctx_user_id: string | null;
   promoter_name: string | null;
+  vefa_deed_expected_date: string | null;
   contractual_delivery_date: string | null;
   expected_delivery_date: string | null;
   actual_delivery_date: string | null;

@@ -50,4 +50,11 @@ describe('operation field permissions', () => {
     expect(definitionFor('cop_user_id').groupKey).toBe('operation_fields_team');
     expect(definitionFor('ctx_user_id').groupKey).toBe('operation_fields_team');
   });
+
+  it('rattache la date prévisionnelle de l’acte au groupe planning', () => {
+    const definitionFor = (field: string) => OPERATION_FIELD_PERMISSION_DEFINITIONS.find((definition) => definition.field === field)!;
+
+    expect(definitionFor('vefa_deed_expected_date').groupKey).toBe('operation_fields_planning');
+    expect(definitionFor('vefa_deed_expected_date').label).toContain('Signature de l’acte');
+  });
 });

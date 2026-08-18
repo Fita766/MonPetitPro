@@ -121,3 +121,61 @@ describe('butoirs CS dépassés (condition_overdue)', () => {
     expect(alerts.some((alert) => alert.milestoneKey === 'condition_overdue')).toBe(false);
   });
 });
+
+describe('signature de l’acte VEFA (Item #5)', () => {
+  it('alerte J-30 quand la date prévisionnelle est dans 20 jours', () => {
+    const alerts = buildAlerts([{
+      ...operation,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-08-19',
+      vefa_deed_or_land_purchase_date: null,
+    }], [], '2026-07-30');
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ milestoneKey: 'vefa_deed', status: 'within30', days: 20 }),
+    ]));
+  });
+
+  it('alerte J-15 quand la date prévisionnelle est dans 10 jours', () => {
+    const alerts = buildAlerts([{
+      ...operation,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-08-09',
+      vefa_deed_or_land_purchase_date: null,
+    }], [], '2026-07-30');
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ milestoneKey: 'vefa_deed', status: 'within15', days: 10 }),
+    ]));
+  });
+
+  it('alerte dépassement tant que l’acte n’est pas signé', () => {
+    const alerts = buildAlerts([{
+      ...operation,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-07-29',
+      vefa_deed_or_land_purchase_date: null,
+    }], [], '2026-07-30');
+    expect(alerts).toEqual(expect.arrayContaining([
+      expect.objectContaining({ milestoneKey: 'vefa_deed', status: 'overdue', days: -1 }),
+    ]));
+  });
+
+  it('n’alerte plus une fois l’acte signé', () => {
+    const alerts = buildAlerts([{
+      ...operation,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-08-19',
+      vefa_deed_or_land_purchase_date: '2026-06-10',
+    }], [], '2026-07-30');
+    expect(alerts.some((alert) => alert.milestoneKey === 'vefa_deed')).toBe(false);
+  });
+
+  it('reste silencieuse hors fenêtre des 30 jours', () => {
+    const alerts = buildAlerts([{
+      ...operation,
+      operation_type: 'VEFA',
+      vefa_deed_expected_date: '2026-09-15',
+      vefa_deed_or_land_purchase_date: null,
+    }], [], '2026-07-30');
+    expect(alerts.some((alert) => alert.milestoneKey === 'vefa_deed')).toBe(false);
+  });
+});

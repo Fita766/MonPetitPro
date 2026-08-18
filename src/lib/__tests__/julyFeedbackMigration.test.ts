@@ -95,6 +95,7 @@ describe("migration des retours du 29 juillet", () => {
       "permit_expected_date",
       "tender_expected_date",
       "cpr_expected_date",
+      "vefa_deed_expected_date",
     ]) {
       expect(sql).toContain(column);
     }
@@ -160,6 +161,12 @@ describe("migration des retours du 29 juillet", () => {
     // CTE permission_definitions + CTE de dotation des rôles : planning puis programme.
     expect(occurrences("'h2_actual_date','so_csi_ca','so_lli_approval'")).toBe(2);
     expect(occurrences("'category','terrain'")).toBe(2);
+  });
+
+  it("déclare la date prévisionnelle de l'acte VEFA dans les deux CTE des permissions de champ", () => {
+    const occurrences = (needle: string) => sql.split(needle).length - 1;
+    // CTE permission_definitions + CTE de dotation des rôles : planning.
+    expect(occurrences("'vefa_deed_or_land_purchase_date','vefa_deed_expected_date'")).toBe(2);
   });
 
   it("déclare les comptes COP/CTX dans les deux CTE des permissions de champ", () => {

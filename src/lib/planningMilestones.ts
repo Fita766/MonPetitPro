@@ -61,7 +61,7 @@ export const MILESTONE_GROUPS: MilestoneGroupDefinition[] = [
     description: 'Engagement contractuel puis acquisition ou acte VEFA.',
     milestones: [
       { key: 'cpr', label: 'Signature CPR / compromis', code: 'AU', expectedField: 'cpr_expected_date', actualField: 'vefa_cpr_or_sale_agreement_date', alertEligible: true },
-      { key: 'vefa_deed', label: 'Acte VEFA / acquisition du terrain', code: 'AW', actualField: 'vefa_deed_or_land_purchase_date' },
+      { key: 'vefa_deed', label: 'Acte VEFA / acquisition du terrain', code: 'AW', expectedField: 'vefa_deed_expected_date', actualField: 'vefa_deed_or_land_purchase_date', alertEligible: true },
     ],
   },
   {

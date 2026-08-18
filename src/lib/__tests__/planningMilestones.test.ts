@@ -54,4 +54,12 @@ describe('planning milestones', () => {
     expect(milestoneVisibility(worksOrder, { mode: 'VEFA', terrain: true }))
       .toEqual({ shown: false, emphasized: false });
   });
+
+  it('enrichit l’acte VEFA d’une date prévisionnelle susceptible d’alerter', () => {
+    const byKey = (key: string) => MILESTONE_GROUPS.flatMap((group) => group.milestones).find((milestone) => milestone.key === key)!;
+    const vefaDeed = byKey('vefa_deed');
+    expect(vefaDeed.expectedField).toBe('vefa_deed_expected_date');
+    expect(vefaDeed.actualField).toBe('vefa_deed_or_land_purchase_date');
+    expect(vefaDeed.alertEligible).toBe(true);
+  });
 });

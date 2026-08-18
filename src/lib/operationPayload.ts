@@ -65,6 +65,7 @@ export interface OperationFormData {
   tender_date: string;
   cpr_expected_date: string;
   vefa_cpr_or_sale_agreement_date: string;
+  vefa_deed_expected_date: string;
   vefa_deed_or_land_purchase_date: string;
   works_order_expected_date: string;
   works_order_actual_date: string;
@@ -105,7 +106,7 @@ export const EMPTY_OPERATION_FORM: OperationFormData = {
   clesence_bbca: false, clesence_reversible: false, clesence_land_sobriety: false, clesence_green_space: false, zoning: '', category: '',
   co_cpi_date: '', cei_cef_date: '', csi_ca_date: '', development_to_assembly_date: '', approvals_expected_date: '', approvals_submission_date: '', lls_approval_date: '',
   lli_approval_date: '', anru_approval_date: '', permit_number: '', permit_expected_date: '', permit_submission_date: '', permit_order_date: '', tender_expected_date: '', tender_date: '', cpr_expected_date: '',
-  vefa_cpr_or_sale_agreement_date: '', vefa_deed_or_land_purchase_date: '', works_order_expected_date: '', works_order_actual_date: '',
+  vefa_cpr_or_sale_agreement_date: '', vefa_deed_expected_date: '', vefa_deed_or_land_purchase_date: '', works_order_expected_date: '', works_order_actual_date: '',
   contractual_delivery_date: '', m8_actual_date: '', assembly_to_works_date: '', m7_actual_date: '', m4_actual_date: '',
   show_home_actual_date: '', opl_actual_date: '', progress_status: '', expected_delivery_date: '', risk_assessment: '', actual_delivery_date: '',
   delivery_reservations_count: '', justified_delay_days: '', penalty_amount: '', reservations_clearance_date: '', daact_date: '', dpe: '',
@@ -124,7 +125,7 @@ const DECIMAL_FIELDS = ['initial_budget', 'final_budget', 'penalty_amount'] as c
 const DATE_FIELDS = [
   'co_cpi_date', 'cei_cef_date', 'csi_ca_date', 'development_to_assembly_date', 'approvals_expected_date', 'approvals_submission_date',
   'lls_approval_date', 'lli_approval_date', 'anru_approval_date', 'permit_expected_date', 'permit_submission_date', 'permit_order_date', 'tender_expected_date', 'tender_date', 'cpr_expected_date',
-  'vefa_cpr_or_sale_agreement_date', 'vefa_deed_or_land_purchase_date', 'works_order_expected_date', 'works_order_actual_date',
+  'vefa_cpr_or_sale_agreement_date', 'vefa_deed_or_land_purchase_date', 'vefa_deed_expected_date', 'works_order_expected_date', 'works_order_actual_date',
   'contractual_delivery_date', 'm8_actual_date', 'assembly_to_works_date', 'm7_actual_date', 'm4_actual_date',
   'show_home_actual_date', 'opl_actual_date', 'expected_delivery_date', 'actual_delivery_date', 'reservations_clearance_date',
   'daact_date', 'management_actual_date', 'h2_actual_date',
