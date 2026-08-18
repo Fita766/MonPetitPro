@@ -59,6 +59,33 @@ describe('PC périmé (permit_expired)', () => {
     const alerts = buildAlerts([operation], [], '2026-08-18');
     expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
   });
+
+  it('n’alerte pas pour une VEFA dont l’acte est signé (l’acte remplace l’OS)', () => {
+    const alerts = buildAlerts([
+      { ...operation, operation_type: 'VEFA', permit_order_date: '2022-01-15', vefa_deed_or_land_purchase_date: '2025-03-20' },
+    ], [], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
+  });
+
+  it('alerte pour une VEFA sans acte signé avec un arrêté de plus de 3 ans', () => {
+    const alerts = buildAlerts([
+      { ...operation, operation_type: 'VEFA', permit_order_date: '2022-01-15', vefa_deed_or_land_purchase_date: null },
+    ], [], '2026-08-18');
+    expect(alerts.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(true);
+  });
+
+  it('borne à 3 ans exacts : périmé seulement après la date de péremption', () => {
+    // péremption le 2026-08-18 == aujourd’hui → pas périmé
+    const onLapse = buildAlerts([
+      { ...operation, permit_order_date: '2023-08-18' },
+    ], [], '2026-08-18');
+    expect(onLapse.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(false);
+    // péremption le 2026-08-17 → périmé depuis 1 jour
+    const afterLapse = buildAlerts([
+      { ...operation, permit_order_date: '2023-08-17' },
+    ], [], '2026-08-18');
+    expect(afterLapse.some((alert) => alert.milestoneKey === 'permit_expired')).toBe(true);
+  });
 });
 
 describe('butoirs CS dépassés (condition_overdue)', () => {

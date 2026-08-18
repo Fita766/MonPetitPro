@@ -54,10 +54,13 @@ export function permitLapseDate(permitOrderDate: string | null | undefined): str
   return isoFromUtcTimestamp(Date.UTC(year + PERMIT_VALIDITY_YEARS, month - 1, day));
 }
 
-/** Vrai si l'arrêté date de plus de 3 ans et qu'aucun ordre de service travaux n'est engagé. */
+/** Vrai si l'arrêté date de plus de 3 ans et que les travaux ne sont pas engagés.
+ *  L'engagement est signalé par l'ordre de service (MOD) ou l'acte VEFA / acquisition du
+ *  terrain (VEFA) : en VEFA, l'acte remplace l'OS comme référence de lancement des travaux. */
 export function isPermitLapsed(
   permitOrderDate: unknown,
   worksOrderActualDate: unknown,
+  vefaDeedOrLandPurchaseDate: unknown,
   today: string,
 ): boolean {
   const lapse = permitLapseDate(typeof permitOrderDate === 'string' ? permitOrderDate : null);
@@ -66,6 +69,7 @@ export function isPermitLapsed(
   if (todayTime == null) return false;
   if (utcTimestamp(lapse)! >= todayTime) return false;
   if (typeof worksOrderActualDate === 'string' && worksOrderActualDate) return false;
+  if (typeof vefaDeedOrLandPurchaseDate === 'string' && vefaDeedOrLandPurchaseDate) return false;
   return true;
 }
 
@@ -102,7 +106,7 @@ export function buildAlerts(
   });
 
   const permitAlerts = operations.flatMap((operation): OperationAlert[] => {
-    if (!isPermitLapsed(operation.permit_order_date, operation.works_order_actual_date, today)) return [];
+    if (!isPermitLapsed(operation.permit_order_date, operation.works_order_actual_date, operation.vefa_deed_or_land_purchase_date, today)) return [];
     const lapse = permitLapseDate(typeof operation.permit_order_date === 'string' ? operation.permit_order_date : null)!;
     const lapseTime = utcTimestamp(lapse)!;
     return [{

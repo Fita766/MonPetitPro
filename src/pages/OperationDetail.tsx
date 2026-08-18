@@ -289,7 +289,7 @@ export default function OperationDetail() {
   if (operation.lli_approval_date || operation.so_lli_approval) planning.push(["Agrément LLI", operation.lli_approval_date, Boolean(operation.so_lli_approval)]);
 
   const todayIso = `${new Date().getFullYear()}-${String(new Date().getMonth() + 1).padStart(2, '0')}-${String(new Date().getDate()).padStart(2, '0')}`;
-  const permitLapsed = isPermitLapsed(operation.permit_order_date, operation.works_order_actual_date, todayIso);
+  const permitLapsed = isPermitLapsed(operation.permit_order_date, operation.works_order_actual_date, operation.vefa_deed_or_land_purchase_date, todayIso);
   return (
     <div className="mx-auto max-w-[1500px] pb-16">
       <button
