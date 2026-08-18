@@ -56,10 +56,15 @@ function actualDate(operation: ObjectiveReportOperation, kind: ObjectiveKind) {
 // Date d'OS au format ISO yyyy-MM-dd attendu.
 const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
 
+// `operation_objectives.objective_year` est contraint à 2000..2200 en base :
+// on ne propose jamais une année que la migration rejetterait.
+const OBJECTIVE_YEAR_MIN = 2000;
+const OBJECTIVE_YEAR_MAX = 2200;
+
 /**
  * Année d'objectif proposée depuis le planning d'OS : date réelle d'OS en
- * priorité, sinon date prévisionnelle. Ne valide aucune année : la valeur
- * n'est jamais utilisée sans confirmation explicite de l'utilisateur.
+ * priorité, sinon date prévisionnelle. Renvoie null hors plage (2000..2200).
+ * La valeur n'est jamais utilisée sans confirmation explicite de l'utilisateur.
  */
 export function proposeObjectiveYear(
   worksOrderActualDate: string | null,
@@ -67,7 +72,17 @@ export function proposeObjectiveYear(
 ): number | null {
   const source = (worksOrderActualDate || null) ?? (worksOrderExpectedDate || null);
   if (!source || !ISO_DAY.test(source)) return null;
-  return Number(source.slice(0, 4));
+  const year = Number(source.slice(0, 4));
+  return year >= OBJECTIVE_YEAR_MIN && year <= OBJECTIVE_YEAR_MAX ? year : null;
+}
+
+/**
+ * Vrai si au moins un rattachement n'a pas encore d'année choisie (0, null,
+ * NaN). Reprend le garde-fou de validation d'`OperationForm` pour couvrir
+ * l'état « année proposée non confirmée » sans contourner l'enregistrement.
+ */
+export function hasObjectivesMissingYear(objectives: { objective_year: number | null }[]): boolean {
+  return objectives.some((objective) => !objective.objective_year);
 }
 
 function objectiveRow(

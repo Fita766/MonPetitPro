@@ -11,6 +11,7 @@ import {
   canEditOperationField,
 } from '../lib/operationFieldPermissions';
 import { calculateProgramTotals, createDefaultProgram } from '../lib/program';
+import { hasObjectivesMissingYear } from '../lib/objectiveRecords';
 import { selectCommune } from '../lib/references';
 import { EMPTY_OPERATION_FORM, fromOperationRow, toOperationPayload, type OperationFormData } from '../lib/operationPayload';
 import type { CommuneReference, OperationBudgetLine, OperationObjective, OperationProgramLine, OperationProgramSection, OperationSignificantWork, OperationSubsidy, ReferenceValue, SuspensiveCondition } from '../types/domain';
@@ -314,7 +315,7 @@ export default function OperationForm() {
   const handleSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
     if (!editable) return;
-    if (objectives.some((objective) => !objective.objective_year)) {
+    if (hasObjectivesMissingYear(objectives)) {
       setError('Indiquez l’année de l’objectif DMO.');
       setActiveTab('objectives');
       return;

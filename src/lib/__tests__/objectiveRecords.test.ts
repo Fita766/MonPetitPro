@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { buildObjectiveReport, proposeObjectiveYear } from '../objectiveRecords';
+import {
+  buildObjectiveReport,
+  hasObjectivesMissingYear,
+  proposeObjectiveYear,
+} from '../objectiveRecords';
 import type { OperationObjective } from '../../types/domain';
 
 const operations = [
@@ -79,5 +83,29 @@ describe('proposeObjectiveYear', () => {
   it('respecte la frontière d’année', () => {
     expect(proposeObjectiveYear('2026-12-31', null)).toBe(2026);
     expect(proposeObjectiveYear('2027-01-01', null)).toBe(2027);
+  });
+
+  it('ne propose jamais une année hors de la contrainte de la base (2000..2200)', () => {
+    expect(proposeObjectiveYear('1999-06-01', null)).toBeNull();
+    expect(proposeObjectiveYear('2200-01-15', null)).toBe(2200);
+    expect(proposeObjectiveYear('2201-01-01', null)).toBeNull();
+  });
+});
+
+describe('hasObjectivesMissingYear', () => {
+  it('renvoie false quand toutes les années sont renseignées', () => {
+    expect(hasObjectivesMissingYear([{ objective_year: 2026 }, { objective_year: 2027 }])).toBe(false);
+  });
+
+  it('renvoie true dès qu’une année est manquante (0)', () => {
+    expect(hasObjectivesMissingYear([{ objective_year: 2026 }, { objective_year: 0 }])).toBe(true);
+  });
+
+  it('renvoie true quand une année est null', () => {
+    expect(hasObjectivesMissingYear([{ objective_year: 2026 }, { objective_year: null }])).toBe(true);
+  });
+
+  it('renvoie false pour une liste vide', () => {
+    expect(hasObjectivesMissingYear([])).toBe(false);
   });
 });
