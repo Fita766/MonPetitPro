@@ -82,11 +82,8 @@ export default function OperationForm() {
     synthesis: permissionGranted(permissions, 'operations.edit_synthesis'),
   }[activeTab] ?? false);
   const editable = id ? tabPermission : permissionGranted(permissions, 'operations.create');
-  const canEditField = useCallback((field: keyof OperationFormData) => {
-    if (field === 'cop_user_id') return canEditOperationField(permissions, 'operations_manager', !id);
-    if (field === 'ctx_user_id') return canEditOperationField(permissions, 'project_manager', !id);
-    return canEditOperationField(permissions, field, !id);
-  }, [id, permissions]);
+  const canEditField = useCallback((field: keyof OperationFormData) =>
+    canEditOperationField(permissions, field, !id), [id, permissions]);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -120,7 +117,7 @@ export default function OperationForm() {
       setActiveProfiles((profileResult.data as Array<{ id: string; display_name: string | null; initials: string | null }>)
         .map((row) => ({ id: row.id, displayName: row.display_name, initials: row.initials })));
     }
-    const referenceError = referenceResult.error ?? communeResult.error;
+    const referenceError = referenceResult.error ?? communeResult.error ?? profileResult.error;
     if (referenceError) setError(referenceError.message);
 
     if (id) {

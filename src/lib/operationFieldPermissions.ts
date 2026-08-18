@@ -14,7 +14,7 @@ export interface OperationFieldPermissionDefinition {
 }
 
 const TEAM_FIELDS = new Set<OperationField>([
-  'project_manager', 'operations_manager', 'assistant_name', 'gpa_assistant_name',
+  'project_manager', 'operations_manager', 'cop_user_id', 'ctx_user_id', 'assistant_name', 'gpa_assistant_name',
   'manager_name', 'animation_provider',
 ]);
 const PROGRAM_FIELDS = new Set<OperationField>([

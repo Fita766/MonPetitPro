@@ -747,7 +747,7 @@ with field_groups(group_key, legacy_permission, fields) as (
       'operation_type','program_nature','promoter_name'
     ]::text[]),
     ('operation_fields_team', 'operations.edit_team', array[
-      'project_manager','operations_manager','assistant_name','gpa_assistant_name',
+      'project_manager','operations_manager','cop_user_id','ctx_user_id','assistant_name','gpa_assistant_name',
       'manager_name','animation_provider'
     ]::text[]),
     ('operation_fields_program', 'operations.edit_program', array[
@@ -865,7 +865,7 @@ where role_id = '10000000-0000-0000-0000-000000000003'::uuid
 with field_groups(legacy_permission, fields) as (
   values
     ('operations.edit_identity', array['name','stage','of_number','gesprojet_number','department','commune','commune_id','address','operation_type','program_nature','promoter_name']::text[]),
-    ('operations.edit_team', array['project_manager','operations_manager','assistant_name','gpa_assistant_name','manager_name','animation_provider']::text[]),
+    ('operations.edit_team', array['project_manager','operations_manager','cop_user_id','ctx_user_id','assistant_name','gpa_assistant_name','manager_name','animation_provider']::text[]),
     ('operations.edit_program', array['total_housing_units','individual_housing_units','collective_housing_units','plus_units','plai_units','pls_units','lli_units','lls_units','brs_units','psla_units','student_units','specific_units','anru_units','acv_units','commercial_units','other_units','thermal_regulation','certification','clesence_bbca','clesence_reversible','clesence_land_sobriety','clesence_green_space','zoning','category','terrain']::text[]),
     ('operations.edit_planning', array['co_cpi_date','cei_cef_date','csi_ca_date','development_to_assembly_date','approvals_expected_date','approvals_submission_date','lls_approval_date','lli_approval_date','anru_approval_date','permit_number','permit_expected_date','permit_submission_date','permit_order_date','tender_expected_date','tender_date','cpr_expected_date','vefa_cpr_or_sale_agreement_date','vefa_deed_or_land_purchase_date','works_order_expected_date','works_order_actual_date','contractual_delivery_date','m8_actual_date','assembly_to_works_date','m7_actual_date','m4_actual_date','show_home_actual_date','opl_actual_date','progress_status','expected_delivery_date','risk_assessment','actual_delivery_date','delivery_reservations_count','justified_delay_days','penalty_amount','reservations_clearance_date','daact_date','dpe','management_actual_date','gpa_count','h2_actual_date','so_csi_ca','so_lli_approval']::text[]),
     ('operations.edit_budget', array['initial_budget','final_budget']::text[]),

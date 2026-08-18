@@ -43,4 +43,11 @@ describe('operation field permissions', () => {
     expect(definitionFor('so_lli_approval').groupKey).toBe('operation_fields_planning');
     expect(definitionFor('terrain').groupKey).toBe('operation_fields_program');
   });
+
+  it('rattache les liens de compte COP/CTX au groupe équipe', () => {
+    const definitionFor = (field: string) => OPERATION_FIELD_PERMISSION_DEFINITIONS.find((definition) => definition.field === field)!;
+
+    expect(definitionFor('cop_user_id').groupKey).toBe('operation_fields_team');
+    expect(definitionFor('ctx_user_id').groupKey).toBe('operation_fields_team');
+  });
 });

@@ -46,7 +46,12 @@ export default function GeneralSection({
     userIdField: 'ctx_user_id' | 'cop_user_id',
   ) => <div>
     <FieldLabel>{label}</FieldLabel>
-    <ReferenceSelect disabled={!canEditField(nameField)} valueId={form[userIdField] ?? ''}
+    {/* L'identifiant (ctx_user_id / cop_user_id) fait autorité pour le périmètre du
+        calendrier ; la colonne texte (project_manager / operations_manager) reste la
+        source d'affichage historique. Si le profil est renommé plus tard, ce texte peut
+        rester obsolète et ne réapparaître qu'en repli (compte inactif). Le sélecteur
+        exige les deux droits de champ (nom + identifiant) pour écrire la paire ensemble. */}
+    <ReferenceSelect disabled={!canEditField(nameField) || !canEditField(userIdField)} valueId={form[userIdField] ?? ''}
       fallbackLabel={form[nameField]}
       options={userOptions} placeholder="Rechercher une personne…"
       onSelect={(option) => {

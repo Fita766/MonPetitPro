@@ -161,6 +161,12 @@ describe("migration des retours du 29 juillet", () => {
     expect(occurrences("'h2_actual_date','so_csi_ca','so_lli_approval'")).toBe(2);
     expect(occurrences("'category','terrain'")).toBe(2);
   });
+
+  it("déclare les comptes COP/CTX dans les deux CTE des permissions de champ", () => {
+    const occurrences = (needle: string) => sql.split(needle).length - 1;
+    // CTE permission_definitions + CTE de dotation des rôles : équipe.
+    expect(occurrences("'project_manager','operations_manager','cop_user_id','ctx_user_id'")).toBe(2);
+  });
   it("déclare calendar.view_all pour admin et responsable uniquement", () => {
     expect(sql).toContain("('calendar.view_all','calendar'");
     expect(sql).toContain("'10000000-0000-0000-0000-000000000001'::uuid, 'calendar.view_all'");
