@@ -42,7 +42,7 @@ export type PermissionKey =
   | 'operations.view' | 'operations.create' | 'operations.edit_identity' | 'operations.edit_team'
   | 'operations.edit_program' | 'operations.edit_planning' | 'operations.edit_budget'
   | 'operations.edit_conditions' | 'operations.edit_objectives' | 'operations.edit_synthesis'
-  | 'operations.delete' | 'operations.export'
+  | 'operations.delete' | 'operations.export' | 'operations.import'
   | 'observations.view' | 'observations.view_dg' | 'observations.create' | 'observations.edit_own'
   | 'observations.edit_all' | 'observations.validate' | 'observations.delete' | 'observations.export'
   | 'observations.view_assigned' | 'observations.view_all' | 'observations.edit_assigned'

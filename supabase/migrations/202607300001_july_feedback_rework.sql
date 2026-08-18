@@ -104,6 +104,15 @@ on conflict (key) do update set
   description = excluded.description,
   sort_order = excluded.sort_order;
 
+-- T16 : import administratif par classeur Excel, réservé à l'administrateur.
+insert into public.permission_definitions(key, group_key, label, description, sort_order) values
+  ('operations.import','operations','Importer des opérations (Excel)','Créer de nouvelles opérations depuis un classeur, après aperçu, sans jamais écraser l’existant',130)
+on conflict (key) do update set
+  group_key = excluded.group_key,
+  label = excluded.label,
+  description = excluded.description,
+  sort_order = excluded.sort_order;
+
 insert into public.custom_role_permissions (role_id, permission_key)
 select role.id, permission.key
 from public.custom_roles role
@@ -814,6 +823,7 @@ on conflict do nothing;
 insert into public.custom_role_permissions(role_id, permission_key)
 select role_id, permission_key
 from (values
+  ('10000000-0000-0000-0000-000000000001'::uuid, 'operations.import'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.view_all'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.view_assigned'),
   ('10000000-0000-0000-0000-000000000001'::uuid, 'observations.edit_assigned'),

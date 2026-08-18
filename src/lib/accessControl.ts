@@ -33,6 +33,7 @@ export const PERMISSION_GROUPS: PermissionGroup[] = [
     ['operations.edit_synthesis', 'Modifier la synthèse', 'Description et travaux significatifs.'],
     ['operations.delete', 'Supprimer une opération', 'Supprimer une opération et ses données liées.'],
     ['operations.export', 'Exporter les opérations', 'Créer les exports PDF et Excel.'],
+    ['operations.import', 'Importer des opérations (Excel)', 'Créer de nouvelles opérations depuis un classeur, après aperçu, sans jamais écraser l’existant.'],
   ]),
   group('observations', 'Observations', [
     ['observations.view', 'Consulter les observations', 'Voir les observations partagées.'],

@@ -12,6 +12,7 @@ import CalendarView from './pages/CalendarView';
 import Statistics from './pages/Statistics';
 import AdminUsers from './pages/AdminUsers';
 import AdminReferences from './pages/AdminReferences';
+import AdminImport from './pages/AdminImport';
 import AuditHistory from './pages/AuditHistory';
 import { useProfile } from './hooks/useProfile';
 import { accountAccessState, permissionGranted } from './lib/accessControl';
@@ -140,6 +141,14 @@ function App() {
           element={
             <PermissionRoute anyOf={['references.view']}>
               <AdminReferences />
+            </PermissionRoute>
+          }
+        />
+        <Route
+          path="/admin/import"
+          element={
+            <PermissionRoute anyOf={['operations.import']}>
+              <AdminImport />
             </PermissionRoute>
           }
         />

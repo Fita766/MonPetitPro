@@ -175,6 +175,12 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).not.toMatch(/'10000000-0000-0000-0000-000000000004'::uuid, 'calendar.view_all'/);
   });
 
+  it("déclare operations.import et le réserve à l'administrateur (import admin)", () => {
+    expect(sql).toContain("('operations.import','operations'");
+    expect(sql).toContain("'10000000-0000-0000-0000-000000000001'::uuid, 'operations.import'");
+    expect(sql).not.toMatch(/'10000000-0000-0000-0000-00000000000(2|3|4)'::uuid, 'operations.import'/);
+  });
+
   it("liste les profils actifs sans e-mail pour les sélecteurs COP/CTX", () => {
     expect(sql).toContain("function public.list_active_profiles");
     expect(sql).toMatch(/select p\.id, p\.display_name, p\.initials\s+from public\.profiles p/i);
