@@ -179,7 +179,7 @@ export default function CalendarView() {
       .order("name");
     const calendarOperationsQuery = viewAll
       ? operationsQuery
-      : supabase.from("calendar_operations").select("*").order("name");
+      : supabase.rpc("calendar_operations");
     void Promise.all([
       calendarOperationsQuery,
       operationsQuery,

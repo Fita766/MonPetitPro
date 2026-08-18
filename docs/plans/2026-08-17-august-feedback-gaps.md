@@ -205,7 +205,7 @@ expect(filterCurrentUserEvents(evts, { userId: 'u1', cop: 'u1', ctx: null, osDat
 
 **Step 3 — modèle :** `GeneralSection` remplace les `<datalist>` COP/CTX par des `<ReferenceSelect user>` limités aux comptes actifs ; `cop_user_id`/`ctx_user_id` persistés ; garder le nom historique en lecture pour compatibilité.
 
-**Step 4 — RLS :** nouvelle permission `calendar.view_all` (responsable/administrateur). Pour les autres, la lecture calendrier est restreinte : `operations read for calendar` → `(cop_user_id = auth.uid() or ctx_user_id = auth.uid())`. Le rendu ne montre que les opérations concernées.
+**Step 4 — RLS :** nouvelle permission `calendar.view_all` (responsable/administrateur). Pour les autres, la lecture calendrier est restreinte : `operations read for calendar` → `(cop_user_id = auth.uid() or ctx_user_id = auth.uid())`. Le rendu ne montre que les opérations concernées. (Implémentation : fonction `security definer` `public.calendar_operations()` — la RLS sur les vues n'est pas disponible sur l'instance Supabase, `ALTER … ENABLE ROW LEVEL SECURITY` étant refusé sur les vues.)
 
 **Step 5 — coupure à l'OS :** la date de coupure = `works_order_actual_date || works_order_expected_date` par opération ; un événement `date <= osDate` est « pré-OS » (COP), `date >= osDate` est « post-OS » (CTX), l'OS lui-même est partagé. Appliquer ce filtre en fonction du rôle effectif (COP/CTX) de l'utilisateur sur l'opération. La vue « agenda libre » reste visible à qui possède `calendar.view`.
 

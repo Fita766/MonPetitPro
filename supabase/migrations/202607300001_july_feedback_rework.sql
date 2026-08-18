@@ -1162,30 +1162,12 @@ $$;
 revoke all on function public.list_active_profiles() from public, anon;
 grant execute on function public.list_active_profiles() to authenticated;
 
--- A6b : vue calendrier scopée par équipe. security_invoker : la RLS des
--- opérations s'applique toujours au lecteur, ces policies ne peuvent donc que
--- restreindre. La coupure COP/CTX à l'OS est appliquée côté client : elle
--- dépend de la date de chaque jalon et n'est pas exprimable en RLS ligne.
-create or replace view public.calendar_operations
-with (security_invoker = on) as
-select * from public.operations;
-
-alter view public.calendar_operations enable row level security;
-
-drop policy if exists calendar_operations_view_all on public.calendar_operations;
-create policy calendar_operations_view_all on public.calendar_operations
-for select to authenticated
-using (public.has_permission('calendar.view_all'));
-
-drop policy if exists calendar_operations_own on public.calendar_operations;
-create policy calendar_operations_own on public.calendar_operations
-for select to authenticated
-using (cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid()));
-
--- Lecture réservée aux comptes connectés, comme pour list_active_profiles :
--- la lecture passe par la RLS de la vue (view_all ou propre équipe).
-revoke all on public.calendar_operations from public, anon;
-grant select on public.calendar_operations to authenticated;
+-- A6b : le backstop du calendrier scopé par équipe est réalisé par la fonction
+-- security definer public.calendar_operations() dans la migration additive
+-- 202608180001_august_feedback_addendum.sql. La RLS des vues (security_invoker
+-- + ALTER ... ENABLE ROW LEVEL SECURITY) est refusée par l'instance Supabase
+-- cible (erreur 42809 « not supported for views »), donc aucune vue scopée
+-- n'est créée ici.
 
 drop policy if exists audit_admin_read on public.audit_log;
 drop policy if exists audit_permission_read on public.audit_log;

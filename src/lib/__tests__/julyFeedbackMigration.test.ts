@@ -208,15 +208,20 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("grant execute on function public.list_active_profiles() to authenticated");
   });
 
-  it("crée la vue calendrier scopée et ses policies RLS (A6b)", () => {
-    expect(sql).toContain("create or replace view public.calendar_operations");
-    expect(sql).toMatch(/calendar_operations[\s\S]*security_invoker\s*=\s*on/i);
-    expect(sql).toContain("alter view public.calendar_operations enable row level security");
-    expect(sql).toContain("policy calendar_operations_view_all on public.calendar_operations");
-    expect(sql).toContain("using (public.has_permission('calendar.view_all'))");
-    expect(sql).toContain("policy calendar_operations_own on public.calendar_operations");
-    expect(sql).toContain("cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid())");
-    expect(sql).toContain("revoke all on public.calendar_operations from public, anon");
-    expect(sql).toContain("grant select on public.calendar_operations to authenticated");
+  it("crée la fonction calendrier scopée par équipe (A6b, migration addendum)", () => {
+    const addendum = readFileSync(
+      "supabase/migrations/202608180001_august_feedback_addendum.sql",
+      "utf8",
+    );
+    expect(addendum).toContain("function public.calendar_operations()");
+    expect(addendum).toMatch(/function public\.calendar_operations\(\)[\s\S]*security\s+definer/i);
+    expect(addendum).toContain("public.has_permission('calendar.view_all')");
+    expect(addendum).toContain("cop_user_id = (select auth.uid())");
+    expect(addendum).toContain("ctx_user_id = (select auth.uid())");
+    expect(addendum).toContain("revoke all on function public.calendar_operations() from public, anon");
+    expect(addendum).toContain("grant execute on function public.calendar_operations() to authenticated");
+    // La vue scopée décrite initialement est inapplicable sur l'instance cible
+    // (RLS des vues refusée) : elle ne doit figurer nulle part.
+    expect(sql).not.toMatch(/create or replace view public\.calendar_operations/i);
   });
 });
