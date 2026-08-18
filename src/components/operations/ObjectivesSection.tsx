@@ -1,6 +1,7 @@
 import { Flag, Plus, Trash2 } from 'lucide-react';
 import type { ObjectiveCategory, ObjectiveKind, OperationObjective } from '../../types/domain';
 import { calculateOperationSchedule } from '../../lib/operationCalculations';
+import { proposeObjectiveYear } from '../../lib/objectiveRecords';
 import { FieldLabel, SectionHeading, SelectInput, TextInput } from './FormControls';
 import type { OperationSectionProps } from './formTypes';
 
@@ -42,6 +43,11 @@ export default function ObjectivesSection({
   });
   const update = (target: OperationObjective, patch: Partial<OperationObjective>) =>
     onObjectivesChange(objectives.map((row) => row === target ? { ...row, ...patch } : row));
+  // Année d'OS proposée depuis le planning (réelle sinon prévisionnelle).
+  const proposedWorksYear = proposeObjectiveYear(
+    form.operation_type === 'VEFA' ? null : (form.works_order_actual_date || null),
+    form.operation_type === 'VEFA' ? null : (form.works_order_expected_date || null),
+  );
   const add = (kind: ObjectiveKind) => {
     const category: ObjectiveCategory = objectives.some((row) =>
       row.kind === kind && row.objective_year === currentYear && row.category === 'initial')
@@ -49,7 +55,9 @@ export default function ObjectivesSection({
       : 'initial';
     onObjectivesChange([...objectives, {
       kind,
-      objective_year: currentYear,
+      // En OS avec une date de planning, l'année est proposée : elle reste
+      // vide tant que l'utilisateur n'a pas confirmé (ok) ou re-choisi (ko).
+      objective_year: kind === 'works_order' && proposedWorksYear != null ? 0 : currentYear,
       category,
       snapshot_date: null,
       snapshot_housing_units: null,
@@ -76,12 +84,31 @@ export default function ObjectivesSection({
               <div className="space-y-4">
                 {kindRows.map((row, index) => {
                   const protectedInitial = row.category === 'initial' && Boolean(row.id) && !canDeleteInitial;
+                  const showProposal = config.kind === 'works_order' && proposedWorksYear != null
+                    && !row.objective_year && detailsEditable;
                   return <div key={row.id ?? `${config.kind}-${index}`} className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-200 bg-white p-4 sm:grid-cols-2">
-                  <div>
-                    <FieldLabel>Année</FieldLabel>
-                    <TextInput disabled={!detailsEditable || protectedInitial} min={2000} max={2200} type="number"
-                      value={row.objective_year} onChange={(event) => update(row, { objective_year: Number(event.target.value) })} />
-                  </div>
+                  {showProposal ? (
+                    <div className="rounded-xl border border-teal-200 bg-teal-50 px-4 py-3 sm:col-span-2">
+                      <p className="text-sm font-medium text-teal-900">Année proposée : {proposedWorksYear}</p>
+                      <p className="mt-1 text-xs text-teal-700">Année issue du planning d’OS de l’opération (date réelle sinon prévisionnelle).</p>
+                      <div className="mt-3 flex flex-wrap gap-2">
+                        <button type="button" onClick={() => update(row, { objective_year: proposedWorksYear! })}
+                          className="inline-flex items-center gap-2 rounded-xl border border-teal-800 bg-teal-800 px-4 py-2 text-sm text-white">
+                          Rattacher à {proposedWorksYear}
+                        </button>
+                        <button type="button" onClick={() => update(row, { objective_year: currentYear })}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm text-slate-700">
+                          Choisir une autre année
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div>
+                      <FieldLabel>Année</FieldLabel>
+                      <TextInput disabled={!detailsEditable || protectedInitial} min={2000} max={2200} type="number"
+                        value={row.objective_year} onChange={(event) => update(row, { objective_year: Number(event.target.value) })} />
+                    </div>
+                  )}
                   <div>
                     <FieldLabel>Catégorie</FieldLabel>
                     <SelectInput disabled={!detailsEditable || protectedInitial} value={row.category}

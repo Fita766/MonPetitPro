@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildObjectiveReport } from '../objectiveRecords';
+import { buildObjectiveReport, proposeObjectiveYear } from '../objectiveRecords';
 import type { OperationObjective } from '../../types/domain';
 
 const operations = [
@@ -51,5 +51,33 @@ describe('buildObjectiveReport', () => {
   it('calcule les logements-mois uniquement pour la mise en gestion', () => {
     expect(buildObjectiveReport(records, operations, 2026, 'management').initialRows[0].gainLoss).toBe(-60);
     expect(buildObjectiveReport(records, operations, 2026, 'works_order').supplementaryRows[0].gainLoss).toBeNull();
+  });
+});
+
+describe('proposeObjectiveYear', () => {
+  it('privilégie la date réelle d’OS sur la date prévisionnelle', () => {
+    expect(proposeObjectiveYear('2026-11-20', '2027-01-01')).toBe(2026);
+  });
+
+  it('utilise la date prévisionnelle quand la date réelle est absente', () => {
+    expect(proposeObjectiveYear(null, '2026-02-01')).toBe(2026);
+    expect(proposeObjectiveYear('', '2027-03-15')).toBe(2027);
+  });
+
+  it('renvoie null sans aucune date', () => {
+    expect(proposeObjectiveYear(null, null)).toBeNull();
+    expect(proposeObjectiveYear('', '')).toBeNull();
+  });
+
+  it('rejette les dates malformées', () => {
+    expect(proposeObjectiveYear('2026/11/20', null)).toBeNull();
+    expect(proposeObjectiveYear(null, '2026-1-20')).toBeNull();
+    expect(proposeObjectiveYear('26-11-20', null)).toBeNull();
+    expect(proposeObjectiveYear('2026-11-20T00:00:00', null)).toBeNull();
+  });
+
+  it('respecte la frontière d’année', () => {
+    expect(proposeObjectiveYear('2026-12-31', null)).toBe(2026);
+    expect(proposeObjectiveYear('2027-01-01', null)).toBe(2027);
   });
 });

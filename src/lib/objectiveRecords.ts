@@ -53,6 +53,23 @@ function actualDate(operation: ObjectiveReportOperation, kind: ObjectiveKind) {
     : operation.management_actual_date ?? null;
 }
 
+// Date d'OS au format ISO yyyy-MM-dd attendu.
+const ISO_DAY = /^\d{4}-\d{2}-\d{2}$/;
+
+/**
+ * Année d'objectif proposée depuis le planning d'OS : date réelle d'OS en
+ * priorité, sinon date prévisionnelle. Ne valide aucune année : la valeur
+ * n'est jamais utilisée sans confirmation explicite de l'utilisateur.
+ */
+export function proposeObjectiveYear(
+  worksOrderActualDate: string | null,
+  worksOrderExpectedDate: string | null,
+): number | null {
+  const source = (worksOrderActualDate || null) ?? (worksOrderExpectedDate || null);
+  if (!source || !ISO_DAY.test(source)) return null;
+  return Number(source.slice(0, 4));
+}
+
 function objectiveRow(
   record: OperationObjective,
   operation: ObjectiveReportOperation,
