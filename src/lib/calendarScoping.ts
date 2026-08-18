@@ -35,7 +35,7 @@ export function filterCurrentUserEvents<E extends ScopedEvent>(
     if (osDate == null) return true;
     if (isCop && isCtx) return true;
     if (isCop) return event.date <= osDate;
-    if (isCtx) return event.date >= osDate;
-    return true;
+    // Ici isCop est faux ; le garde d'appartenance garantit isCtx.
+    return event.date >= osDate;
   });
 }

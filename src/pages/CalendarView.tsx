@@ -206,6 +206,13 @@ export default function CalendarView() {
           observationResult.error;
         if (firstError) setError(firstError.message);
         else {
+          // L'agenda (observations + événements libres) est volontairement
+          // alimenté par toutes les opérations : ses liens peuvent pointer vers
+          // n'importe quelle opération qu'un détenteur de `calendar.view` peut
+          // référencer, quand bien même l'utilisateur n'en est ni COP ni CTX.
+          // L'agenda ne porte que des champs d'affichage (nom, équipe,
+          // département…) — jamais de jalons ni de chiffres budgétaires. Ne pas
+          // router les données de jalons d'opérations par ce chemin.
           setOperations(
             (fullOperationResult.data as CalendarOperation[] | null) ?? [],
           );
@@ -311,10 +318,9 @@ export default function CalendarView() {
     () => {
       if (view === "agenda") return agendaEvents;
       const built = buildCalendarEvents(scopedOperations, conditions, view);
-      if (viewAll) return built;
       return filterCurrentUserEvents(built, opsById, {
         id: user?.id ?? "",
-        hasViewAll: false,
+        hasViewAll: viewAll,
       });
     },
     [agendaEvents, conditions, opsById, scopedOperations, user, view, viewAll],

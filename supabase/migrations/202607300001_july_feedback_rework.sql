@@ -1139,6 +1139,11 @@ create policy calendar_operations_own on public.calendar_operations
 for select to authenticated
 using (cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid()));
 
+-- Lecture réservée aux comptes connectés, comme pour list_active_profiles :
+-- la lecture passe par la RLS de la vue (view_all ou propre équipe).
+revoke all on public.calendar_operations from public, anon;
+grant select on public.calendar_operations to authenticated;
+
 drop policy if exists audit_admin_read on public.audit_log;
 drop policy if exists audit_permission_read on public.audit_log;
 create policy audit_permission_read on public.audit_log

@@ -192,5 +192,7 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("using (public.has_permission('calendar.view_all'))");
     expect(sql).toContain("policy calendar_operations_own on public.calendar_operations");
     expect(sql).toContain("cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid())");
+    expect(sql).toContain("revoke all on public.calendar_operations from public, anon");
+    expect(sql).toContain("grant select on public.calendar_operations to authenticated");
   });
 });
