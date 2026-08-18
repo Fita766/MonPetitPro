@@ -37,6 +37,8 @@ import { buildAlerts, type AlertCondition, type AlertOperation } from "../lib/al
 import UpcomingAlerts from "../components/dashboard/UpcomingAlerts";
 import ExportColumnDialog from "../components/exports/ExportColumnDialog";
 import { alertToIcsEvent, buildIcs, downloadIcs } from "../lib/ics";
+import KpiCards from "../components/dashboard/KpiCards";
+import { buildKpis, countActiveFilters } from "../lib/dashboardKpis";
 
 interface DashboardOperation extends FilterableOperation {
   id: string;
@@ -50,6 +52,7 @@ interface DashboardOperation extends FilterableOperation {
   commune: string | null;
   certification: string | null;
   total_housing_units: number | null;
+  final_budget: number | null;
   expected_delivery_date: string | null;
   actual_delivery_date: string | null;
   observations?: { responsible_person: string | null }[];
@@ -179,6 +182,8 @@ export default function Dashboard() {
     () => buildAlerts(operations as unknown as AlertOperation[], conditions, todayIso),
     [operations, conditions, todayIso],
   );
+  const kpis = useMemo(() => buildKpis(operations, alerts), [operations, alerts]);
+  const activeFilterCount = useMemo(() => countActiveFilters(filters), [filters]);
   const exportAlertsToOutlook = (items: typeof alerts, filename: string) => {
     if (items.length === 0) return;
     downloadIcs(filename, buildIcs(items.map(alertToIcsEvent), 'Échéances MonPetitPro'));
@@ -273,6 +278,8 @@ export default function Dashboard() {
           )}
         </div>
       </header>
+
+      <KpiCards kpis={kpis} />
 
       {error && (
         <div
@@ -378,6 +385,11 @@ export default function Dashboard() {
               className="outline-none"
             />
           </label>
+          {activeFilterCount > 0 && (
+            <span className="inline-flex items-center gap-1.5 rounded-xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs font-medium text-amber-900">
+              {activeFilterCount} filtre{activeFilterCount > 1 ? "s" : ""} actif{activeFilterCount > 1 ? "s" : ""}
+            </span>
+          )}
           <button
             type="button"
             onClick={() => setFilters(EMPTY_FILTERS)}
