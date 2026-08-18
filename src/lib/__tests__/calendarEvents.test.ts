@@ -62,4 +62,11 @@ describe('buildCalendarEvents', () => {
     const events = buildCalendarEvents([baseOperation], [], 'program');
     expect(events.filter((event) => event.title === 'Dépôt PC' || event.title === 'Arrêté PC')).toEqual([]);
   });
+
+  it('fait porter les comptes COP/CTX sur chaque événement', () => {
+    const events = buildCalendarEvents([{ ...baseOperation, cop_user_id: 'cop-1', ctx_user_id: 'ctx-1' }], [], 'deliveries');
+    expect(events[0]).toMatchObject({ copUserId: 'cop-1', ctxUserId: 'ctx-1' });
+    // sans compte lié, le porteur reste null (jamais « undefined » dans le rendu)
+    expect(buildCalendarEvents([baseOperation], [], 'deliveries')[0]).toMatchObject({ copUserId: null, ctxUserId: null });
+  });
 });

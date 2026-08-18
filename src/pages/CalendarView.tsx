@@ -47,6 +47,7 @@ import {
 } from "../components/operations/FormControls";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import { buildIcs, downloadIcs } from "../lib/ics";
+import { filterCurrentUserEvents } from "../lib/calendarScoping";
 
 type CalendarViewType = BusinessCalendarView | "agenda";
 type CalendarDisplay = "month" | "year";
@@ -153,10 +154,12 @@ export default function CalendarView() {
   const navigate = useNavigate();
   const permissions = useStore((state) => state.permissions);
   const user = useStore((state) => state.user);
+  const viewAll = permissionGranted(permissions, "calendar.view_all");
   const [view, setView] = useState<CalendarViewType>("deliveries");
   const [display, setDisplay] = useState<CalendarDisplay>("month");
   const [currentDate, setCurrentDate] = useState(new Date());
   const [operations, setOperations] = useState<CalendarOperation[]>([]);
+  const [calendarOperations, setCalendarOperations] = useState<CalendarOperation[]>([]);
   const [conditions, setConditions] = useState<CalendarCondition[]>([]);
   const [manualEvents, setManualEvents] = useState<ManualEventRow[]>([]);
   const [observations, setObservations] = useState<CalendarObservationRow[]>(
@@ -170,8 +173,16 @@ export default function CalendarView() {
 
   useEffect(() => {
     let cancelled = false;
+    const operationsQuery = supabase
+      .from("operations")
+      .select("*")
+      .order("name");
+    const calendarOperationsQuery = viewAll
+      ? operationsQuery
+      : supabase.from("calendar_operations").select("*").order("name");
     void Promise.all([
-      supabase.from("operations").select("*").order("name"),
+      calendarOperationsQuery,
+      operationsQuery,
       supabase.from("suspensive_conditions").select("*"),
       supabase
         .from("observations")
@@ -180,16 +191,28 @@ export default function CalendarView() {
         ),
       supabase.from("events").select("*"),
     ]).then(
-      ([operationResult, conditionResult, observationResult, eventResult]) => {
+      ([
+        operationResult,
+        fullOperationResult,
+        conditionResult,
+        observationResult,
+        eventResult,
+      ]) => {
         if (cancelled) return;
         const firstError =
           operationResult.error ||
+          fullOperationResult.error ||
           conditionResult.error ||
           observationResult.error;
         if (firstError) setError(firstError.message);
         else {
           setOperations(
-            (operationResult.data as CalendarOperation[] | null) ?? [],
+            (fullOperationResult.data as CalendarOperation[] | null) ?? [],
+          );
+          setCalendarOperations(
+            viewAll
+              ? []
+              : ((operationResult.data as CalendarOperation[] | null) ?? []),
           );
           setConditions(
             (conditionResult.data as CalendarCondition[] | null) ?? [],
@@ -209,11 +232,20 @@ export default function CalendarView() {
     return () => {
       cancelled = true;
     };
-  }, [refreshKey]);
+  }, [refreshKey, viewAll]);
 
   const operationById = useMemo(
     () => new Map(operations.map((operation) => [operation.id, operation])),
     [operations],
+  );
+  const opsById = useMemo(() => {
+    const record: Record<string, CalendarOperation> = {};
+    for (const operation of operations) record[operation.id] = operation;
+    return record;
+  }, [operations]);
+  const scopedOperations = useMemo(
+    () => (viewAll ? operations : calendarOperations),
+    [operations, calendarOperations, viewAll],
   );
   const agendaEvents = useMemo<DisplayEvent[]>(() => {
     const fromManual = manualEvents.flatMap((event): DisplayEvent[] => {
@@ -276,29 +308,38 @@ export default function CalendarView() {
   }, [manualEvents, observations, operationById]);
 
   const allEvents = useMemo<DisplayEvent[]>(
-    () =>
-      view === "agenda"
-        ? agendaEvents
-        : buildCalendarEvents(operations, conditions, view),
-    [agendaEvents, conditions, operations, view],
+    () => {
+      if (view === "agenda") return agendaEvents;
+      const built = buildCalendarEvents(scopedOperations, conditions, view);
+      if (viewAll) return built;
+      return filterCurrentUserEvents(built, opsById, {
+        id: user?.id ?? "",
+        hasViewAll: false,
+      });
+    },
+    [agendaEvents, conditions, opsById, scopedOperations, user, view, viewAll],
   );
   const filteredEvents = useMemo(
     () => allEvents.filter((event) => eventMatches(event, filters)),
     [allEvents, filters],
   );
+  const displayOperations = useMemo(
+    () => (view === "agenda" ? operations : scopedOperations),
+    [operations, scopedOperations, view],
+  );
   const options = useMemo(
     () => ({
-      operations: operations.map((operation) => operation.name),
-      ctxs: unique(operations.map((operation) => operation.project_manager)),
-      cops: unique(operations.map((operation) => operation.operations_manager)),
-      departments: unique(operations.map((operation) => operation.department)),
-      promoters: unique(operations.map((operation) => operation.promoter_name)),
-      stages: unique(operations.map((operation) => operation.stage)),
-      modes: unique(operations.map((operation) => operation.operation_type)),
-      natures: unique(operations.map((operation) => operation.program_nature)),
+      operations: displayOperations.map((operation) => operation.name),
+      ctxs: unique(displayOperations.map((operation) => operation.project_manager)),
+      cops: unique(displayOperations.map((operation) => operation.operations_manager)),
+      departments: unique(displayOperations.map((operation) => operation.department)),
+      promoters: unique(displayOperations.map((operation) => operation.promoter_name)),
+      stages: unique(displayOperations.map((operation) => operation.stage)),
+      modes: unique(displayOperations.map((operation) => operation.operation_type)),
+      natures: unique(displayOperations.map((operation) => operation.program_nature)),
       milestoneTypes: unique(allEvents.map((event) => event.milestoneType)),
     }),
-    [allEvents, operations],
+    [allEvents, displayOperations],
   );
 
   const monthStart = startOfMonth(currentDate);

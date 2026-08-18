@@ -183,4 +183,14 @@ describe("migration des retours du 29 juillet", () => {
     expect(sql).toContain("operations.field.operations_manager.edit");
     expect(sql).toContain("grant execute on function public.list_active_profiles() to authenticated");
   });
+
+  it("crée la vue calendrier scopée et ses policies RLS (A6b)", () => {
+    expect(sql).toContain("create or replace view public.calendar_operations");
+    expect(sql).toMatch(/calendar_operations[\s\S]*security_invoker\s*=\s*on/i);
+    expect(sql).toContain("alter view public.calendar_operations enable row level security");
+    expect(sql).toContain("policy calendar_operations_view_all on public.calendar_operations");
+    expect(sql).toContain("using (public.has_permission('calendar.view_all'))");
+    expect(sql).toContain("policy calendar_operations_own on public.calendar_operations");
+    expect(sql).toContain("cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid())");
+  });
 });

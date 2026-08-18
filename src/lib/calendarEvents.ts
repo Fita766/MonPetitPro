@@ -13,6 +13,8 @@ export interface CalendarOperation {
   name: string;
   project_manager?: string | null;
   operations_manager?: string | null;
+  cop_user_id?: string | null;
+  ctx_user_id?: string | null;
   department?: string | null;
   promoter_name?: string | null;
   stage?: string | null;
@@ -23,6 +25,8 @@ export interface CalendarOperation {
   actual_delivery_date?: string | null;
   management_expected_date?: string | null;
   management_actual_date?: string | null;
+  works_order_expected_date?: string | null;
+  works_order_actual_date?: string | null;
   [key: string]: unknown;
 }
 export interface CalendarCondition {
@@ -45,6 +49,8 @@ export interface BusinessCalendarEvent {
   operationName: string;
   ctx: string | null;
   cop: string | null;
+  copUserId?: string | null;
+  ctxUserId?: string | null;
   department: string | null;
   promoter: string | null;
   stage: string | null;
@@ -58,6 +64,8 @@ function metadata(operation: CalendarOperation) {
     operationName: operation.name,
     ctx: operation.project_manager ?? null,
     cop: operation.operations_manager ?? null,
+    copUserId: operation.cop_user_id ?? null,
+    ctxUserId: operation.ctx_user_id ?? null,
     department: operation.department ?? null,
     promoter: operation.promoter_name ?? null,
     stage: operation.stage ?? null,

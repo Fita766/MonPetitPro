@@ -1119,6 +1119,26 @@ $$;
 revoke all on function public.list_active_profiles() from public, anon;
 grant execute on function public.list_active_profiles() to authenticated;
 
+-- A6b : vue calendrier scopée par équipe. security_invoker : la RLS des
+-- opérations s'applique toujours au lecteur, ces policies ne peuvent donc que
+-- restreindre. La coupure COP/CTX à l'OS est appliquée côté client : elle
+-- dépend de la date de chaque jalon et n'est pas exprimable en RLS ligne.
+create or replace view public.calendar_operations
+with (security_invoker = on) as
+select * from public.operations;
+
+alter view public.calendar_operations enable row level security;
+
+drop policy if exists calendar_operations_view_all on public.calendar_operations;
+create policy calendar_operations_view_all on public.calendar_operations
+for select to authenticated
+using (public.has_permission('calendar.view_all'));
+
+drop policy if exists calendar_operations_own on public.calendar_operations;
+create policy calendar_operations_own on public.calendar_operations
+for select to authenticated
+using (cop_user_id = (select auth.uid()) or ctx_user_id = (select auth.uid()));
+
 drop policy if exists audit_admin_read on public.audit_log;
 drop policy if exists audit_permission_read on public.audit_log;
 create policy audit_permission_read on public.audit_log
