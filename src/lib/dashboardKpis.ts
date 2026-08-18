@@ -24,7 +24,11 @@ export interface DashboardKpis {
   activeAlerts: number;
 }
 
-const positive = (value: number | null | undefined): value is number =>
+/**
+ * Vrai pour toute valeur finie (y compris négative) : le nom ne promet pas une
+ * positivité, il garantit seulement que `value` est un nombre fini.
+ */
+const isFiniteNumber = (value: number | null | undefined): value is number =>
   typeof value === 'number' && Number.isFinite(value);
 
 export function buildKpis(
@@ -37,11 +41,11 @@ export function buildKpis(
   let hasFinalBudget = false;
 
   for (const operation of operations) {
-    if (positive(operation.total_housing_units)) {
+    if (isFiniteNumber(operation.total_housing_units)) {
       housingUnits += operation.total_housing_units;
       hasHousingUnits = true;
     }
-    if (positive(operation.final_budget)) {
+    if (isFiniteNumber(operation.final_budget)) {
       finalBudget += operation.final_budget;
       hasFinalBudget = true;
     }

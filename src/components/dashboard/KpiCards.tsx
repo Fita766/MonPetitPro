@@ -38,6 +38,7 @@ export default function KpiCards({ kpis }: KpiCardsProps) {
         </p>
         <p className="text-xs text-slate-500">budget atterrissage</p>
       </div>
+      {/* « alertes actives » = toutes les échéances (dépassées + à venir), pas seulement celles en retard. */}
       <div className="rounded-2xl border border-amber-200 bg-amber-50 p-5">
         <AlertTriangle className="text-amber-700" />
         <p className="mt-4 text-3xl font-medium text-amber-950">

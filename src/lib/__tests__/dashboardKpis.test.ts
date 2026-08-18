@@ -59,6 +59,19 @@ describe('buildKpis', () => {
     const none = buildKpis([{ total_housing_units: null }, {}], []);
     expect(none.housingUnits).toBeNull();
   });
+
+  it('exclut les valeurs non finies (NaN, Infinity) de la somme', () => {
+    const kpis = buildKpis(
+      [{ total_housing_units: NaN }, { final_budget: Infinity }],
+      [],
+    );
+    expect(kpis).toEqual({
+      operations: 2,
+      housingUnits: null,
+      finalBudget: null,
+      activeAlerts: 0,
+    });
+  });
 });
 
 describe('countActiveFilters', () => {
