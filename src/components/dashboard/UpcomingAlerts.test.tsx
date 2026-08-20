@@ -30,6 +30,10 @@ describe('actions Outlook des échéances du tableau de bord', () => {
       />,
     );
 
+    // L'encart est replié par défaut : le déplier pour atteindre l'échéance.
+    await user.click(
+      screen.getByRole('button', { name: /Échéances à surveiller/ }),
+    );
     await user.click(
       screen.getByRole('button', { name: 'Ajouter Dépôt du permis à Outlook' }),
     );
