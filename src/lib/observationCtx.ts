@@ -36,3 +36,15 @@ export function observationCtxId(
 ): string {
   return observation.ctx_user_id ?? operation?.ctx_user_id ?? '';
 }
+
+/** Label CTX à afficher/exporter pour une observation : profil lié résolu via l'id (obs prime → op),
+ *  sinon repli sur le texte hérité project_manager de l'opération. */
+export function observationCtxLabel(
+  observation: { ctx_user_id?: string | null },
+  operation: { ctx_user_id?: string | null; project_manager?: string | null } | null | undefined,
+  profiles: ReadonlyMap<string, string>,
+): string {
+  const ctxId = observationCtxId(observation, operation);
+  const linked = ctxId ? (profiles.get(ctxId) ?? null) : null;
+  return linked ?? operation?.project_manager ?? '';
+}

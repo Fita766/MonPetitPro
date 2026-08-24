@@ -24,7 +24,7 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
-import { observationCtxId, resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
+import { observationCtxId, observationCtxLabel, resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
@@ -50,22 +50,6 @@ interface ObservationWithOperation extends ObservationRow {
   status: string;
   is_dg: boolean;
 }
-
-const OBSERVATION_EXPORT_REGISTRY: ExportColumn<ObservationWithOperation>[] = [
-  { key: "operation", label: "Opération", group: "Opération", formatter: (row) => row.operations?.name ?? "" },
-  { key: "type", label: "Type", group: "Opération", formatter: (row) => row.operations?.operation_type ?? "" },
-  { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => row.operations?.project_manager ?? "" },
-  { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
-  { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
-  { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
-  { key: "responsible", label: "Responsable", group: "Suivi", formatter: (row) => row.responsible_person },
-  { key: "deadline", label: "Date butoir", group: "Suivi", formatter: (row) => row.deadline_date ? new Date(`${row.deadline_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
-  { key: "completion", label: "Réalisation", group: "Suivi", formatter: (row) => row.completion_date ?? "" },
-  { key: "resolution", label: "Résolution proposée", group: "Suivi", formatter: (row) => row.resolution_date ?? "" },
-  { key: "status", label: "Statut", group: "Suivi", formatter: (row) => getObservationStatus(row) },
-  { key: "dg", label: "DG", group: "Confidentiel", requiredPermission: "observations.view_dg", formatter: (row) => row.is_dg ? "Oui" : "Non" },
-  { key: "author", label: "Auteur", group: "Suivi", formatter: (row) => row.author_initials ?? "" },
-];
 
 interface ObservationFilters {
   operations: string[];
@@ -157,6 +141,21 @@ export default function Observations() {
     initials: item.initials,
   })), [assigneeProfiles]);
   const profileById = useMemo(() => new Map(ctxOptions.map((option) => [option.id, option.label])), [ctxOptions]);
+  const exportRegistry = useMemo<ExportColumn<ObservationWithOperation>[]>(() => [
+    { key: "operation", label: "Opération", group: "Opération", formatter: (row) => row.operations?.name ?? "" },
+    { key: "type", label: "Type", group: "Opération", formatter: (row) => row.operations?.operation_type ?? "" },
+    { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => observationCtxLabel(row, row.operations, profileById) },
+    { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
+    { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
+    { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
+    { key: "responsible", label: "Responsable", group: "Suivi", formatter: (row) => row.responsible_person },
+    { key: "deadline", label: "Date butoir", group: "Suivi", formatter: (row) => row.deadline_date ? new Date(`${row.deadline_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
+    { key: "completion", label: "Réalisation", group: "Suivi", formatter: (row) => row.completion_date ?? "" },
+    { key: "resolution", label: "Résolution proposée", group: "Suivi", formatter: (row) => row.resolution_date ?? "" },
+    { key: "status", label: "Statut", group: "Suivi", formatter: (row) => getObservationStatus(row) },
+    { key: "dg", label: "DG", group: "Confidentiel", requiredPermission: "observations.view_dg", formatter: (row) => row.is_dg ? "Oui" : "Non" },
+    { key: "author", label: "Auteur", group: "Suivi", formatter: (row) => row.author_initials ?? "" },
+  ], [profileById]);
 
   useEffect(() => {
     let cancelled = false;
@@ -422,7 +421,7 @@ export default function Observations() {
       sheet.addRow({
         operation: observation.operations?.name ?? "",
         type: observation.operations?.operation_type ?? "",
-        ctx: observation.operations?.project_manager ?? "",
+        ctx: observationCtxLabel(observation, observation.operations, profileById),
         cop: observation.operations?.operations_manager ?? "",
         info: observation.info_date,
         description: observation.description,
@@ -469,7 +468,7 @@ export default function Observations() {
       ],
       body: filtered.map((observation) => [
         observation.operations?.name ?? "",
-        `${observation.operations?.project_manager ?? "—"} / ${observation.operations?.operations_manager ?? "—"}`,
+        `${observationCtxLabel(observation, observation.operations, profileById) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
         observation.info_date,
         observation.description,
         observation.responsible_person,
@@ -488,7 +487,7 @@ export default function Observations() {
   // anciennes extractions déjà ouvertes dans une session.
   void exportExcel;
   void exportPdf;
-  const exportColumns = authorizedColumns(OBSERVATION_EXPORT_REGISTRY, permissions);
+  const exportColumns = authorizedColumns(exportRegistry, permissions);
   const exportSelectedExcel = async (keys: string[], source = filtered) => {
     const columns = selectedExportColumns(keys, exportColumns);
     const workbook = new ExcelJS.Workbook();
