@@ -17,6 +17,7 @@ export interface ObservationRow {
   is_dg?: boolean | null;
   user_id?: string | null;
   assignee_user_id?: string | null;
+  ctx_user_id?: string | null;
 }
 
 export interface ObservationFormData {

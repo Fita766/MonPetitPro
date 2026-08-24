@@ -163,6 +163,7 @@ export interface Observation {
   status: string | null;
   user_id?: string | null;
   assignee_user_id: string | null;
+  ctx_user_id: string | null;
 }
 
 export type HousingProduct = 'PLUS' | 'PLAI' | 'PLS' | 'LLI' | 'BRS' | 'PSLA';
