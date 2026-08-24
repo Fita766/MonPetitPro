@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { resolveCtxForOperation } from '../observationCtx';
+import { observationCtxId, resolveCtxForOperation } from '../observationCtx';
 
 describe('resolveCtxForOperation', () => {
   const profiles = [
@@ -20,5 +20,13 @@ describe('resolveCtxForOperation', () => {
   it('renvoie vide si aucune correspondance', () => {
     const op = { ctx_user_id: null, project_manager: 'Inconnu XYZ' };
     expect(resolveCtxForOperation(op, profiles)).toBe('');
+  });
+});
+
+describe('observationCtxId', () => {
+  it('préfère le lien observation sur le lien opération', () => {
+    expect(observationCtxId({ ctx_user_id: 'obs-ctx' }, { ctx_user_id: 'op-ctx' })).toBe('obs-ctx');
+    expect(observationCtxId({ ctx_user_id: null }, { ctx_user_id: 'op-ctx' })).toBe('op-ctx');
+    expect(observationCtxId({ ctx_user_id: null }, null)).toBe('');
   });
 });

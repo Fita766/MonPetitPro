@@ -24,7 +24,7 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
-import { resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
+import { observationCtxId, resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
@@ -156,6 +156,7 @@ export default function Observations() {
     label: item.display_name?.trim() || item.initials?.trim() || item.email?.split('@')[0] || 'Utilisateur',
     initials: item.initials,
   })), [assigneeProfiles]);
+  const profileById = useMemo(() => new Map(ctxOptions.map((option) => [option.id, option.label])), [ctxOptions]);
 
   useEffect(() => {
     let cancelled = false;
@@ -749,6 +750,15 @@ export default function Observations() {
                       <div>
                         <div className="flex flex-wrap items-center gap-2">
                           {statusBadge(observation)}
+                          {(() => {
+                            const ctxId = observationCtxId(observation, observation.operations);
+                            const ctxLabel = ctxId ? (profileById.get(ctxId) ?? null) : null;
+                            return ctxLabel ? (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
+                                CTX · {ctxLabel}
+                              </span>
+                            ) : null;
+                          })()}
                           {observation.is_dg && (
                             <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-1 text-[10px] font-medium text-amber-900">
                               <EyeOff size={11} /> DG
@@ -851,7 +861,10 @@ export default function Observations() {
                     {observation.description}
                   </td>
                   <td className="px-3 py-3">
-                    {observation.operations?.project_manager}
+                    {(() => {
+                      const ctxId = observationCtxId(observation, observation.operations);
+                      return ctxId ? (profileById.get(ctxId) ?? observation.operations?.project_manager ?? '—') : (observation.operations?.project_manager ?? '—');
+                    })()}
                   </td>
                   <td className="px-3 py-3">
                     {observation.operations?.operations_manager}

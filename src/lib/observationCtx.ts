@@ -28,3 +28,11 @@ export function resolveCtxForOperation(
     normalized(profile.label) === target || normalized(profile.initials) === target);
   return match?.id ?? '';
 }
+
+/** Id du profil CTX à considérer pour une observation : l'observation prime, sinon l'opération. */
+export function observationCtxId(
+  observation: { ctx_user_id?: string | null },
+  operation: { ctx_user_id?: string | null } | null | undefined,
+): string {
+  return observation.ctx_user_id ?? operation?.ctx_user_id ?? '';
+}
