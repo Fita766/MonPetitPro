@@ -10,7 +10,7 @@ Permettre d'associer une observation au **CTX (profil utilisateur)** concerné, 
 ## Rappel du modèle actuel
 
 - `observations` : liée à **une opération obligatoire** (`operation_id`), + `assignee_user_id` (la personne **responsable de la résolution** — sémantique distincte).
-- `operations` : possède déjà des **liens profils** `cop_user_id` / `ctx_user_id` → `profiles(id)`, utilisés pour le périmètre du calendrier. Ce pattern fait autorité pour le périmètre ; la colonne texte (`project_manager` / `operations_manager`) reste la source d'affichage historique.
+- `operations` : possède déjà des **liens profils** `cop_user_id` / `ctx_user_id` → `auth.users(id)`, utilisés pour le périmètre du calendrier. Ce pattern fait autorité pour le périmètre ; la colonne texte (`project_manager` / `operations_manager`) reste la source d'affichage historique.
 - Le formulaire d'observation (`ObservationForm`) sélectionne une opération ; le CTX n'est pas sélectionnable.
 
 ## Décisions validées
@@ -28,11 +28,12 @@ Ajouter sur `public.observations` :
 
 ```sql
 alter table public.observations
-  add column if not exists ctx_user_id uuid references public.profiles(id) on delete set null;
+  add column if not exists ctx_user_id uuid references auth.users(id) on delete set null;
 create index if not exists observations_ctx_user_idx on public.observations(ctx_user_id);
 ```
 
-- `nullable`, `on delete set null` : si le profil est supprimé, le lien se neutralise (pas d'erreur FK, pas de suppression en cascade de l'observation).
+- `nullable`, `on delete set null` : si le compte est supprimé, le lien se neutralise (pas d'erreur FK, pas de suppression en cascade de l'observation).
+- Cible FK `auth.users(id)` : cohérente avec le pattern du dépôt — `operations.ctx_user_id` / `cop_user_id`, `observations.assignee_user_id` et `user_id` pointent tous vers `auth.users(id)` (vérifié dans les migrations).
 - Migration additive, idempotente, au même format que les migrations existantes.
 
 ### 2. Formulaire (`ObservationForm`, `Observations.tsx`)
