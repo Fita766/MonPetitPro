@@ -295,6 +295,7 @@ export default function Observations() {
       description: observation.description,
       responsible_person: observation.responsible_person,
       assignee_user_id: observation.assignee_user_id ?? "",
+      ctx_user_id: observation.ctx_user_id ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
