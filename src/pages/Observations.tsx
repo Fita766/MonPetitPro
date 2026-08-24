@@ -204,7 +204,16 @@ export default function Observations() {
   const options = useMemo(
     () => ({
       operations: operations.map((operation) => operation.name),
-      ctxs: unique(operations.map((operation) => operation.project_manager)),
+      ctxs: (() => {
+        const ids = new Set<string>();
+        observations.forEach((observation) => {
+          const id = observationCtxId(observation, observation.operations);
+          if (id) ids.add(id);
+        });
+        return unique([...ids]
+          .map((id) => profileById.get(id))
+          .filter((label): label is string => Boolean(label)));
+      })(),
       cops: unique(operations.map((operation) => operation.operations_manager)),
       promoters: unique(operations.map((operation) => operation.promoter_name)),
       operationTypes: unique(
@@ -215,7 +224,7 @@ export default function Observations() {
       ),
       statuses: unique(observations.map(statusFor)),
     }),
-    [observations, operations],
+    [observations, operations, profileById],
   );
 
   const filtered = useMemo(
@@ -227,12 +236,16 @@ export default function Observations() {
           (!operation || !filters.operations.includes(operation.name))
         )
           return false;
-        if (
-          filters.ctxs.length &&
-          (!operation?.project_manager ||
-            !filters.ctxs.includes(operation.project_manager))
-        )
-          return false;
+        if (filters.ctxs.length) {
+          const ctxId = observationCtxId(observation, observation.operations);
+          const ctxLabel = ctxId ? (profileById.get(ctxId) ?? null) : null;
+          const effectiveCtx =
+            ctxLabel ??
+            observation.operations?.project_manager ??
+            null;
+          if (!effectiveCtx || !filters.ctxs.includes(effectiveCtx))
+            return false;
+        }
         if (
           filters.cops.length &&
           (!operation?.operations_manager ||
@@ -276,7 +289,7 @@ export default function Observations() {
           ].some((value) => value?.toLocaleLowerCase("fr").includes(query))
         );
       }),
-    [filters, observations],
+    [filters, observations, profileById],
   );
 
   const grouped = useMemo(
