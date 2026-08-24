@@ -763,8 +763,7 @@ export default function Observations() {
                         <div className="flex flex-wrap items-center gap-2">
                           {statusBadge(observation)}
                           {(() => {
-                            const ctxId = observationCtxId(observation, observation.operations);
-                            const ctxLabel = ctxId ? (profileById.get(ctxId) ?? null) : null;
+                            const ctxLabel = observationCtxLabel(observation, observation.operations, profileById);
                             return ctxLabel ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
                                 CTX · {ctxLabel}
