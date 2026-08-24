@@ -1,5 +1,6 @@
 import { EyeOff, Save, X } from 'lucide-react';
 import type { ObservationFormData, ObservationExplicitStatus } from '../../lib/observationStatus';
+import type { ProfileCtxOption } from '../../lib/observationCtx';
 import { FieldLabel, SelectInput, TextArea, TextInput } from '../operations/FormControls';
 
 export interface ObservationOperationOption {
@@ -12,23 +13,25 @@ export interface ObservationAssigneeOption {
   label: string;
 }
 
-export default function ObservationForm({ value, operations, assignees, editableFields, canViewDg, fixedOperation, saving, onChange, onSubmit, onCancel }: {
+export default function ObservationForm({ value, operations, assignees, ctxOptions = [], editableFields, canViewDg, fixedOperation, saving, onChange, onOperationSelect, onSubmit, onCancel }: {
   value: ObservationFormData;
   operations: ObservationOperationOption[];
   assignees: ObservationAssigneeOption[];
+  ctxOptions?: ProfileCtxOption[];
   editableFields: Set<keyof ObservationFormData>;
   canViewDg: boolean;
   fixedOperation?: boolean;
   saving?: boolean;
   onChange: (value: ObservationFormData) => void;
+  onOperationSelect?: (operationId: string) => void;
   onSubmit: (event: React.FormEvent) => void;
   onCancel: () => void;
 }) {
   const update = <K extends keyof ObservationFormData>(key: K, fieldValue: ObservationFormData[K]) => onChange({ ...value, [key]: fieldValue });
   return (
     <form onSubmit={onSubmit} className="space-y-5">
-      {!fixedOperation && <div><FieldLabel>Opération *</FieldLabel><SelectInput disabled={!editableFields.has('operation_id')} required value={value.operation_id} onChange={(event) => update('operation_id', event.target.value)}><option value="">Sélectionner…</option>{operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.name}</option>)}</SelectInput></div>}
-      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+      {!fixedOperation && <div><FieldLabel>Opération *</FieldLabel><SelectInput disabled={!editableFields.has('operation_id')} required value={value.operation_id} onChange={(event) => { update('operation_id', event.target.value); onOperationSelect?.(event.target.value); }}><option value="">Sélectionner…</option>{operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.name}</option>)}</SelectInput></div>}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div><FieldLabel>Date d’information *</FieldLabel><TextInput disabled={!editableFields.has('info_date')} required type="date" value={value.info_date} onChange={(event) => update('info_date', event.target.value)} /></div>
         <div><FieldLabel>Personne responsable *</FieldLabel>
           <SelectInput disabled={!editableFields.has('assignee_user_id')} required value={value.assignee_user_id}
@@ -38,6 +41,13 @@ export default function ObservationForm({ value, operations, assignees, editable
             }}>
             <option value="">Sélectionner…</option>
             {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.label}</option>)}
+          </SelectInput>
+        </div>
+        <div><FieldLabel>CTX concerné</FieldLabel>
+          <SelectInput disabled={!editableFields.has('ctx_user_id')} value={value.ctx_user_id}
+            onChange={(event) => update('ctx_user_id', event.target.value)}>
+            <option value="">Non précisé</option>
+            {ctxOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
           </SelectInput>
         </div>
       </div>

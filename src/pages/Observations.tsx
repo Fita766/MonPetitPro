@@ -24,6 +24,7 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
+import { resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
@@ -37,6 +38,7 @@ interface ObservationOperation {
   id: string;
   name: string;
   project_manager: string | null;
+  ctx_user_id: string | null;
   operations_manager: string | null;
   promoter_name: string | null;
   operation_type: string | null;
@@ -149,6 +151,11 @@ export default function Observations() {
     }
     return rows;
   }, [assigneeProfiles, form]);
+  const ctxOptions: ProfileCtxOption[] = useMemo(() => assigneeProfiles.map((item) => ({
+    id: item.id,
+    label: item.display_name?.trim() || item.initials?.trim() || item.email?.split('@')[0] || 'Utilisateur',
+    initials: item.initials,
+  })), [assigneeProfiles]);
 
   useEffect(() => {
     let cancelled = false;
@@ -156,13 +163,13 @@ export default function Observations() {
       supabase
         .from("observations")
         .select(
-          "*, operations(id, name, project_manager, operations_manager, promoter_name, operation_type, stage)",
+          "*, operations(id, name, project_manager, ctx_user_id, operations_manager, promoter_name, operation_type, stage)",
         )
         .order("deadline_date"),
       supabase
         .from("operations")
         .select(
-          "id, name, project_manager, operations_manager, promoter_name, operation_type, stage",
+          "id, name, project_manager, ctx_user_id, operations_manager, promoter_name, operation_type, stage",
         )
         .order("name"),
       supabase.from("profiles")
@@ -285,7 +292,15 @@ export default function Observations() {
   const openCreate = (operationId = "") => {
     setEditing(null);
     if (!profile) return;
-    setForm(buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operationId));
+    const draft = buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operationId);
+    if (operationId) {
+      const operation = operations.find((item) => item.id === operationId);
+      if (operation) {
+        const ctxId = resolveCtxForOperation(operation, ctxOptions);
+        if (ctxId) draft.ctx_user_id = ctxId;
+      }
+    }
+    setForm(draft);
   };
   const openEdit = (observation: ObservationWithOperation) => {
     setEditing(observation);
@@ -302,6 +317,14 @@ export default function Observations() {
       status: observation.status as ObservationFormData["status"],
       is_dg: observation.is_dg,
     });
+  };
+
+  const handleOperationSelect = (operationId: string) => {
+    if (!form || editing) return; // création uniquement
+    const operation = operations.find((item) => item.id === operationId);
+    if (!operation) return;
+    const ctxId = resolveCtxForOperation(operation, ctxOptions);
+    setForm({ ...form, operation_id: operationId, ctx_user_id: ctxId });
   };
 
   const saveObservation = async (event: React.FormEvent) => {
@@ -892,10 +915,12 @@ export default function Observations() {
                 value={form}
                 operations={operations}
                 assignees={assigneeOptions}
+                ctxOptions={ctxOptions}
                 editableFields={editableFields}
                 canViewDg={canViewDg}
                 saving={saving}
                 onChange={setForm}
+                onOperationSelect={handleOperationSelect}
                 onSubmit={saveObservation}
                 onCancel={() => setForm(null)}
               />

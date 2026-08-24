@@ -25,7 +25,7 @@ export function editableObservationFields(
   const canEditContent = permissions.some((key) =>
     ['observations.create', 'observations.edit_assigned', 'observations.edit_all'].includes(key));
   if (canEditContent) {
-    for (const key of ['operation_id', 'info_date', 'description', 'deadline_date', 'resolution_date'] as const) {
+    for (const key of ['operation_id', 'info_date', 'description', 'deadline_date', 'resolution_date', 'ctx_user_id'] as const) {
       result.add(key);
     }
   }

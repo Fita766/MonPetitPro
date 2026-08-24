@@ -37,6 +37,7 @@ import type {
 } from "../types/domain";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
+import { resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import DocumentsSection from "../components/operations/DocumentsSection";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
@@ -173,6 +174,11 @@ export default function OperationDetail() {
   const assigneeOptions = useMemo(() => assigneeProfiles.map((item) => ({
     id: item.id,
     label: item.display_name?.trim() || item.initials?.trim() || item.email?.split("@")[0] || "Utilisateur",
+  })), [assigneeProfiles]);
+  const ctxOptions: ProfileCtxOption[] = useMemo(() => assigneeProfiles.map((item) => ({
+    id: item.id,
+    label: item.display_name?.trim() || item.initials?.trim() || item.email?.split("@")[0] || "Utilisateur",
+    initials: item.initials,
   })), [assigneeProfiles]);
   const stage = getStageConfig(operation?.stage);
 
@@ -544,7 +550,10 @@ export default function OperationDetail() {
               type="button"
               onClick={() => {
                 setEditing(null);
-                if (profile) setForm(buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operation.id));
+                if (!profile) return;
+                const draft = buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operation.id);
+                const ctxId = resolveCtxForOperation(operation, ctxOptions);
+                setForm(ctxId ? { ...draft, ctx_user_id: ctxId } : draft);
               }}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
@@ -648,6 +657,7 @@ export default function OperationDetail() {
                 value={form}
                 operations={[{ id: operation.id, name: operation.name }]}
                 assignees={assigneeOptions}
+                ctxOptions={ctxOptions}
                 editableFields={observationEditableFields}
                 canViewDg={permissionGranted(permissions, 'observations.view_dg')}
                 saving={saving}
