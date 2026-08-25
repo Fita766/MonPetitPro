@@ -17,7 +17,7 @@ export interface ObservationRow {
   is_dg?: boolean | null;
   user_id?: string | null;
   assignee_user_id?: string | null;
-  ctx_user_id?: string | null;
+  ctx?: string | null;
 }
 
 export interface ObservationFormData {
@@ -26,7 +26,7 @@ export interface ObservationFormData {
   description: string;
   responsible_person: string;
   assignee_user_id: string;
-  ctx_user_id: string;
+  ctx: string;
   deadline_date: string;
   completion_date: string;
   resolution_date: string;
@@ -75,7 +75,7 @@ export function buildObservationPayload(
     description: form.description.trim(),
     responsible_person: form.responsible_person.trim(),
     assignee_user_id: form.assignee_user_id || null,
-    ctx_user_id: form.ctx_user_id || null,
+    ctx: form.ctx || null,
     deadline_date: form.deadline_date,
     completion_date: form.completion_date || null,
     resolution_date: form.resolution_date || null,
@@ -97,7 +97,7 @@ export const EMPTY_OBSERVATION_FORM = (operationId = ''): ObservationFormData =>
   description: '',
   responsible_person: '',
   assignee_user_id: '',
-  ctx_user_id: '',
+  ctx: '',
   deadline_date: '',
   completion_date: '',
   resolution_date: '',

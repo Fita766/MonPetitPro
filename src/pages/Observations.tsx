@@ -24,7 +24,7 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
-import { observationCtxId, observationCtxLabel, resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
+import { observationCtxLabel, resolveCtxForOperation } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
@@ -38,7 +38,6 @@ interface ObservationOperation {
   id: string;
   name: string;
   project_manager: string | null;
-  ctx_user_id: string | null;
   operations_manager: string | null;
   promoter_name: string | null;
   operation_type: string | null;
@@ -112,6 +111,7 @@ export default function Observations() {
   );
   const [operations, setOperations] = useState<ObservationOperation[]>([]);
   const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
+  const [ctxCodes, setCtxCodes] = useState<string[]>([]);
   const [filters, setFilters] = useState<ObservationFilters>(EMPTY_FILTERS);
   const [view, setView] = useState<"structured" | "table">("structured");
   const [showEmpty, setShowEmpty] = useState(false);
@@ -135,16 +135,10 @@ export default function Observations() {
     }
     return rows;
   }, [assigneeProfiles, form]);
-  const ctxOptions: ProfileCtxOption[] = useMemo(() => assigneeProfiles.map((item) => ({
-    id: item.id,
-    label: item.display_name?.trim() || item.initials?.trim() || item.email?.split('@')[0] || 'Utilisateur',
-    initials: item.initials,
-  })), [assigneeProfiles]);
-  const profileById = useMemo(() => new Map(ctxOptions.map((option) => [option.id, option.label])), [ctxOptions]);
   const exportRegistry = useMemo<ExportColumn<ObservationWithOperation>[]>(() => [
     { key: "operation", label: "Opération", group: "Opération", formatter: (row) => row.operations?.name ?? "" },
     { key: "type", label: "Type", group: "Opération", formatter: (row) => row.operations?.operation_type ?? "" },
-    { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => observationCtxLabel(row, row.operations, profileById) },
+    { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => observationCtxLabel(row, row.operations) },
     { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
     { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
@@ -155,7 +149,7 @@ export default function Observations() {
     { key: "status", label: "Statut", group: "Suivi", formatter: (row) => getObservationStatus(row) },
     { key: "dg", label: "DG", group: "Confidentiel", requiredPermission: "observations.view_dg", formatter: (row) => row.is_dg ? "Oui" : "Non" },
     { key: "author", label: "Auteur", group: "Suivi", formatter: (row) => row.author_initials ?? "" },
-  ], [profileById]);
+  ], []);
 
   useEffect(() => {
     let cancelled = false;
@@ -163,20 +157,26 @@ export default function Observations() {
       supabase
         .from("observations")
         .select(
-          "*, operations(id, name, project_manager, ctx_user_id, operations_manager, promoter_name, operation_type, stage)",
+          "*, operations(id, name, project_manager, operations_manager, promoter_name, operation_type, stage)",
         )
         .order("deadline_date"),
       supabase
         .from("operations")
         .select(
-          "id, name, project_manager, ctx_user_id, operations_manager, promoter_name, operation_type, stage",
+          "id, name, project_manager, operations_manager, promoter_name, operation_type, stage",
         )
         .order("name"),
       supabase.from("profiles")
         .select("id,email,display_name,initials,status")
         .eq("status", "active")
         .order("display_name"),
-    ]).then(([observationResult, operationResult, profileResult]) => {
+      supabase.from("reference_values")
+        .select("label")
+        .eq("kind", "ctx")
+        .eq("is_active", true)
+        .order("sort_order")
+        .order("label"),
+    ]).then(([observationResult, operationResult, profileResult, ctxResult]) => {
       if (cancelled) return;
       const firstError = observationResult.error || operationResult.error;
       if (firstError) setError(firstError.message);
@@ -190,6 +190,7 @@ export default function Observations() {
           (operationResult.data as ObservationOperation[] | null) ?? [],
         );
         if (!profileResult.error) setAssigneeProfiles((profileResult.data as Profile[] | null) ?? []);
+        if (!ctxResult?.error) setCtxCodes(((ctxResult?.data ?? []) as { label: string }[]).map((row) => row.label));
       }
       setLoading(false);
     });
@@ -203,16 +204,7 @@ export default function Observations() {
   const options = useMemo(
     () => ({
       operations: operations.map((operation) => operation.name),
-      ctxs: (() => {
-        const ids = new Set<string>();
-        observations.forEach((observation) => {
-          const id = observationCtxId(observation, observation.operations);
-          if (id) ids.add(id);
-        });
-        return unique([...ids]
-          .map((id) => profileById.get(id))
-          .filter((label): label is string => Boolean(label)));
-      })(),
+      ctxs: unique(operations.map((operation) => operation.project_manager).concat(ctxCodes)),
       cops: unique(operations.map((operation) => operation.operations_manager)),
       promoters: unique(operations.map((operation) => operation.promoter_name)),
       operationTypes: unique(
@@ -223,7 +215,7 @@ export default function Observations() {
       ),
       statuses: unique(observations.map(statusFor)),
     }),
-    [observations, operations, profileById],
+    [observations, operations, ctxCodes],
   );
 
   const filtered = useMemo(
@@ -236,11 +228,9 @@ export default function Observations() {
         )
           return false;
         if (filters.ctxs.length) {
-          const ctxId = observationCtxId(observation, observation.operations);
-          const ctxLabel = ctxId ? (profileById.get(ctxId) ?? null) : null;
           const effectiveCtx =
-            ctxLabel ??
-            observation.operations?.project_manager ??
+            observation.ctx?.trim() ||
+            observation.operations?.project_manager?.trim() ||
             null;
           if (!effectiveCtx || !filters.ctxs.includes(effectiveCtx))
             return false;
@@ -288,7 +278,7 @@ export default function Observations() {
           ].some((value) => value?.toLocaleLowerCase("fr").includes(query))
         );
       }),
-    [filters, observations, profileById],
+    [filters, observations],
   );
 
   const grouped = useMemo(
@@ -309,8 +299,8 @@ export default function Observations() {
     if (operationId) {
       const operation = operations.find((item) => item.id === operationId);
       if (operation) {
-        const ctxId = resolveCtxForOperation(operation, ctxOptions);
-        if (ctxId) draft.ctx_user_id = ctxId;
+        const ctxCode = resolveCtxForOperation(operation);
+        if (ctxCode) draft.ctx = ctxCode;
       }
     }
     setForm(draft);
@@ -323,7 +313,7 @@ export default function Observations() {
       description: observation.description,
       responsible_person: observation.responsible_person,
       assignee_user_id: observation.assignee_user_id ?? "",
-      ctx_user_id: observation.ctx_user_id ?? "",
+      ctx: observation.ctx ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
@@ -336,8 +326,8 @@ export default function Observations() {
     if (!form || editing) return; // création uniquement
     const operation = operations.find((item) => item.id === operationId);
     if (!operation) return;
-    const ctxId = resolveCtxForOperation(operation, ctxOptions);
-    setForm({ ...form, operation_id: operationId, ctx_user_id: ctxId });
+    const ctxCode = resolveCtxForOperation(operation);
+    setForm({ ...form, operation_id: operationId, ctx: ctxCode });
   };
 
   const saveObservation = async (event: React.FormEvent) => {
@@ -421,7 +411,7 @@ export default function Observations() {
       sheet.addRow({
         operation: observation.operations?.name ?? "",
         type: observation.operations?.operation_type ?? "",
-        ctx: observationCtxLabel(observation, observation.operations, profileById),
+        ctx: observationCtxLabel(observation, observation.operations),
         cop: observation.operations?.operations_manager ?? "",
         info: observation.info_date,
         description: observation.description,
@@ -468,7 +458,7 @@ export default function Observations() {
       ],
       body: filtered.map((observation) => [
         observation.operations?.name ?? "",
-        `${observationCtxLabel(observation, observation.operations, profileById) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
+        `${observationCtxLabel(observation, observation.operations) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
         observation.info_date,
         observation.description,
         observation.responsible_person,
@@ -763,7 +753,7 @@ export default function Observations() {
                         <div className="flex flex-wrap items-center gap-2">
                           {statusBadge(observation)}
                           {(() => {
-                            const ctxLabel = observationCtxLabel(observation, observation.operations, profileById);
+                            const ctxLabel = observationCtxLabel(observation, observation.operations);
                             return ctxLabel ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
                                 CTX · {ctxLabel}
@@ -872,10 +862,7 @@ export default function Observations() {
                     {observation.description}
                   </td>
                   <td className="px-3 py-3">
-                    {(() => {
-                      const ctxId = observationCtxId(observation, observation.operations);
-                      return ctxId ? (profileById.get(ctxId) ?? observation.operations?.project_manager ?? '—') : (observation.operations?.project_manager ?? '—');
-                    })()}
+                    {observation.ctx?.trim() || observation.operations?.project_manager?.trim() || '—'}
                   </td>
                   <td className="px-3 py-3">
                     {observation.operations?.operations_manager}
@@ -939,7 +926,7 @@ export default function Observations() {
                 value={form}
                 operations={operations}
                 assignees={assigneeOptions}
-                ctxOptions={ctxOptions}
+                ctxOptions={ctxCodes}
                 editableFields={editableFields}
                 canViewDg={canViewDg}
                 saving={saving}

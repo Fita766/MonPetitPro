@@ -37,7 +37,7 @@ import type {
 } from "../types/domain";
 import ObservationForm from "../components/observations/ObservationForm";
 import ResolutionActions from "../components/observations/ResolutionActions";
-import { resolveCtxForOperation, type ProfileCtxOption } from "../lib/observationCtx";
+import { resolveCtxForOperation } from "../lib/observationCtx";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import DocumentsSection from "../components/operations/DocumentsSection";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
@@ -83,6 +83,7 @@ export default function OperationDetail() {
   const [documents, setDocuments] = useState<OperationDocument[]>([]);
   const [reviewItems, setReviewItems] = useState<DocumentReviewItem[]>([]);
   const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
+  const [ctxCodes, setCtxCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<ObservationFormData | null>(null);
@@ -118,6 +119,7 @@ export default function OperationDetail() {
         .eq("operation_id", id)
         .order("sort_order"),
       supabase.from("profiles").select("id,email,display_name,initials,status").eq("status", "active").order("display_name"),
+      supabase.from("reference_values").select("label").eq("kind", "ctx").eq("is_active", true).order("sort_order").order("label"),
     ]).then(
       ([
         operationResult,
@@ -128,6 +130,7 @@ export default function OperationDetail() {
         documentResult,
         reviewResult,
         profileResult,
+        ctxResult,
       ]) => {
         if (cancelled) return;
         const firstError = [
@@ -161,6 +164,7 @@ export default function OperationDetail() {
             (reviewResult.data as DocumentReviewItem[] | null) ?? [],
           );
           if (!profileResult.error) setAssigneeProfiles((profileResult.data as Profile[] | null) ?? []);
+          if (!ctxResult?.error) setCtxCodes(((ctxResult?.data ?? []) as { label: string }[]).map((row) => row.label));
         }
         setLoading(false);
       },
@@ -175,11 +179,6 @@ export default function OperationDetail() {
     id: item.id,
     label: item.display_name?.trim() || item.initials?.trim() || item.email?.split("@")[0] || "Utilisateur",
   })), [assigneeProfiles]);
-  const ctxOptions: ProfileCtxOption[] = useMemo(() => assigneeProfiles.map((item) => ({
-    id: item.id,
-    label: item.display_name?.trim() || item.initials?.trim() || item.email?.split("@")[0] || "Utilisateur",
-    initials: item.initials,
-  })), [assigneeProfiles]);
   const stage = getStageConfig(operation?.stage);
 
   const openEdit = (observation: DetailObservation) => {
@@ -190,7 +189,7 @@ export default function OperationDetail() {
       description: observation.description,
       responsible_person: observation.responsible_person,
       assignee_user_id: observation.assignee_user_id ?? "",
-      ctx_user_id: observation.ctx_user_id ?? "",
+      ctx: observation.ctx ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
@@ -552,8 +551,8 @@ export default function OperationDetail() {
                 setEditing(null);
                 if (!profile) return;
                 const draft = buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operation.id);
-                const ctxId = resolveCtxForOperation(operation, ctxOptions);
-                setForm(ctxId ? { ...draft, ctx_user_id: ctxId } : draft);
+                const ctxCode = resolveCtxForOperation(operation);
+                setForm(ctxCode ? { ...draft, ctx: ctxCode } : draft);
               }}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
@@ -657,7 +656,7 @@ export default function OperationDetail() {
                 value={form}
                 operations={[{ id: operation.id, name: operation.name }]}
                 assignees={assigneeOptions}
-                ctxOptions={ctxOptions}
+                ctxOptions={ctxCodes}
                 editableFields={observationEditableFields}
                 canViewDg={permissionGranted(permissions, 'observations.view_dg')}
                 saving={saving}

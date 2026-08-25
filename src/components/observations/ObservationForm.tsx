@@ -1,6 +1,5 @@
 import { EyeOff, Save, X } from 'lucide-react';
 import type { ObservationFormData, ObservationExplicitStatus } from '../../lib/observationStatus';
-import type { ProfileCtxOption } from '../../lib/observationCtx';
 import { FieldLabel, SelectInput, TextArea, TextInput } from '../operations/FormControls';
 
 export interface ObservationOperationOption {
@@ -17,7 +16,7 @@ export default function ObservationForm({ value, operations, assignees, ctxOptio
   value: ObservationFormData;
   operations: ObservationOperationOption[];
   assignees: ObservationAssigneeOption[];
-  ctxOptions?: ProfileCtxOption[];
+  ctxOptions?: string[];
   editableFields: Set<keyof ObservationFormData>;
   canViewDg: boolean;
   fixedOperation?: boolean;
@@ -44,10 +43,10 @@ export default function ObservationForm({ value, operations, assignees, ctxOptio
           </SelectInput>
         </div>
         <div><FieldLabel>CTX concerné</FieldLabel>
-          <SelectInput disabled={!editableFields.has('ctx_user_id')} value={value.ctx_user_id}
-            onChange={(event) => update('ctx_user_id', event.target.value)}>
+          <SelectInput disabled={!editableFields.has('ctx')} value={value.ctx}
+            onChange={(event) => update('ctx', event.target.value)}>
             <option value="">Non précisé</option>
-            {ctxOptions.map((option) => <option key={option.id} value={option.id}>{option.label}</option>)}
+            {ctxOptions.map((code) => <option key={code} value={code}>{code}</option>)}
           </SelectInput>
         </div>
       </div>

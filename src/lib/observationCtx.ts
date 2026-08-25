@@ -1,50 +1,26 @@
 export interface OperationCtxSource {
-  ctx_user_id?: string | null;
   project_manager?: string | null;
 }
 
-export interface ProfileCtxOption {
-  id: string;
-  label: string;
-  initials?: string | null;
+/** CTX d'une observation avant choix : le code CTX de l'opération liée (colonne project_manager),
+ *  qui appartient au référentiel CTX (reference_values kind='ctx'). */
+export function resolveCtxForOperation(operation: OperationCtxSource | null | undefined): string {
+  return operation?.project_manager?.trim() ?? '';
 }
 
-function normalized(value: string | null | undefined): string {
-  return (value ?? '').trim().toLocaleLowerCase('fr').replace(/\s+/g, ' ');
-}
-
-/** Choisit le profil CTX pour une observation selon l'opération liée.
- *  1. operation.ctx_user_id si renseigné (fait autorité).
- *  2. Sinon, recherche du profil actif dont le nom affiché OU les initiales
- *     correspondent au texte historique project_manager (repli hérité). */
-export function resolveCtxForOperation(
-  operation: OperationCtxSource,
-  profiles: readonly ProfileCtxOption[],
+/** Code CTX à considérer pour une observation : l'observation prime, sinon l'opération. */
+export function observationCtxValue(
+  observation: { ctx?: string | null },
+  operation: { project_manager?: string | null } | null | undefined,
 ): string {
-  if (operation.ctx_user_id) return operation.ctx_user_id;
-  const target = normalized(operation.project_manager);
-  if (!target) return '';
-  const match = profiles.find((profile) =>
-    normalized(profile.label) === target || normalized(profile.initials) === target);
-  return match?.id ?? '';
+  const value = observation.ctx ?? operation?.project_manager ?? '';
+  return value.trim() || '';
 }
 
-/** Id du profil CTX à considérer pour une observation : l'observation prime, sinon l'opération. */
-export function observationCtxId(
-  observation: { ctx_user_id?: string | null },
-  operation: { ctx_user_id?: string | null } | null | undefined,
-): string {
-  return observation.ctx_user_id ?? operation?.ctx_user_id ?? '';
-}
-
-/** Label CTX à afficher/exporter pour une observation : profil lié résolu via l'id (obs prime → op),
- *  sinon repli sur le texte hérité project_manager de l'opération. */
+/** Code CTX à afficher/exporter pour une observation (obs prime → repli opération). */
 export function observationCtxLabel(
-  observation: { ctx_user_id?: string | null },
-  operation: { ctx_user_id?: string | null; project_manager?: string | null } | null | undefined,
-  profiles: ReadonlyMap<string, string>,
+  observation: { ctx?: string | null },
+  operation: { project_manager?: string | null } | null | undefined,
 ): string {
-  const ctxId = observationCtxId(observation, operation);
-  const linked = ctxId ? (profiles.get(ctxId) ?? null) : null;
-  return linked ?? operation?.project_manager ?? '';
+  return observationCtxValue(observation, operation);
 }

@@ -35,24 +35,24 @@ describe('buildObservationPayload', () => {
   it('ajoute automatiquement auteur, initiales et marqueur DG', () => {
     expect(buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: 'user-2', ctx_user_id: '', completion_date: '', resolution_date: '2026-01-20', status: 'En cours', is_dg: true,
+      assignee_user_id: 'user-2', ctx: '', completion_date: '', resolution_date: '2026-01-20', status: 'En cours', is_dg: true,
     }, { userId: 'user-1', initials: 'AB' })).toMatchObject({
       user_id: 'user-1', assignee_user_id: 'user-2', author_initials: 'AB', is_dg: true, completion_date: null, resolution_date: '2026-01-20', status: 'En cours',
     });
   });
 
-  it('sérialise ctx_user_id dans le payload (null si vide)', () => {
+  it('sérialise ctx dans le payload (null si vide)', () => {
     const payload = buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: 'user-2', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx_user_id: 'ctx-9',
+      assignee_user_id: 'user-2', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx: 'EB',
     }, { userId: 'user-1', initials: 'AB' });
-    expect(payload.ctx_user_id).toBe('ctx-9');
+    expect(payload.ctx).toBe('EB');
 
     const emptyPayload = buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: '', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx_user_id: '',
+      assignee_user_id: '', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx: '',
     }, { userId: 'user-1', initials: 'AB' });
-    expect(emptyPayload.ctx_user_id).toBeNull();
+    expect(emptyPayload.ctx).toBeNull();
   });
 });
 
