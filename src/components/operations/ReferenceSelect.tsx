@@ -40,6 +40,11 @@ export default function ReferenceSelect({
       .slice(0, 80);
   }, [options, query, valueId]);
 
+  // Pour une grande liste (ex. les communes), l'ouverture sans recherche ne doit
+  // pas noyer l'utilisateur avec les 80 premières valeurs triées (qui ne font
+  // apparaître qu'une seule lettre) : on invite à taper.
+  const promptSearch = !query.trim() && options.length > 80;
+
   const choose = (option: ReferenceSelectOption) => {
     onSelect(option);
     setQuery('');
@@ -75,8 +80,13 @@ export default function ReferenceSelect({
       </div>
       {open && !disabled && <div role="listbox"
         className="absolute z-50 mt-1 max-h-72 w-full overflow-auto rounded-xl border border-slate-200 bg-white p-1.5 shadow-xl shadow-slate-900/10">
-        {filtered.length === 0 && <p className="p-3 text-sm text-slate-500">Aucune valeur correspondante.</p>}
-        {filtered.map((option, index) => <button key={option.id} role="option"
+        {promptSearch && (
+          <p className="p-4 text-center text-sm text-slate-500">
+            Tapez au moins 2 caractères pour rechercher…
+          </p>
+        )}
+        {!promptSearch && filtered.length === 0 && <p className="p-3 text-sm text-slate-500">Aucune valeur correspondante.</p>}
+        {!promptSearch && filtered.map((option, index) => <button key={option.id} role="option"
           aria-selected={option.id === valueId} type="button" onMouseDown={(event) => event.preventDefault()}
           onClick={() => choose(option)}
           className={`flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left ${index === activeIndex ? 'bg-teal-50' : 'hover:bg-slate-50'}`}>
