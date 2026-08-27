@@ -3,8 +3,7 @@
 -- rôle possède la permission `observations.view_all` (option « Voir toutes les
 -- observations » cochable à la création/édition d'un rôle), qui accorde la lecture
 -- de toutes les observations. Les informations DG restent réservées à
--- `observations.view_dg`. Le rôle Lecteur historique perd son `observations.view_all`
--- pour ne voir que son espace (ajustable ensuite par un administrateur dans l'UI).
+-- `observations.view_dg`.
 
 -- 1) Restreindre la lecture par la RLS.
 drop policy if exists observations_permission_read on public.observations;
@@ -23,10 +22,3 @@ using (
   -- la confidentialité DG reste protégée.
   and (not is_dg or public.has_permission('observations.view_dg'))
 );
-
--- 2) Le rôle Lecteur historique ne voit plus tout : il conserve `observations.view`
---    (lire), mais perd `observations.view_all`. Un administrateur peut toujours
---    recocher l'option pour un rôle donné (y compris un rôle Lecteur custom).
-delete from public.custom_role_permissions
-where role_id = '10000000-0000-0000-0000-000000000004'::uuid
-  and permission_key = 'observations.view_all';

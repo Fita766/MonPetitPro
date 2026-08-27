@@ -5,6 +5,10 @@ const sql = readFileSync(
   "supabase/migrations/202608280001_observation_visibility.sql",
   "utf8",
 );
+const unsetReader = readFileSync(
+  "supabase/migrations/202608280002_unset_reader_view_all.sql",
+  "utf8",
+);
 
 describe("migration de visibilité des observations", () => {
   it("restreint la lecture à l'espace de chacun (auteur ou réalisateur) sauf si vue globale", () => {
@@ -16,9 +20,12 @@ describe("migration de visibilité des observations", () => {
     expect(sql).toMatch(/not is_dg or public\.has_permission\('observations\.view_dg'\)/);
   });
 
-  it("retire la vue globale du rôle Lecteur historique", () => {
-    expect(sql).toContain("'10000000-0000-0000-0000-000000000004'::uuid");
-    expect(sql).toContain("permission_key = 'observations.view_all'");
-    expect(sql).toMatch(/delete from public\.custom_role_permissions/);
+  it("retire la vue globale du rôle Lecteur historique (trigger désactivé puis réactivé)", () => {
+    expect(unsetReader).toContain("disable trigger protect_system_role_permissions");
+    expect(unsetReader).toContain("enable trigger protect_system_role_permissions");
+    expect(unsetReader).toContain("'10000000-0000-0000-0000-000000000004'::uuid");
+    expect(unsetReader).toContain("permission_key = 'observations.view_all'");
+    expect(unsetReader).toMatch(/delete from public\.custom_role_permissions/);
   });
 });
+
