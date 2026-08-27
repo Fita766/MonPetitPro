@@ -113,6 +113,7 @@ export default function Observations() {
   const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
   const [ctxCodes, setCtxCodes] = useState<string[]>([]);
   const [filters, setFilters] = useState<ObservationFilters>(EMPTY_FILTERS);
+  const [onlyMine, setOnlyMine] = useState(false);
   const [view, setView] = useState<"structured" | "table">("structured");
   const [showEmpty, setShowEmpty] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -266,6 +267,7 @@ export default function Observations() {
         if (filters.dg === "only" && !observation.is_dg) return false;
         if (filters.dg === "exclude" && observation.is_dg) return false;
         if (filters.assignment === "unassigned" && observation.assignee_user_id) return false;
+        if (onlyMine && observation.assignee_user_id !== user?.id && observation.user_id !== user?.id) return false;
         const query = filters.query.trim().toLocaleLowerCase("fr");
         return (
           !query ||
@@ -278,7 +280,7 @@ export default function Observations() {
           ].some((value) => value?.toLocaleLowerCase("fr").includes(query))
         );
       }),
-    [filters, observations],
+    [filters, observations, onlyMine, user?.id],
   );
 
   const grouped = useMemo(
@@ -676,7 +678,25 @@ export default function Observations() {
           </select>}
           <button
             type="button"
-            onClick={() => setFilters(EMPTY_FILTERS)}
+            onClick={() => {
+              const active = !onlyMine;
+              setOnlyMine(active);
+              if (active) setFilters(EMPTY_FILTERS);
+            }}
+            className={`rounded-xl border px-3 py-2 text-xs font-medium ${
+              onlyMine
+                ? "border-teal-600 bg-teal-700 text-white"
+                : "border-slate-200 bg-white text-slate-600 hover:border-teal-300"
+            }`}
+          >
+            Mes observations
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setFilters(EMPTY_FILTERS);
+              setOnlyMine(false);
+            }}
             className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-500"
           >
             Effacer
