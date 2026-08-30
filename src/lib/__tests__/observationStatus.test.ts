@@ -35,24 +35,24 @@ describe('buildObservationPayload', () => {
   it('ajoute automatiquement auteur, initiales et marqueur DG', () => {
     expect(buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: 'user-2', ctx: '', completion_date: '', resolution_date: '2026-01-20', status: 'En cours', is_dg: true,
+      assignee_user_id: 'user-2', responsable: '', completion_date: '', resolution_date: '2026-01-20', status: 'En cours', is_dg: true,
     }, { userId: 'user-1', initials: 'AB' })).toMatchObject({
       user_id: 'user-1', assignee_user_id: 'user-2', author_initials: 'AB', is_dg: true, completion_date: null, resolution_date: '2026-01-20', status: 'En cours',
     });
   });
 
-  it('sérialise ctx dans le payload (null si vide)', () => {
+  it('sérialise responsable dans le payload (null si vide)', () => {
     const payload = buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: 'user-2', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx: 'EB',
+      assignee_user_id: 'user-2', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, responsable: 'EB',
     }, { userId: 'user-1', initials: 'AB' });
-    expect(payload.ctx).toBe('EB');
+    expect(payload.responsable).toBe('EB');
 
     const emptyPayload = buildObservationPayload({
       operation_id: 'op-1', info_date: '2026-01-01', description: 'Point', responsible_person: 'CTX', deadline_date: '2026-02-01',
-      assignee_user_id: '', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, ctx: '',
+      assignee_user_id: '', completion_date: '', resolution_date: '', status: 'En cours', is_dg: false, responsable: '',
     }, { userId: 'user-1', initials: 'AB' });
-    expect(emptyPayload.ctx).toBeNull();
+    expect(emptyPayload.responsable).toBeNull();
   });
 });
 

@@ -36,8 +36,9 @@ import type {
   SuspensiveCondition,
 } from "../types/domain";
 import ObservationForm from "../components/observations/ObservationForm";
+import type { ReferenceSelectOption } from "../components/operations/ReferenceSelect";
 import ResolutionActions from "../components/observations/ResolutionActions";
-import { resolveCtxForOperation } from "../lib/observationCtx";
+import { resolveResponsableForOperation } from "../lib/observationCtx";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import DocumentsSection from "../components/operations/DocumentsSection";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
@@ -83,7 +84,7 @@ export default function OperationDetail() {
   const [documents, setDocuments] = useState<OperationDocument[]>([]);
   const [reviewItems, setReviewItems] = useState<DocumentReviewItem[]>([]);
   const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
-  const [ctxCodes, setCtxCodes] = useState<string[]>([]);
+  const [referenceRows, setReferenceRows] = useState<{ kind: string; label: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [form, setForm] = useState<ObservationFormData | null>(null);
@@ -119,7 +120,7 @@ export default function OperationDetail() {
         .eq("operation_id", id)
         .order("sort_order"),
       supabase.from("profiles").select("id,email,display_name,initials,status").eq("status", "active").order("display_name"),
-      supabase.from("reference_values").select("label").eq("kind", "ctx").eq("is_active", true).order("sort_order").order("label"),
+      supabase.from("reference_values").select("kind,label").in("kind", ["ctx", "cop", "assistant", "gpa_assistant", "manager", "animation_provider"]).eq("is_active", true).order("sort_order").order("label"),
     ]).then(
       ([
         operationResult,
@@ -164,7 +165,7 @@ export default function OperationDetail() {
             (reviewResult.data as DocumentReviewItem[] | null) ?? [],
           );
           if (!profileResult.error) setAssigneeProfiles((profileResult.data as Profile[] | null) ?? []);
-          if (!ctxResult?.error) setCtxCodes(((ctxResult?.data ?? []) as { label: string }[]).map((row) => row.label));
+          if (!ctxResult?.error) setReferenceRows(((ctxResult?.data ?? []) as { kind: string; label: string }[]));
         }
         setLoading(false);
       },
@@ -175,10 +176,26 @@ export default function OperationDetail() {
   }, [id, refreshKey]);
 
   const observationEditableFields = useMemo(() => editableObservationFields(permissions), [permissions]);
-  const assigneeOptions = useMemo(() => assigneeProfiles.map((item) => ({
-    id: item.id,
-    label: item.display_name?.trim() || item.initials?.trim() || item.email?.split("@")[0] || "Utilisateur",
-  })), [assigneeProfiles]);
+  const responsableOptions: ReferenceSelectOption[] = useMemo(() => {
+    const kindLabel: Record<string, string> = {
+      ctx: 'CTX', cop: 'COP', assistant: 'Assistante', gpa_assistant: 'Assistante GPA',
+      manager: 'Gestionnaire', animation_provider: 'Prestataire animation',
+    };
+    const byLabel = new Map<string, ReferenceSelectOption>();
+    const add = (label: string, secondary: string) => {
+      const clean = label.trim();
+      if (clean && !byLabel.has(clean)) byLabel.set(clean, { id: clean, label: clean, secondary });
+    };
+    for (const row of referenceRows) add(row.label, kindLabel[row.kind] ?? '');
+    for (const p of assigneeProfiles) {
+      add(p.display_name?.trim() || p.initials?.trim() || p.email?.split('@')[0] || '', 'Utilisateur');
+    }
+    return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  }, [referenceRows, assigneeProfiles]);
+  const authorName = useMemo(() => {
+    if (!profile) return '';
+    return profile.display_name?.trim() || profile.initials?.trim() || '';
+  }, [profile]);
   const stage = getStageConfig(operation?.stage);
 
   const openEdit = (observation: DetailObservation) => {
@@ -189,7 +206,7 @@ export default function OperationDetail() {
       description: observation.description,
       responsible_person: observation.responsible_person,
       assignee_user_id: observation.assignee_user_id ?? "",
-      ctx: observation.ctx ?? "",
+      responsable: observation.responsable ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
@@ -551,8 +568,8 @@ export default function OperationDetail() {
                 setEditing(null);
                 if (!profile) return;
                 const draft = buildObservationDraft(profile, permissionGranted(permissions, 'observations.assign'), operation.id);
-                const ctxCode = resolveCtxForOperation(operation);
-                setForm(ctxCode ? { ...draft, ctx: ctxCode } : draft);
+                const responsable = resolveResponsableForOperation(operation);
+                setForm(responsable ? { ...draft, responsable } : draft);
               }}
               className="inline-flex items-center gap-2 rounded-xl bg-teal-700 px-4 py-2 text-sm font-medium text-white hover:bg-teal-800"
             >
@@ -590,7 +607,7 @@ export default function OperationDetail() {
                   )}
                 </div>
                 <Info
-                  label="Réalisateur"
+                  label="Rédacteur"
                   value={observation.responsible_person}
                 />
                 <div>
@@ -655,8 +672,8 @@ export default function OperationDetail() {
                 fixedOperation
                 value={form}
                 operations={[{ id: operation.id, name: operation.name }]}
-                assignees={assigneeOptions}
-                ctxOptions={ctxCodes}
+                responsableOptions={responsableOptions}
+                authorName={authorName}
                 editableFields={observationEditableFields}
                 canViewDg={permissionGranted(permissions, 'observations.view_dg')}
                 saving={saving}

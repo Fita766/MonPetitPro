@@ -2,25 +2,24 @@ export interface OperationCtxSource {
   project_manager?: string | null;
 }
 
-/** CTX d'une observation avant choix : le code CTX de l'opération liée (colonne project_manager),
- *  qui appartient au référentiel CTX (reference_values kind='ctx'). */
-export function resolveCtxForOperation(operation: OperationCtxSource | null | undefined): string {
+/** Responsable par défaut d'une observation : le CTX de l'opération liée
+ *  (colonne project_manager), pré-rempli mais modifiable. */
+export function resolveResponsableForOperation(operation: OperationCtxSource | null | undefined): string {
   return operation?.project_manager?.trim() ?? '';
 }
 
-/** Code CTX à considérer pour une observation : l'observation prime, sinon l'opération. */
-export function observationCtxValue(
-  observation: { ctx?: string | null },
+/** Responsable à considérer pour une observation : l'observation prime, sinon l'opération. */
+export function observationResponsableValue(
+  observation: { responsable?: string | null },
   operation: { project_manager?: string | null } | null | undefined,
 ): string {
-  const value = observation.ctx ?? operation?.project_manager ?? '';
-  return value.trim() || '';
+  return observation.responsable?.trim() || operation?.project_manager?.trim() || '';
 }
 
-/** Code CTX à afficher/exporter pour une observation (obs prime → repli opération). */
-export function observationCtxLabel(
-  observation: { ctx?: string | null },
+/** Responsable à afficher/exporter pour une observation (obs prime → repli opération). */
+export function observationResponsableLabel(
+  observation: { responsable?: string | null },
   operation: { project_manager?: string | null } | null | undefined,
 ): string {
-  return observationCtxValue(observation, operation);
+  return observationResponsableValue(observation, operation);
 }

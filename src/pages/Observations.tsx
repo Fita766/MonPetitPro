@@ -24,8 +24,9 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
-import { observationCtxLabel, resolveCtxForOperation } from "../lib/observationCtx";
+import { observationResponsableLabel, resolveResponsableForOperation } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
+import type { ReferenceSelectOption } from "../components/operations/ReferenceSelect";
 import ResolutionActions from "../components/observations/ResolutionActions";
 import MultiSelectFilter from "../components/filters/MultiSelectFilter";
 import { triggerSuccessToast } from "../lib/toastUtils";
@@ -52,11 +53,11 @@ interface ObservationWithOperation extends ObservationRow {
 
 interface ObservationFilters {
   operations: string[];
-  ctxs: string[];
+  responsables: string[];
   cops: string[];
   promoters: string[];
   operationTypes: string[];
-  responsibles: string[];
+  redacteurs: string[];
   statuses: string[];
   dg: "all" | "only" | "exclude";
   assignment: "all" | "unassigned";
@@ -65,11 +66,11 @@ interface ObservationFilters {
 
 const EMPTY_FILTERS: ObservationFilters = {
   operations: [],
-  ctxs: [],
+  responsables: [],
   cops: [],
   promoters: [],
   operationTypes: [],
-  responsibles: [],
+  redacteurs: [],
   statuses: [],
   dg: "all",
   assignment: "all",
@@ -111,7 +112,7 @@ export default function Observations() {
   );
   const [operations, setOperations] = useState<ObservationOperation[]>([]);
   const [assigneeProfiles, setAssigneeProfiles] = useState<Profile[]>([]);
-  const [ctxCodes, setCtxCodes] = useState<string[]>([]);
+  const [referenceRows, setReferenceRows] = useState<{ kind: string; label: string }[]>([]);
   const [filters, setFilters] = useState<ObservationFilters>(EMPTY_FILTERS);
   const [onlyMine, setOnlyMine] = useState(false);
   const [view, setView] = useState<"structured" | "table">("structured");
@@ -126,20 +127,10 @@ export default function Observations() {
   const canCreate = permissionGranted(permissions, 'observations.create');
   const canViewAll = permissionGranted(permissions, 'observations.view_all');
   const canViewDg = permissionGranted(permissions, 'observations.view_dg');
-  const assigneeOptions = useMemo(() => {
-    const rows = assigneeProfiles.map((item) => ({
-      id: item.id,
-      label: item.display_name?.trim() || item.initials?.trim() || item.email?.split('@')[0] || 'Utilisateur',
-    }));
-    if (form?.assignee_user_id && !rows.some((item) => item.id === form.assignee_user_id)) {
-      rows.push({ id: form.assignee_user_id, label: form.responsible_person || 'Utilisateur affecté' });
-    }
-    return rows;
-  }, [assigneeProfiles, form]);
   const exportRegistry = useMemo<ExportColumn<ObservationWithOperation>[]>(() => [
     { key: "operation", label: "Opération", group: "Opération", formatter: (row) => row.operations?.name ?? "" },
     { key: "type", label: "Type", group: "Opération", formatter: (row) => row.operations?.operation_type ?? "" },
-    { key: "ctx", label: "CTX", group: "Équipe", formatter: (row) => observationCtxLabel(row, row.operations) },
+    { key: "responsable", label: "Responsable", group: "Équipe", formatter: (row) => observationResponsableLabel(row, row.operations) },
     { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
     { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
@@ -172,12 +163,12 @@ export default function Observations() {
         .eq("status", "active")
         .order("display_name"),
       supabase.from("reference_values")
-        .select("label")
-        .eq("kind", "ctx")
+        .select("kind,label")
+        .in("kind", ["ctx", "cop", "assistant", "gpa_assistant", "manager", "animation_provider"])
         .eq("is_active", true)
         .order("sort_order")
         .order("label"),
-    ]).then(([observationResult, operationResult, profileResult, ctxResult]) => {
+    ]).then(([observationResult, operationResult, profileResult, refResult]) => {
       if (cancelled) return;
       const firstError = observationResult.error || operationResult.error;
       if (firstError) setError(firstError.message);
@@ -191,7 +182,7 @@ export default function Observations() {
           (operationResult.data as ObservationOperation[] | null) ?? [],
         );
         if (!profileResult.error) setAssigneeProfiles((profileResult.data as Profile[] | null) ?? []);
-        if (!ctxResult?.error) setCtxCodes(((ctxResult?.data ?? []) as { label: string }[]).map((row) => row.label));
+        if (!refResult?.error) setReferenceRows(((refResult?.data ?? []) as { kind: string; label: string }[]));
       }
       setLoading(false);
     });
@@ -202,21 +193,44 @@ export default function Observations() {
 
   const statusFor = (observation: ObservationWithOperation) =>
     getObservationStatus(observation);
+  const responsableOptions: ReferenceSelectOption[] = useMemo(() => {
+    const kindLabel: Record<string, string> = {
+      ctx: 'CTX', cop: 'COP', assistant: 'Assistante', gpa_assistant: 'Assistante GPA',
+      manager: 'Gestionnaire', animation_provider: 'Prestataire animation',
+    };
+    const byLabel = new Map<string, ReferenceSelectOption>();
+    const add = (label: string, secondary: string) => {
+      const clean = label.trim();
+      if (clean && !byLabel.has(clean)) byLabel.set(clean, { id: clean, label: clean, secondary });
+    };
+    for (const row of referenceRows) add(row.label, kindLabel[row.kind] ?? '');
+    for (const p of assigneeProfiles) {
+      add(p.display_name?.trim() || p.initials?.trim() || p.email?.split('@')[0] || '', 'Utilisateur');
+    }
+    return [...byLabel.values()].sort((a, b) => a.label.localeCompare(b.label, 'fr'));
+  }, [referenceRows, assigneeProfiles]);
+
+  const authorName = useMemo(() => {
+    if (!user) return '';
+    const p = assigneeProfiles.find((item) => item.id === user.id);
+    return p?.display_name?.trim() || p?.initials?.trim() || user.email?.split('@')[0] || '';
+  }, [user, assigneeProfiles]);
+
   const options = useMemo(
     () => ({
       operations: operations.map((operation) => operation.name),
-      ctxs: unique(operations.map((operation) => operation.project_manager).concat(ctxCodes)),
+      responsables: unique(operations.map((operation) => operation.project_manager).concat(responsableOptions.map((o) => o.label))),
       cops: unique(operations.map((operation) => operation.operations_manager)),
       promoters: unique(operations.map((operation) => operation.promoter_name)),
       operationTypes: unique(
         operations.map((operation) => operation.operation_type),
       ),
-      responsibles: unique(
+      redacteurs: unique(
         observations.map((observation) => observation.responsible_person),
       ),
       statuses: unique(observations.map(statusFor)),
     }),
-    [observations, operations, ctxCodes],
+    [observations, operations, responsableOptions],
   );
 
   const filtered = useMemo(
@@ -228,12 +242,9 @@ export default function Observations() {
           (!operation || !filters.operations.includes(operation.name))
         )
           return false;
-        if (filters.ctxs.length) {
-          const effectiveCtx =
-            observation.ctx?.trim() ||
-            observation.operations?.project_manager?.trim() ||
-            null;
-          if (!effectiveCtx || !filters.ctxs.includes(effectiveCtx))
+        if (filters.responsables.length) {
+          const effective = observation.responsable?.trim() || observation.operations?.project_manager?.trim() || null;
+          if (!effective || !filters.responsables.includes(effective))
             return false;
         }
         if (
@@ -255,8 +266,8 @@ export default function Observations() {
         )
           return false;
         if (
-          filters.responsibles.length &&
-          !filters.responsibles.includes(observation.responsible_person)
+          filters.redacteurs.length &&
+          !filters.redacteurs.includes(observation.responsible_person)
         )
           return false;
         if (
@@ -301,8 +312,8 @@ export default function Observations() {
     if (operationId) {
       const operation = operations.find((item) => item.id === operationId);
       if (operation) {
-        const ctxCode = resolveCtxForOperation(operation);
-        if (ctxCode) draft.ctx = ctxCode;
+        const responsable = resolveResponsableForOperation(operation);
+        if (responsable) draft.responsable = responsable;
       }
     }
     setForm(draft);
@@ -315,7 +326,7 @@ export default function Observations() {
       description: observation.description,
       responsible_person: observation.responsible_person,
       assignee_user_id: observation.assignee_user_id ?? "",
-      ctx: observation.ctx ?? "",
+      responsable: observation.responsable ?? "",
       deadline_date: observation.deadline_date,
       completion_date: observation.completion_date ?? "",
       resolution_date: observation.resolution_date ?? "",
@@ -328,8 +339,8 @@ export default function Observations() {
     if (!form || editing) return; // création uniquement
     const operation = operations.find((item) => item.id === operationId);
     if (!operation) return;
-    const ctxCode = resolveCtxForOperation(operation);
-    setForm({ ...form, operation_id: operationId, ctx: ctxCode });
+    const responsable = resolveResponsableForOperation(operation);
+    setForm({ ...form, operation_id: operationId, responsable });
   };
 
   const saveObservation = async (event: React.FormEvent) => {
@@ -401,7 +412,7 @@ export default function Observations() {
       { header: "COP", key: "cop", width: 12 },
       { header: "Date info", key: "info", width: 13 },
       { header: "Description", key: "description", width: 55 },
-      { header: "Réalisateur", key: "responsible", width: 18 },
+      { header: "Rédacteur", key: "redacteur", width: 18 },
       { header: "Butoir", key: "deadline", width: 13 },
       { header: "Résolution", key: "resolution", width: 13 },
       { header: "Validation", key: "validation", width: 16 },
@@ -413,7 +424,7 @@ export default function Observations() {
       sheet.addRow({
         operation: observation.operations?.name ?? "",
         type: observation.operations?.operation_type ?? "",
-        ctx: observationCtxLabel(observation, observation.operations),
+        ctx: observationResponsableLabel(observation, observation.operations),
         cop: observation.operations?.operations_manager ?? "",
         info: observation.info_date,
         description: observation.description,
@@ -448,10 +459,10 @@ export default function Observations() {
       head: [
         [
           "Opération",
-          "CTX/COP",
+          "Responsable/COP",
           "Information",
           "Description",
-          "Réalisateur",
+          "Rédacteur",
           "Butoir",
           "Résolution",
           "Statut",
@@ -460,7 +471,7 @@ export default function Observations() {
       ],
       body: filtered.map((observation) => [
         observation.operations?.name ?? "",
-        `${observationCtxLabel(observation, observation.operations) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
+        `${observationResponsableLabel(observation, observation.operations) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
         observation.info_date,
         observation.description,
         observation.responsible_person,
@@ -616,10 +627,10 @@ export default function Observations() {
             onChange={(value) => setFilters({ ...filters, operations: value })}
           />
           <MultiSelectFilter
-            label="CTX"
-            options={options.ctxs}
-            values={filters.ctxs}
-            onChange={(value) => setFilters({ ...filters, ctxs: value })}
+            label="Responsable"
+            options={options.responsables}
+            values={filters.responsables}
+            onChange={(value) => setFilters({ ...filters, responsables: value })}
           />
           <MultiSelectFilter
             label="COP"
@@ -642,11 +653,11 @@ export default function Observations() {
             }
           />
           <MultiSelectFilter
-            label="Réalisateurs"
-            options={options.responsibles}
-            values={filters.responsibles}
+            label="Rédacteurs"
+            options={options.redacteurs}
+            values={filters.redacteurs}
             onChange={(value) =>
-              setFilters({ ...filters, responsibles: value })
+              setFilters({ ...filters, redacteurs: value })
             }
           />
           <MultiSelectFilter
@@ -773,10 +784,10 @@ export default function Observations() {
                         <div className="flex flex-wrap items-center gap-2">
                           {statusBadge(observation)}
                           {(() => {
-                            const ctxLabel = observationCtxLabel(observation, observation.operations);
-                            return ctxLabel ? (
+                            const respLabel = observationResponsableLabel(observation, observation.operations);
+                            return respLabel ? (
                               <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-1 text-[10px] font-medium text-slate-600">
-                                CTX · {ctxLabel}
+                                Responsable · {respLabel}
                               </span>
                             ) : null;
                           })()}
@@ -795,7 +806,7 @@ export default function Observations() {
                       </div>
                       <div>
                         <p className="text-[10px] font-medium uppercase text-slate-400">
-                          Réalisateur
+                          Rédacteur
                         </p>
                         <p className="mt-1 text-xs font-medium">
                           {observation.responsible_person}
@@ -854,9 +865,9 @@ export default function Observations() {
                 {[
                   "Opération",
                   "Description",
-                  "CTX",
+                  "Responsable",
                   "COP",
-                  "Réalisateur",
+                  "Rédacteur",
                   "Butoir",
                   "Résolution",
                   "Statut",
@@ -882,7 +893,7 @@ export default function Observations() {
                     {observation.description}
                   </td>
                   <td className="px-3 py-3">
-                    {observation.ctx?.trim() || observation.operations?.project_manager?.trim() || '—'}
+                    {observation.responsable?.trim() || observation.operations?.project_manager?.trim() || '—'}
                   </td>
                   <td className="px-3 py-3">
                     {observation.operations?.operations_manager}
@@ -945,8 +956,8 @@ export default function Observations() {
               <ObservationForm
                 value={form}
                 operations={operations}
-                assignees={assigneeOptions}
-                ctxOptions={ctxCodes}
+                responsableOptions={responsableOptions}
+                authorName={authorName}
                 editableFields={editableFields}
                 canViewDg={canViewDg}
                 saving={saving}

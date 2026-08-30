@@ -33,11 +33,15 @@ export default function ReferenceSelect({
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('fr');
-    return options
+    const results = options
       .filter((option) => option.isActive !== false || option.id === valueId)
       .filter((option) => !needle
-        || `${option.label} ${option.secondary ?? ''}`.toLocaleLowerCase('fr').includes(needle))
-      .slice(0, 80);
+        || `${option.label} ${option.secondary ?? ''}`.toLocaleLowerCase('fr').includes(needle));
+    // Dès qu'on tape, on affiche TOUTES les correspondances (aucune troncature) :
+    // une recherche doit pouvoir trouver n'importe quelle valeur, de A à Z.
+    // La limite à 80 ne s'applique qu'à la liste affichée à l'ouverture sans
+    // recherche (qui est de toute façon remplacée par l'invite sur les grandes listes).
+    return needle ? results : results.slice(0, 80);
   }, [options, query, valueId]);
 
   // Pour une grande liste (ex. les communes), l'ouverture sans recherche ne doit

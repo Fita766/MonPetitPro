@@ -1,5 +1,6 @@
 import { EyeOff, Save, X } from 'lucide-react';
 import type { ObservationFormData, ObservationExplicitStatus } from '../../lib/observationStatus';
+import ReferenceSelect, { type ReferenceSelectOption } from '../operations/ReferenceSelect';
 import { FieldLabel, SelectInput, TextArea, TextInput } from '../operations/FormControls';
 
 export interface ObservationOperationOption {
@@ -12,11 +13,11 @@ export interface ObservationAssigneeOption {
   label: string;
 }
 
-export default function ObservationForm({ value, operations, assignees, ctxOptions = [], editableFields, canViewDg, fixedOperation, saving, onChange, onOperationSelect, onSubmit, onCancel }: {
+export default function ObservationForm({ value, operations, responsableOptions = [], authorName = '', editableFields, canViewDg, fixedOperation, saving, onChange, onOperationSelect, onSubmit, onCancel }: {
   value: ObservationFormData;
   operations: ObservationOperationOption[];
-  assignees: ObservationAssigneeOption[];
-  ctxOptions?: string[];
+  responsableOptions?: ReferenceSelectOption[];
+  authorName?: string;
   editableFields: Set<keyof ObservationFormData>;
   canViewDg: boolean;
   fixedOperation?: boolean;
@@ -32,22 +33,14 @@ export default function ObservationForm({ value, operations, assignees, ctxOptio
       {!fixedOperation && <div><FieldLabel>Opération *</FieldLabel><SelectInput disabled={!editableFields.has('operation_id')} required value={value.operation_id} onChange={(event) => { update('operation_id', event.target.value); onOperationSelect?.(event.target.value); }}><option value="">Sélectionner…</option>{operations.map((operation) => <option key={operation.id} value={operation.id}>{operation.name}</option>)}</SelectInput></div>}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-3">
         <div><FieldLabel>Date d’information *</FieldLabel><TextInput disabled={!editableFields.has('info_date')} required type="date" value={value.info_date} onChange={(event) => update('info_date', event.target.value)} /></div>
-        <div><FieldLabel>Personne responsable *</FieldLabel>
-          <SelectInput disabled={!editableFields.has('assignee_user_id')} required value={value.assignee_user_id}
-            onChange={(event) => {
-              const assignee = assignees.find((item) => item.id === event.target.value);
-              onChange({ ...value, assignee_user_id: event.target.value, responsible_person: assignee?.label ?? '' });
-            }}>
-            <option value="">Sélectionner…</option>
-            {assignees.map((assignee) => <option key={assignee.id} value={assignee.id}>{assignee.label}</option>)}
-          </SelectInput>
+        <div><FieldLabel>Rédacteur</FieldLabel>
+          <TextInput disabled value={authorName || value.responsible_person} />
         </div>
-        <div><FieldLabel>CTX concerné</FieldLabel>
-          <SelectInput disabled={!editableFields.has('ctx')} value={value.ctx}
-            onChange={(event) => update('ctx', event.target.value)}>
-            <option value="">Non précisé</option>
-            {ctxOptions.map((code) => <option key={code} value={code}>{code}</option>)}
-          </SelectInput>
+        <div><FieldLabel>Responsable</FieldLabel>
+          <ReferenceSelect disabled={!editableFields.has('responsable')} valueId={value.responsable}
+            fallbackLabel={value.responsable} options={responsableOptions}
+            placeholder="Rechercher une personne…"
+            onSelect={(option) => update('responsable', option.label)} />
         </div>
       </div>
       <div><FieldLabel>Description *</FieldLabel><TextArea disabled={!editableFields.has('description')} required rows={5} value={value.description} onChange={(event) => update('description', event.target.value)} /></div>
