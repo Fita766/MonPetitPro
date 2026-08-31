@@ -134,7 +134,7 @@ export default function Observations() {
     { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
     { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
-    { key: "responsible", label: "Responsable", group: "Suivi", formatter: (row) => row.responsible_person },
+    { key: "redacteur", label: "Rédacteur", group: "Suivi", formatter: (row) => row.responsible_person },
     { key: "deadline", label: "Date butoir", group: "Suivi", formatter: (row) => row.deadline_date ? new Date(`${row.deadline_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "completion", label: "Réalisation", group: "Suivi", formatter: (row) => row.completion_date ?? "" },
     { key: "resolution", label: "Résolution proposée", group: "Suivi", formatter: (row) => row.resolution_date ?? "" },
@@ -408,7 +408,7 @@ export default function Observations() {
     sheet.columns = [
       { header: "Opération", key: "operation", width: 30 },
       { header: "Type", key: "type", width: 14 },
-      { header: "CTX", key: "ctx", width: 12 },
+      { header: "Responsable", key: "responsable", width: 12 },
       { header: "COP", key: "cop", width: 12 },
       { header: "Date info", key: "info", width: 13 },
       { header: "Description", key: "description", width: 55 },
@@ -424,11 +424,11 @@ export default function Observations() {
       sheet.addRow({
         operation: observation.operations?.name ?? "",
         type: observation.operations?.operation_type ?? "",
-        ctx: observationResponsableLabel(observation, observation.operations),
+        responsable: observationResponsableLabel(observation, observation.operations),
         cop: observation.operations?.operations_manager ?? "",
         info: observation.info_date,
         description: observation.description,
-        responsible: observation.responsible_person,
+        redacteur: observation.responsible_person,
         deadline: observation.deadline_date,
         resolution: observation.resolution_date ?? "",
         validation: observation.resolution_validated_at ? "Validée" : "",
@@ -577,7 +577,7 @@ export default function Observations() {
           {permissionGranted(permissions, 'observations.export') && <ExportColumnDialog
             columns={exportColumns}
             storageKey="mpp-export-columns-observations"
-            defaultKeys={["operation", "ctx", "cop", "info_date", "description", "responsible", "deadline", "resolution", "status"]}
+            defaultKeys={["operation", "responsable", "cop", "info_date", "description", "redacteur", "deadline", "resolution", "status"]}
             onExcel={(keys) => exportSelectedExcel(keys)}
             onPdf={(keys) => exportSelectedPdf(keys)}
             extraAction={canViewDg ? {
@@ -745,7 +745,7 @@ export default function Observations() {
                   <h2 className="mt-1 text-lg font-medium">{operation.name}</h2>
                 </div>
                 <p className="text-xs font-medium text-slate-500">
-                  CTX {operation.project_manager ?? "—"} · COP{" "}
+                  Responsable {operation.project_manager ?? "—"} · COP{" "}
                   {operation.operations_manager ?? "—"} · {items.length} point
                   {items.length > 1 ? "s" : ""}
                 </p>
