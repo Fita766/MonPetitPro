@@ -38,7 +38,7 @@ import type {
 import ObservationForm from "../components/observations/ObservationForm";
 import type { ReferenceSelectOption } from "../components/operations/ReferenceSelect";
 import ResolutionActions from "../components/observations/ResolutionActions";
-import { resolveResponsableForOperation } from "../lib/observationCtx";
+import { observationAuthorLabel, resolveResponsableForOperation } from "../lib/observationCtx";
 import { triggerSuccessToast } from "../lib/toastUtils";
 import DocumentsSection from "../components/operations/DocumentsSection";
 import { buildObservationDraft, editableObservationFields } from "../lib/observationAccess";
@@ -196,6 +196,7 @@ export default function OperationDetail() {
     if (!profile) return '';
     return profile.display_name?.trim() || profile.initials?.trim() || '';
   }, [profile]);
+  const profileById = useMemo(() => new Map(assigneeProfiles.map((p) => [p.id, p.display_name?.trim() || p.initials?.trim() || p.email?.split('@')[0] || ''])), [assigneeProfiles]);
   const stage = getStageConfig(operation?.stage);
 
   const openEdit = (observation: DetailObservation) => {
@@ -593,7 +594,7 @@ export default function OperationDetail() {
                     {getObservationStatus(observation)}
                   </span>
                   <p className="mt-2 text-[10px] font-medium text-slate-400">
-                    Auteur {observation.author_initials ?? "—"}
+                    Auteur {observationAuthorLabel(observation, profileById)}
                   </p>
                 </div>
                 <div>
@@ -608,7 +609,7 @@ export default function OperationDetail() {
                 </div>
                 <Info
                   label="Rédacteur"
-                  value={observation.responsible_person}
+                  value={observationAuthorLabel(observation, profileById)}
                 />
                 <div>
                   <p className="text-[10px] font-medium uppercase text-slate-400">
@@ -673,7 +674,7 @@ export default function OperationDetail() {
                 value={form}
                 operations={[{ id: operation.id, name: operation.name }]}
                 responsableOptions={responsableOptions}
-                authorName={authorName}
+                authorName={editing ? observationAuthorLabel(editing, profileById) : authorName}
                 editableFields={observationEditableFields}
                 canViewDg={permissionGranted(permissions, 'observations.view_dg')}
                 saving={saving}

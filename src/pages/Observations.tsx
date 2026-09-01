@@ -24,7 +24,7 @@ import {
   type ObservationFormData,
   type ObservationRow,
 } from "../lib/observationStatus";
-import { observationResponsableLabel, resolveResponsableForOperation } from "../lib/observationCtx";
+import { observationAuthorLabel, observationResponsableLabel, resolveResponsableForOperation } from "../lib/observationCtx";
 import ObservationForm from "../components/observations/ObservationForm";
 import type { ReferenceSelectOption } from "../components/operations/ReferenceSelect";
 import ResolutionActions from "../components/observations/ResolutionActions";
@@ -123,6 +123,10 @@ export default function Observations() {
   const [editing, setEditing] = useState<ObservationWithOperation | null>(null);
   const [saving, setSaving] = useState(false);
   const [refreshKey, setRefreshKey] = useState(0);
+  const profileById = useMemo(
+    () => new Map(assigneeProfiles.map((p) => [p.id, p.display_name?.trim() || p.initials?.trim() || p.email?.split('@')[0] || ''])),
+    [assigneeProfiles],
+  );
   const editableFields = useMemo(() => editableObservationFields(permissions), [permissions]);
   const canCreate = permissionGranted(permissions, 'observations.create');
   const canViewAll = permissionGranted(permissions, 'observations.view_all');
@@ -134,14 +138,14 @@ export default function Observations() {
     { key: "cop", label: "COP", group: "Équipe", formatter: (row) => row.operations?.operations_manager ?? "" },
     { key: "info_date", label: "Date info", group: "Suivi", formatter: (row) => row.info_date ? new Date(`${row.info_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "description", label: "Description", group: "Suivi", formatter: (row) => row.description },
-    { key: "redacteur", label: "Rédacteur", group: "Suivi", formatter: (row) => row.responsible_person },
+    { key: "redacteur", label: "Rédacteur", group: "Suivi", formatter: (row) => observationAuthorLabel(row, profileById) },
     { key: "deadline", label: "Date butoir", group: "Suivi", formatter: (row) => row.deadline_date ? new Date(`${row.deadline_date}T12:00:00`).toLocaleDateString("fr-FR") : "" },
     { key: "completion", label: "Réalisation", group: "Suivi", formatter: (row) => row.completion_date ?? "" },
     { key: "resolution", label: "Résolution proposée", group: "Suivi", formatter: (row) => row.resolution_date ?? "" },
     { key: "status", label: "Statut", group: "Suivi", formatter: (row) => getObservationStatus(row) },
     { key: "dg", label: "DG", group: "Confidentiel", requiredPermission: "observations.view_dg", formatter: (row) => row.is_dg ? "Oui" : "Non" },
     { key: "author", label: "Auteur", group: "Suivi", formatter: (row) => row.author_initials ?? "" },
-  ], []);
+  ], [profileById]);
 
   useEffect(() => {
     let cancelled = false;
@@ -226,11 +230,11 @@ export default function Observations() {
         operations.map((operation) => operation.operation_type),
       ),
       redacteurs: unique(
-        observations.map((observation) => observation.responsible_person),
+        observations.map((observation) => observationAuthorLabel(observation, profileById)),
       ),
       statuses: unique(observations.map(statusFor)),
     }),
-    [observations, operations, responsableOptions],
+    [observations, operations, responsableOptions, profileById],
   );
 
   const filtered = useMemo(
@@ -267,7 +271,7 @@ export default function Observations() {
           return false;
         if (
           filters.redacteurs.length &&
-          !filters.redacteurs.includes(observation.responsible_person)
+          !filters.redacteurs.includes(observationAuthorLabel(observation, profileById))
         )
           return false;
         if (
@@ -284,14 +288,14 @@ export default function Observations() {
           !query ||
           [
             observation.description,
-            observation.responsible_person,
+            observationAuthorLabel(observation, profileById),
             operation?.name,
             operation?.project_manager,
             operation?.operations_manager,
           ].some((value) => value?.toLocaleLowerCase("fr").includes(query))
         );
       }),
-    [filters, observations, onlyMine, user?.id],
+    [filters, observations, onlyMine, user?.id, profileById],
   );
 
   const grouped = useMemo(
@@ -428,7 +432,7 @@ export default function Observations() {
         cop: observation.operations?.operations_manager ?? "",
         info: observation.info_date,
         description: observation.description,
-        redacteur: observation.responsible_person,
+        redacteur: observationAuthorLabel(observation, profileById),
         deadline: observation.deadline_date,
         resolution: observation.resolution_date ?? "",
         validation: observation.resolution_validated_at ? "Validée" : "",
@@ -474,7 +478,7 @@ export default function Observations() {
         `${observationResponsableLabel(observation, observation.operations) || "—"} / ${observation.operations?.operations_manager ?? "—"}`,
         observation.info_date,
         observation.description,
-        observation.responsible_person,
+        observationAuthorLabel(observation, profileById),
         observation.deadline_date,
         observation.resolution_date ?? "",
         statusFor(observation),
@@ -797,7 +801,7 @@ export default function Observations() {
                             </span>
                           )}
                           <span className="text-[10px] font-medium text-slate-400">
-                            par {observation.author_initials ?? "—"}
+                            par {observationAuthorLabel(observation, profileById)}
                           </span>
                         </div>
                         <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-slate-700">
@@ -809,7 +813,7 @@ export default function Observations() {
                           Rédacteur
                         </p>
                         <p className="mt-1 text-xs font-medium">
-                          {observation.responsible_person}
+                          {observationAuthorLabel(observation, profileById)}
                         </p>
                       </div>
                       <div>
@@ -893,13 +897,13 @@ export default function Observations() {
                     {observation.description}
                   </td>
                   <td className="px-3 py-3">
-                    {observation.responsable?.trim() || observation.operations?.project_manager?.trim() || '—'}
+                    {observationResponsableLabel(observation, observation.operations) || '—'}
                   </td>
                   <td className="px-3 py-3">
                     {observation.operations?.operations_manager}
                   </td>
                   <td className="px-3 py-3">
-                    {observation.responsible_person}
+                    {observationAuthorLabel(observation, profileById)}
                   </td>
                   <td className="px-3 py-3">{observation.deadline_date}</td>
                   <td className="px-3 py-3">
@@ -957,7 +961,7 @@ export default function Observations() {
                 value={form}
                 operations={operations}
                 responsableOptions={responsableOptions}
-                authorName={authorName}
+                authorName={editing ? observationAuthorLabel(editing, profileById) : authorName}
                 editableFields={editableFields}
                 canViewDg={canViewDg}
                 saving={saving}

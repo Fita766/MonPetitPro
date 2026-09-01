@@ -7,15 +7,11 @@ export function buildObservationDraft(
   operationId = '',
 ): ObservationFormData {
   const draft = EMPTY_OBSERVATION_FORM(operationId);
-  if (canAssign) return draft;
-  return {
-    ...draft,
-    assignee_user_id: profile.id,
-    responsible_person: profile.display_name?.trim()
-      || profile.initials?.trim()
-      || profile.email?.split('@')[0]
-      || 'Utilisateur',
-  };
+  // Le rédacteur est fixe : c'est toujours l'auteur (user_id + author_initials à la
+  // création). On ne renseigne plus responsible_person (l'ancien champ « personne
+  // responsable ») pour ne pas confondre avec le responsable de la tâche.
+  if (!canAssign) draft.assignee_user_id = profile.id;
+  return draft;
 }
 
 export function editableObservationFields(

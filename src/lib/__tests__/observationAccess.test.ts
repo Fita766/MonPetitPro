@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { buildObservationDraft, editableObservationFields } from '../observationAccess';
 
 describe('observation access', () => {
-  it('self assigns a standard creator', () => {
+  it('self assigns a standard creator (rédacteur fixe, responsible_person laissé vide)', () => {
     expect(buildObservationDraft({
       id: 'u1',
       display_name: 'Alice Martin',
@@ -10,7 +10,7 @@ describe('observation access', () => {
       email: 'alice@example.fr',
     }, false)).toMatchObject({
       assignee_user_id: 'u1',
-      responsible_person: 'Alice Martin',
+      responsible_person: '',
     });
   });
 
