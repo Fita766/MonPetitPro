@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { ArrowLeft, BriefcaseBusiness, Building2, CalendarClock, CircleDollarSign, FileText, Flag, ListChecks, Save } from 'lucide-react';
 import { supabase } from '../lib/supabase';
@@ -58,6 +58,8 @@ export default function OperationForm() {
   const [references, setReferences] = useState<ReferenceValue[]>([]);
   const [communes, setCommunes] = useState<CommuneReference[]>([]);
   const [activeProfiles, setActiveProfiles] = useState<UserReferenceOption[]>([]);
+  const communeSearchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const communeSearchSeq = useRef(0);
   const [loading, setLoading] = useState(Boolean(id));
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -90,12 +92,7 @@ export default function OperationForm() {
     setError(null);
     const referenceRequest = supabase.from('reference_values')
       .select('id,kind,label,is_active,sort_order').order('sort_order').order('label');
-    const communeRequest = supabase.from('communes')
-      .select('id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active')
-      .order('name')
-      // PostgREST limite à 1000 lignes par défaut : les communes françaises
-      // (~4600) dépassent ce plafond et la liste serait tronquée (fini après C).
-      .range(0, 9999);
+    const communeRequest = Promise.resolve({ data: [], error: null });
     const activeProfilesRequest = supabase.rpc('list_active_profiles');
     const requests = id ? [
       supabase.from('operations').select('*').eq('id', id).single(),
@@ -181,6 +178,30 @@ export default function OperationForm() {
       zoning: selected.zoning,
     }));
   }, [canEditField]);
+
+  // Recherche distante des communes (à la frappe) : la table (~4600 lignes) dépasse
+  // la limite PostgREST de 1000 lignes, on ne peut pas tout charger. On interroge le
+  // serveur avec un ilike, avec debounce pour éviter un appel par frappe.
+  const searchCommunes = useCallback((query: string) => {
+    if (communeSearchTimer.current) clearTimeout(communeSearchTimer.current);
+    if (!query) {
+      setCommunes([]);
+      return;
+    }
+    const seq = ++communeSearchSeq.current;
+    communeSearchTimer.current = setTimeout(() => {
+      void supabase
+        .from('communes')
+        .select('id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active')
+        .ilike('name', `%${query}%`)
+        .order('name')
+        .limit(50)
+        .then(({ data, error }) => {
+          if (error || seq !== communeSearchSeq.current) return;
+          setCommunes((data as CommuneReference[] | null) ?? []);
+        });
+    }, 250);
+  }, []);
 
   const syncProgram = async (operationId: string) => {
     const sectionRows = programSections.map((section) => ({
@@ -401,9 +422,9 @@ export default function OperationForm() {
       case 'synthesis': return <SynthesisSection {...common}
         detailsEditable={!id || permissionGranted(permissions, 'operations.edit_synthesis')}
         significantWorks={significantWorks} onSignificantWorksChange={setSignificantWorks} />;
-      default: return <GeneralSection {...common} references={references} communes={communes} activeProfiles={activeProfiles} onCommuneSelect={chooseCommune} />;
+      default: return <GeneralSection {...common} references={references} communes={communes} activeProfiles={activeProfiles} onCommuneSelect={chooseCommune} onCommuneSearch={searchCommunes} />;
     }
-  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, significantWorks, subsidies, activeProfiles]);
+  }, [activeTab, budgetLines, canEditField, changeField, chooseCommune, communes, conditions, form, id, objectives, permissions, programLines, programSections, references, searchCommunes, significantWorks, subsidies, activeProfiles]);
 
   if (loading) return <div className="flex min-h-[50vh] items-center justify-center text-slate-500">Chargement de la fiche opération…</div>;
 

@@ -9,6 +9,7 @@ interface GeneralSectionProps extends OperationSectionProps {
   communes: CommuneReference[];
   activeProfiles: UserReferenceOption[];
   onCommuneSelect: (commune: CommuneReference) => void;
+  onCommuneSearch?: (query: string) => void;
 }
 
 export default function GeneralSection({
@@ -19,6 +20,7 @@ export default function GeneralSection({
   communes,
   activeProfiles,
   onCommuneSelect,
+  onCommuneSearch,
 }: GeneralSectionProps) {
   const referenceOptions = (kind: ReferenceKind): ReferenceSelectOption[] =>
     references.filter((row) => row.kind === kind).map((row) => ({
@@ -97,7 +99,8 @@ export default function GeneralSection({
         <div className="md:col-span-2">
           <FieldLabel>Commune officielle</FieldLabel>
           <ReferenceSelect disabled={!canEditField('commune_id')} valueId={form.commune_id}
-            options={communeOptions} placeholder="Nom, code postal ou département…"
+            fallbackLabel={form.commune} options={communeOptions} placeholder="Nom, code postal ou département…"
+            onSearchChange={onCommuneSearch}
             onSelect={(option) => {
               const commune = communes.find((row) => row.id === option.id);
               if (commune) onCommuneSelect(commune);

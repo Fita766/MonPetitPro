@@ -15,6 +15,10 @@ interface ReferenceSelectProps {
   placeholder?: string;
   fallbackLabel?: string;
   onSelect: (option: ReferenceSelectOption) => void;
+  /** Mode recherche distante : appelé à chaque frappe (≥ 2 caractères). Le parent
+   *  fournit les résultats via `options`. Utile pour les grosses tables (communes)
+   *  que le serveur tronque à 1000 lignes (PostgREST) — on ne peut pas tout charger. */
+  onSearchChange?: (query: string) => void;
 }
 
 export default function ReferenceSelect({
@@ -24,12 +28,23 @@ export default function ReferenceSelect({
   placeholder = 'Rechercher et sélectionner…',
   fallbackLabel = '',
   onSelect,
+  onSearchChange,
 }: ReferenceSelectProps) {
   const selected = options.find((option) => option.id === valueId);
   const displayValue = selected?.label ?? fallbackLabel;
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
   const [activeIndex, setActiveIndex] = useState(0);
+
+  const handleQueryChange = (value: string) => {
+    setQuery(value);
+    setOpen(true);
+    setActiveIndex(0);
+    if (onSearchChange) {
+      const needle = value.trim();
+      onSearchChange(needle.length >= 2 ? needle : '');
+    }
+  };
 
   const filtered = useMemo(() => {
     const needle = query.trim().toLocaleLowerCase('fr');
@@ -47,7 +62,7 @@ export default function ReferenceSelect({
   // Pour une grande liste (ex. les communes), l'ouverture sans recherche ne doit
   // pas noyer l'utilisateur avec les 80 premières valeurs triées (qui ne font
   // apparaître qu'une seule lettre) : on invite à taper.
-  const promptSearch = !query.trim() && options.length > 80;
+  const promptSearch = !query.trim() && (options.length > 80 || Boolean(onSearchChange));
 
   const choose = (option: ReferenceSelectOption) => {
     onSelect(option);
@@ -64,7 +79,7 @@ export default function ReferenceSelect({
           placeholder={placeholder}
           onFocus={() => { setOpen(true); setQuery(''); setActiveIndex(0); }}
           onBlur={() => window.setTimeout(() => setOpen(false), 120)}
-          onChange={(event) => { setQuery(event.target.value); setOpen(true); setActiveIndex(0); }}
+          onChange={(event) => handleQueryChange(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === 'ArrowDown') {
               event.preventDefault();
