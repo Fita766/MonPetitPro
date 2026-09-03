@@ -101,7 +101,10 @@ export default function AdminReferences() {
           "id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active",
         )
         .order("department_code")
-        .order("name"),
+        .order("name")
+        // PostgREST limite à 1000 lignes par défaut : les communes françaises
+        // (~4600) dépassent ce plafond et la liste serait tronquée.
+        .range(0, 9999),
     ]);
     const error = referenceResult.error ?? communeResult.error;
     if (error) setNotice({ kind: "error", text: error.message });

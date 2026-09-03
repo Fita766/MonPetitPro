@@ -92,7 +92,10 @@ export default function OperationForm() {
       .select('id,kind,label,is_active,sort_order').order('sort_order').order('label');
     const communeRequest = supabase.from('communes')
       .select('id,name,insee_code,postal_code,department_code,department_name,region_name,housing_zone,is_active')
-      .order('name');
+      .order('name')
+      // PostgREST limite à 1000 lignes par défaut : les communes françaises
+      // (~4600) dépassent ce plafond et la liste serait tronquée (fini après C).
+      .range(0, 9999);
     const activeProfilesRequest = supabase.rpc('list_active_profiles');
     const requests = id ? [
       supabase.from('operations').select('*').eq('id', id).single(),
